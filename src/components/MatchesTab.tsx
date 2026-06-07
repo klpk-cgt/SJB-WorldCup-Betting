@@ -11,6 +11,7 @@ import {
   Clock3,
   EyeOff,
   GitBranch,
+  Info,
   RefreshCw,
   Sparkles,
   TrendingUp,
@@ -564,10 +565,11 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
                           </div>
                           <div className="mt-2 flex items-center gap-2 text-sm font-black text-slate-900">
                             <span
-                              className="truncate cursor-pointer hover:text-emerald-600 transition-colors"
+                              className="truncate cursor-pointer hover:text-emerald-600 transition-colors inline-flex items-center gap-0.5 border-b border-dashed border-emerald-400/40 hover:border-emerald-500"
                               onClick={(e) => { e.stopPropagation(); setTeamDetailId(match.homeTeam?.id); setTeamDetailOpen(true); }}
                             >
                               {match.homeTeam?.nameZh}
+                              <Info className="h-3 w-3 text-emerald-500/50" />
                             </span>
                             <span className="text-slate-400">
                               {[MatchStatus.LIVE, MatchStatus.HT, MatchStatus.FT, MatchStatus.AET, MatchStatus.PEN].includes(match.status)
@@ -575,10 +577,11 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
                                 : 'VS'}
                             </span>
                             <span
-                              className="truncate cursor-pointer hover:text-emerald-600 transition-colors"
+                              className="truncate cursor-pointer hover:text-emerald-600 transition-colors inline-flex items-center gap-0.5 border-b border-dashed border-emerald-400/40 hover:border-emerald-500"
                               onClick={(e) => { e.stopPropagation(); setTeamDetailId(match.awayTeam?.id); setTeamDetailOpen(true); }}
                             >
                               {match.awayTeam?.nameZh}
+                              <Info className="h-3 w-3 text-emerald-500/50" />
                             </span>
                           </div>
                         </div>
