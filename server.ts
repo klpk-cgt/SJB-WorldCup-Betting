@@ -12,17 +12,28 @@ import { createServer as createViteServer } from 'vite';
 import { dbService } from './src/db/db_service';
 import {
   AIContent,
+  AIEnhancementMode,
+  BracketState,
   Match,
   MatchOdds,
   MatchStatus,
   Prediction,
   ShareCardRecord,
   SyncLog,
+  TournamentBet,
+  TournamentBetOption,
   Transaction,
   User,
   Wallet,
 } from './src/types';
-import { generateBetShareCard, generateStructuredAiContent } from './src/server/ai';
+import {
+  generateBetShareCard,
+  generateStructuredAiContent,
+  getOrGenerateLeaderboardCommentary,
+  getOrGenerateMatchAnalysis,
+  getOrGenerateMatchPrediction,
+  invalidateAIContent,
+} from './src/server/ai';
 import { getRuntimeConfig, summarizeProviderConfig } from './src/server/config';
 import {
   FINISHED_MATCH_STATUSES,
@@ -93,6 +104,22 @@ function createId(prefix: string) {
   return `${prefix}-${crypto.randomBytes(4).toString('hex')}`;
 }
 
+const GOLDEN_BOOT_OPTIONS: TournamentBetOption[] = [
+  { id: 'mbappe', label: '姆巴佩', subLabel: '法国', targetType: 'player', oddsDecimal: 4.8, marketType: 'golden_boot' },
+  { id: 'vinicius', label: '维尼修斯', subLabel: '巴西', targetType: 'player', oddsDecimal: 5.5, marketType: 'golden_boot' },
+  { id: 'kane', label: '凯恩', subLabel: '英格兰', targetType: 'player', oddsDecimal: 6.2, marketType: 'golden_boot' },
+  { id: 'lautaro', label: '劳塔罗', subLabel: '阿根廷', targetType: 'player', oddsDecimal: 7.4, marketType: 'golden_boot' },
+  { id: 'havertz', label: '哈弗茨', subLabel: '德国', targetType: 'player', oddsDecimal: 8.6, marketType: 'golden_boot' },
+];
+
+const GOLDEN_BALL_OPTIONS: TournamentBetOption[] = [
+  { id: 'bellingham', label: '贝林厄姆', subLabel: '英格兰', targetType: 'player', oddsDecimal: 5.8, marketType: 'golden_ball' },
+  { id: 'mbappe', label: '姆巴佩', subLabel: '法国', targetType: 'player', oddsDecimal: 6.1, marketType: 'golden_ball' },
+  { id: 'musiala', label: '穆西亚拉', subLabel: '德国', targetType: 'player', oddsDecimal: 7.0, marketType: 'golden_ball' },
+  { id: 'vinicius', label: '维尼修斯', subLabel: '巴西', targetType: 'player', oddsDecimal: 7.4, marketType: 'golden_ball' },
+  { id: 'griezmann', label: '格列兹曼', subLabel: '法国', targetType: 'player', oddsDecimal: 8.4, marketType: 'golden_ball' },
+];
+
 function getAuthenticatedUser(req: Request) {
   const loginCode = req.headers.authorization || (req.query.loginCode as string);
   if (!loginCode) return null;
@@ -142,6 +169,82 @@ function buildAiFallback(title: string, content: string): AIContent {
     fallbackUsed: true,
     createdAt: new Date().toISOString(),
   };
+}
+
+function getChampionOptions() {
+  const db = dbService.getData();
+  const seededIds = ['FRA', 'ARG', 'BRA', 'ENG', 'GER', 'POR', 'ESP', 'NED'];
+  return db.teams
+    .filter((team) => seededIds.includes(team.id))
+    .map<TournamentBetOption>((team, index) => ({
+      id: team.id,
+      label: team.nameZh,
+      subLabel: team.groupName,
+      targetType: 'team',
+      oddsDecimal: [4.6, 5.0, 5.2, 5.8, 6.4, 7.1, 7.6, 8.2][index] || 8.8,
+      marketType: 'champion',
+    }));
+}
+
+function hasKnockoutStarted() {
+  const db = dbService.getData();
+  return db.matches.some((match) => match.stage !== 'Group Stage' && new Date(match.startTimeUtc).getTime() <= Date.now());
+}
+
+function hasLateStageMarketsUnlocked() {
+  const db = dbService.getData();
+  return db.matches.some((match) =>
+    match.stage === 'Quarter-finals' || match.stage === 'Semi-finals' || match.stage === 'Final',
+  );
+}
+
+function getTournamentMarketConfig(type: TournamentBet['type']) {
+  if (type === 'champion') {
+    const open = !hasKnockoutStarted();
+    return {
+      type,
+      label: '冠军竞猜',
+      isOpen: open,
+      isVisible: true,
+      openedAt: new Date().toISOString(),
+      lockedAt: open ? null : new Date().toISOString(),
+      options: getChampionOptions(),
+      hint: open ? '世界杯早期开放，适合先押最终冠军。' : '淘汰赛开始后已锁定。',
+    };
+  }
+
+  const unlocked = hasLateStageMarketsUnlocked();
+  const options = type === 'golden_boot' ? GOLDEN_BOOT_OPTIONS : GOLDEN_BALL_OPTIONS;
+  return {
+    type,
+    label: type === 'golden_boot' ? '金靴竞猜' : '金球竞猜',
+    isOpen: unlocked,
+    isVisible: true,
+    openedAt: unlocked ? new Date().toISOString() : null,
+    lockedAt: null,
+    options,
+    hint: unlocked ? '淘汰赛后期开放，适合做阶段性娱乐竞猜。' : '淘汰赛后期开放，目前先保留低干扰入口。',
+  };
+}
+
+function serializeTournamentBet(bet: TournamentBet) {
+  return {
+    ...bet,
+    marketLabel:
+      bet.type === 'champion' ? '冠军竞猜' : bet.type === 'golden_boot' ? '金靴竞猜' : '金球竞猜',
+  };
+}
+
+function markMatchAiStale(matchId: string) {
+  const db = dbService.getData();
+  invalidateAIContent(db, matchId, 'MATCH_PREDICTION', 'match');
+  invalidateAIContent(db, matchId, 'PRE_MATCH_ANALYSIS', 'match');
+  invalidateAIContent(db, matchId, 'SEARCH_ENHANCEMENT', 'match');
+}
+
+function markRoomLeaderboardAiStale(roomId: string) {
+  const db = dbService.getData();
+  invalidateAIContent(db, roomId, 'LEADERBOARD_COMMENTARY', 'room');
 }
 
 function formatMarketLabel(market: Prediction['market']) {
@@ -442,6 +545,10 @@ function settleMatch(match: Match) {
     createdAt: new Date().toISOString(),
   });
 
+  dbService.refreshBracketState();
+  markMatchAiStale(match.id);
+  markRoomLeaderboardAiStale('room-1');
+
   return matchPredictions.length;
 }
 
@@ -483,6 +590,10 @@ async function runScheduledMaintenance(forceSync = false) {
         db,
       });
       appendSyncLog(oddsResult.log);
+
+      fixturesResult.updatedMatches?.forEach((item) => markMatchAiStale(item.id));
+      oddsResult.updatedMatchIds?.forEach((item) => markMatchAiStale(item));
+      dbService.refreshBracketState();
 
       lastScheduledSyncAt = Date.now();
       changed = true;
@@ -897,7 +1008,59 @@ app.get('/api/matches/:id', async (req: Request, res: Response) => {
             home: Math.round((homeCount / totalPoints) * 100),
             draw: Math.round((drawCount / totalPoints) * 100),
             away: Math.round((awayCount / totalPoints) * 100),
-          },
+      },
+  });
+});
+
+app.get('/api/bracket', async (_req: Request, res: Response) => {
+  await runScheduledMaintenance();
+  dbService.refreshBracketState();
+  res.json(dbService.getBracketState());
+});
+
+app.get('/api/matches/:id/friend-picks', async (req: Request, res: Response) => {
+  await runScheduledMaintenance();
+  const user = getAuthenticatedUser(req);
+  if (!user) return res.status(401).json({ error: '请先登录。' });
+
+  const db = dbService.getData();
+  const match = db.matches.find((item) => item.id === req.params.id);
+  if (!match) return res.status(404).json({ error: '比赛不存在。' });
+
+  const shouldReveal =
+    match.status === MatchStatus.LIVE ||
+    match.status === MatchStatus.HT ||
+    match.status === MatchStatus.FT ||
+    match.status === MatchStatus.AET ||
+    match.status === MatchStatus.PEN ||
+    new Date(match.startTimeUtc).getTime() <= Date.now();
+
+  const picks = db.predictions
+    .filter((item) => item.matchId === match.id && item.groupId === user.groupId)
+    .map((prediction) => {
+      const pickUser = db.users.find((item) => item.id === prediction.userId);
+      return {
+        id: prediction.id,
+        userId: prediction.userId,
+        displayName: pickUser?.displayName || '好友',
+        avatarUrl: pickUser?.avatarUrl || '🙂',
+        revealed: shouldReveal,
+        optionLabel: shouldReveal ? prediction.optionLabel : undefined,
+        stakePoints: shouldReveal ? prediction.stakePoints : undefined,
+        status: prediction.status,
+        settledProfit:
+          shouldReveal && (prediction.status === 'WON' || prediction.status === 'LOST')
+            ? prediction.settledProfit || 0
+            : undefined,
+        placedAt: prediction.placedAt,
+      };
+    })
+    .sort((a, b) => a.placedAt.localeCompare(b.placedAt));
+
+  res.json({
+    matchId: match.id,
+    visibility: shouldReveal ? 'after_kickoff_revealed' : 'hidden_before_kickoff',
+    picks,
   });
 });
 
@@ -1033,6 +1196,110 @@ app.post('/api/predictions', async (req: Request, res: Response) => {
   });
 });
 
+app.get('/api/tournament-bets', (req: Request, res: Response) => {
+  const user = getAuthenticatedUser(req);
+  if (!user) return res.status(401).json({ error: '请先登录。' });
+
+  const db = dbService.getData();
+  const bets = db.tournamentBets
+    .filter((item) => item.userId === user.id)
+    .sort((a, b) => b.placedAt.localeCompare(a.placedAt))
+    .map(serializeTournamentBet);
+
+  res.json({
+    bets,
+    markets: [
+      getTournamentMarketConfig('champion'),
+      getTournamentMarketConfig('golden_boot'),
+      getTournamentMarketConfig('golden_ball'),
+    ],
+  });
+});
+
+async function placeTournamentBet(req: Request, res: Response, type: TournamentBet['type']) {
+  const user = getAuthenticatedUser(req);
+  if (!user) return res.status(401).json({ error: '请先登录。' });
+
+  const marketConfig = getTournamentMarketConfig(type);
+  if (!marketConfig.isOpen) {
+    return res.status(400).json({ error: `${marketConfig.label} 当前尚未开放。` });
+  }
+
+  const { targetId, stakePoints } = req.body as { targetId: string; stakePoints: number };
+  if (!targetId || !stakePoints) {
+    return res.status(400).json({ error: '请选择目标并填写积分。' });
+  }
+
+  const stake = Number(stakePoints);
+  if (!Number.isFinite(stake) || stake <= 0) {
+    return res.status(400).json({ error: '积分数量不合法。' });
+  }
+
+  const db = dbService.getData();
+  const wallet = db.wallets.find((item) => item.userId === user.id);
+  if (!wallet) return res.status(500).json({ error: '钱包不存在。' });
+  if (wallet.balance < stake) return res.status(400).json({ error: '当前积分不足。' });
+
+  const existing = db.tournamentBets.find((item) => item.userId === user.id && item.type === type);
+  if (existing) {
+    return res.status(400).json({ error: '同一玩法当前版本只允许保留一条竞猜记录。' });
+  }
+
+  const option = marketConfig.options.find((item) => item.id === targetId);
+  if (!option) return res.status(400).json({ error: '未找到对应竞猜目标。' });
+
+  const bet: TournamentBet = {
+    id: createId('tour'),
+    userId: user.id,
+    roomId: user.groupId,
+    type,
+    targetId: option.id,
+    targetLabel: option.label,
+    targetSubLabel: option.subLabel,
+    stakePoints: stake,
+    oddsDecimal: option.oddsDecimal,
+    potentialReturn: Math.round(stake * option.oddsDecimal * 10) / 10,
+    status: 'OPEN',
+    openedAt: marketConfig.openedAt || new Date().toISOString(),
+    lockedAt: marketConfig.lockedAt || undefined,
+    placedAt: new Date().toISOString(),
+  };
+
+  const oldBalance = wallet.balance;
+  wallet.balance -= stake;
+  db.tournamentBets.push(bet);
+  db.transactions.push({
+    id: createId('tour-stake'),
+    userId: user.id,
+    type: 'PREDICTION_STAKE',
+    amount: -stake,
+    balanceBefore: oldBalance,
+    balanceAfter: wallet.balance,
+    note:
+      type === 'champion'
+        ? `冠军竞猜投入：${option.label}`
+        : type === 'golden_boot'
+          ? `金靴竞猜投入：${option.label}`
+          : `金球竞猜投入：${option.label}`,
+    createdAt: new Date().toISOString(),
+  });
+
+  dbService.save();
+  return res.json({ success: true, bet: serializeTournamentBet(bet), wallet });
+}
+
+app.post('/api/tournament-bets/champion', (req: Request, res: Response) => {
+  placeTournamentBet(req, res, 'champion');
+});
+
+app.post('/api/tournament-bets/golden-boot', (req: Request, res: Response) => {
+  placeTournamentBet(req, res, 'golden_boot');
+});
+
+app.post('/api/tournament-bets/golden-ball', (req: Request, res: Response) => {
+  placeTournamentBet(req, res, 'golden_ball');
+});
+
 app.get('/api/leaderboards', (_req: Request, res: Response) => {
   const db = dbService.getData();
   const groupId = (_req.query.groupId as string) || 'room-1';
@@ -1110,6 +1377,51 @@ app.get('/api/leaderboards', (_req: Request, res: Response) => {
     streakList: [...leaderboard].sort((a, b) => b.maxStreak - a.maxStreak),
     wonProfitList: [...leaderboard].sort((a, b) => b.totalWonProfit - a.totalWonProfit),
   });
+});
+
+app.get('/api/ai/match/:id/prediction', async (req: Request, res: Response) => {
+  const db = dbService.getData();
+  try {
+    const aiContent = await getOrGenerateMatchPrediction({
+      db,
+      config,
+      matchId: req.params.id,
+      enhancementMode: 'off',
+    });
+    return res.json(aiContent);
+  } catch (error) {
+    return res.status(404).json({ error: error instanceof Error ? error.message : 'AI prediction generation failed.' });
+  }
+});
+
+app.get('/api/ai/match/:id/analysis', async (req: Request, res: Response) => {
+  const db = dbService.getData();
+  try {
+    const aiContent = await getOrGenerateMatchAnalysis({
+      db,
+      config,
+      matchId: req.params.id,
+      enhancementMode: 'off',
+    });
+    return res.json(aiContent);
+  } catch (error) {
+    return res.status(404).json({ error: error instanceof Error ? error.message : 'AI analysis generation failed.' });
+  }
+});
+
+app.get('/api/ai/leaderboard/:roomId', async (req: Request, res: Response) => {
+  const db = dbService.getData();
+  try {
+    const aiContent = await getOrGenerateLeaderboardCommentary({
+      db,
+      config,
+      roomId: req.params.roomId,
+      enhancementMode: 'off',
+    });
+    return res.json(aiContent);
+  } catch (error) {
+    return res.status(400).json({ error: error instanceof Error ? error.message : 'AI leaderboard generation failed.' });
+  }
 });
 
 app.get('/api/ai/daily', (_req: Request, res: Response) => {
@@ -1547,6 +1859,9 @@ app.put('/api/admin/matches/:id', (req: Request, res: Response) => {
     match.predictionLockedAt = match.isPredictionLocked ? new Date().toISOString() : undefined;
   }
   applyLifecycleUpdates(match, config.predictionLockMinutes);
+  dbService.refreshBracketState();
+  markMatchAiStale(match.id);
+  markRoomLeaderboardAiStale('room-1');
   dbService.save();
   res.json({ success: true, match: serializeMatch(match) });
 });
@@ -1572,6 +1887,7 @@ app.put('/api/admin/matches/:id/odds', (req: Request, res: Response) => {
   existing.source = 'MANUAL';
 
   db.matchOdds[req.params.id] = existing;
+  markMatchAiStale(req.params.id);
   dbService.save();
   res.json({ success: true, odds: existing });
 });
@@ -1602,6 +1918,8 @@ app.post('/api/admin/sync/fixtures', async (req: Request, res: Response) => {
   });
   appendSyncLog(result.log);
   ensureLifecycleForAllMatches();
+  result.updatedMatches.forEach((item) => markMatchAiStale(item.id));
+  dbService.refreshBracketState();
   dbService.save();
   res.json({
     success: result.log.status !== 'FAILED',
@@ -1626,6 +1944,9 @@ app.post('/api/admin/sync/today', async (req: Request, res: Response) => {
   appendSyncLog(fixturesResult.log);
   appendSyncLog(oddsResult.log);
   ensureLifecycleForAllMatches();
+  fixturesResult.updatedMatches.forEach((item) => markMatchAiStale(item.id));
+  oddsResult.updatedMatchIds.forEach((item) => markMatchAiStale(item));
+  dbService.refreshBracketState();
   dbService.save();
   res.json({
     success: fixturesResult.log.status !== 'FAILED' || oddsResult.log.status !== 'FAILED',
@@ -1660,6 +1981,9 @@ app.post('/api/admin/sync/matches/:id', async (req: Request, res: Response) => {
     targetMatchId: match.id,
   });
   ensureLifecycleForAllMatches();
+  fixturesResult.updatedMatches.forEach((item) => markMatchAiStale(item.id));
+  oddsResult.updatedMatchIds.forEach((item) => markMatchAiStale(item));
+  dbService.refreshBracketState();
   dbService.save();
   res.json({
     success: true,
@@ -1710,6 +2034,130 @@ app.post('/api/admin/ai/match/:id/pre', async (req: Request, res: Response) => {
   });
   dbService.save();
   res.json({ success: true, aiContent });
+});
+
+app.post('/api/admin/ai/match/:id/regenerate', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const db = dbService.getData();
+  try {
+    const [prediction, analysis] = await Promise.all([
+      getOrGenerateMatchPrediction({ db, config, matchId: req.params.id, enhancementMode: 'off', forceRefresh: true }),
+      getOrGenerateMatchAnalysis({ db, config, matchId: req.params.id, enhancementMode: 'off', forceRefresh: true }),
+    ]);
+    appendSyncLog({
+      id: createId('sync'),
+      source: analysis.provider || 'Local',
+      action: 'Regenerate official AI content',
+      syncType: 'ai',
+      status: 'SUCCESS',
+      requestSummary: `Regenerate prediction + analysis for ${req.params.id}`,
+      responseSummary: `${analysis.provider || 'Local'} regenerated official AI content.`,
+      targetMatchId: req.params.id,
+      startedAt: new Date().toISOString(),
+      finishedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+    });
+    dbService.save();
+    res.json({ success: true, prediction, analysis });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : 'AI regenerate failed.' });
+  }
+});
+
+app.post('/api/admin/ai/match/:id/enhance-search', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const db = dbService.getData();
+  try {
+    const analysis = await getOrGenerateMatchAnalysis({
+      db,
+      config,
+      matchId: req.params.id,
+      enhancementMode: 'search',
+      forceRefresh: true,
+    });
+    appendSyncLog({
+      id: createId('sync'),
+      source: analysis.provider || 'Local',
+      action: 'Regenerate search-enhanced AI content',
+      syncType: 'ai',
+      status: 'SUCCESS',
+      requestSummary: `Search-enhanced analysis for ${req.params.id}`,
+      responseSummary: `${analysis.provider || 'Local'} generated search-enhanced analysis.`,
+      targetMatchId: req.params.id,
+      startedAt: new Date().toISOString(),
+      finishedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+    });
+    dbService.save();
+    res.json({ success: true, analysis });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : 'Search enhancement failed.' });
+  }
+});
+
+app.post('/api/admin/ai/match/:id/enhance-multimodal', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const db = dbService.getData();
+  try {
+    const sourceImageUrls = Array.isArray(req.body?.sourceImageUrls)
+      ? req.body.sourceImageUrls.map((item: unknown) => String(item))
+      : [];
+    const analysis = await getOrGenerateMatchAnalysis({
+      db,
+      config,
+      matchId: req.params.id,
+      enhancementMode: sourceImageUrls.length > 0 ? 'search_multimodal' : 'multimodal',
+      forceRefresh: true,
+      sourceImageUrls,
+    });
+    appendSyncLog({
+      id: createId('sync'),
+      source: analysis.provider || 'Local',
+      action: 'Regenerate multimodal AI content',
+      syncType: 'ai',
+      status: 'SUCCESS',
+      requestSummary: `Multimodal analysis for ${req.params.id}`,
+      responseSummary: `${analysis.provider || 'Local'} generated multimodal analysis.`,
+      targetMatchId: req.params.id,
+      startedAt: new Date().toISOString(),
+      finishedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+    });
+    dbService.save();
+    res.json({ success: true, analysis });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : 'Multimodal enhancement failed.' });
+  }
+});
+
+app.post('/api/admin/ai/leaderboard/:roomId/regenerate', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const db = dbService.getData();
+  try {
+    const aiContent = await getOrGenerateLeaderboardCommentary({
+      db,
+      config,
+      roomId: req.params.roomId,
+      enhancementMode: 'off',
+      forceRefresh: true,
+    });
+    appendSyncLog({
+      id: createId('sync'),
+      source: aiContent.provider || 'Local',
+      action: 'Regenerate leaderboard commentary',
+      syncType: 'ai',
+      status: 'SUCCESS',
+      requestSummary: `Regenerate leaderboard commentary for ${req.params.roomId}`,
+      responseSummary: `${aiContent.provider || aiContent.model} regenerated leaderboard commentary.`,
+      startedAt: new Date().toISOString(),
+      finishedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+    });
+    dbService.save();
+    res.json({ success: true, aiContent });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : 'Leaderboard regenerate failed.' });
+  }
 });
 
 app.get('/api/admin/sync-logs', (req: Request, res: Response) => {

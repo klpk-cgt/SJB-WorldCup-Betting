@@ -4,21 +4,9 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  Award,
-  BarChart3,
-  Coins,
-  FileText,
-  KeyRound,
-  LogOut,
-  RefreshCw,
-  ShieldCheck,
-  Sparkles,
-  TrendingUp,
-} from 'lucide-react';
-import { Transaction } from '../types';
+import { Award, Coins, LogOut, RefreshCw, Target, Ticket, TrendingUp, Trophy } from 'lucide-react';
+import { Prediction, TournamentBet, Transaction } from '../types';
 import { apiRequest, formatDate } from '../utils/api';
-import FlagBadge from './home/FlagBadge';
 
 interface MeTabProps {
   user: any;
@@ -26,395 +14,300 @@ interface MeTabProps {
   onLogout: () => void;
 }
 
-interface AchievementCard {
-  id: string;
-  title: string;
-  description: string;
-  current: number;
-  target: number;
-  suffix?: string;
-  unlocked: boolean;
+type PredictionWithMatch = Prediction & { match?: any | null };
+
+function formatSigned(value: number) {
+  if (value > 0) return `+${value.toLocaleString()}`;
+  return value.toLocaleString();
 }
 
-function getTxTypeLabel(type: string) {
-  switch (type) {
-    case 'INITIAL_GRANT':
-      return '初始赠送';
-    case 'PREDICTION_STAKE':
-      return '竞猜投入';
-    case 'PREDICTION_WIN':
-      return '竞猜命中';
-    case 'PREDICTION_LOSE':
-      return '竞猜未中';
-    case 'ADMIN_ADJUST':
-      return '系统调整';
-    case 'REFUND':
-      return '回滚退款';
-    default:
-      return type;
-  }
+function getPredictionTone(status: string) {
+  if (status === 'WON') return 'text-emerald-700 bg-emerald-50 border-emerald-100';
+  if (status === 'LOST') return 'text-rose-700 bg-rose-50 border-rose-100';
+  return 'text-slate-600 bg-slate-50 border-slate-200';
 }
 
 export default function MeTab({ user, wallet, onLogout }: MeTabProps) {
-  const [txs, setTxs] = useState<Transaction[]>([]);
-  const [predictions, setPredictions] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [predictions, setPredictions] = useState<PredictionWithMatch[]>([]);
+  const [tournamentBets, setTournamentBets] = useState<TournamentBet[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showPredictionDetails, setShowPredictionDetails] = useState(false);
-  const [showTransactions, setShowTransactions] = useState(false);
 
   useEffect(() => {
-    async function loadLogs() {
+    async function loadProfileCenter() {
       try {
-        const [txsData, predsData] = await Promise.all([
+        const [txsData, predictionsData, tournamentPayload] = await Promise.all([
           apiRequest('/api/me/transactions'),
           apiRequest('/api/predictions/me'),
+          apiRequest('/api/tournament-bets'),
         ]);
-        setTxs(txsData);
-        setPredictions(predsData);
-      } catch (e) {
-        console.error('Failed to load profile data', e);
+
+        setTransactions(txsData);
+        setPredictions(predictionsData);
+        setTournamentBets(tournamentPayload.bets || []);
+      } catch (error) {
+        console.error('Failed to load me center data', error);
       } finally {
         setLoading(false);
       }
     }
-    loadLogs();
+
+    loadProfileCenter();
   }, []);
 
-  const settledPredictions = useMemo(
-    () => predictions.filter((item) => item.status === 'WON' || item.status === 'LOST'),
-    [predictions],
-  );
-  const wonPredictions = useMemo(() => predictions.filter((item) => item.status === 'WON'), [predictions]);
+  const stats = useMemo(() => {
+    const settled = predictions.filter((item) => item.status === 'WON' || item.status === 'LOST');
+    const wins = settled.filter((item) => item.status === 'WON');
+    const hitRate = settled.length > 0 ? Math.round((wins.length / settled.length) * 100) : 0;
+    const netProfit = settled.reduce((sum, item) => sum + (item.settledProfit || 0), 0);
 
-  const accuracy = settledPredictions.length > 0 ? Math.round((wonPredictions.length / settledPredictions.length) * 100) : 0;
-  const netProfit = settledPredictions.reduce((total, prediction) => total + Number(prediction.settledProfit || 0), 0);
-
-  const maxStreak = useMemo(() => {
-    let current = 0;
-    let best = 0;
-
-    for (const prediction of [...predictions].sort((a, b) => new Date(a.placedAt).getTime() - new Date(b.placedAt).getTime())) {
-      if (prediction.status === 'WON') {
-        current += 1;
-        best = Math.max(best, current);
-      } else if (prediction.status === 'LOST') {
-        current = 0;
+    const ordered = [...settled].sort(
+      (a, b) => new Date(a.settledAt || a.placedAt).getTime() - new Date(b.settledAt || b.placedAt).getTime(),
+    );
+    let currentStreak = 0;
+    let maxStreak = 0;
+    for (const item of ordered) {
+      if (item.status === 'WON') {
+        currentStreak += 1;
+        maxStreak = Math.max(maxStreak, currentStreak);
+      } else {
+        currentStreak = 0;
       }
     }
 
-    return best;
-  }, [predictions]);
+    return {
+      hitRate,
+      netProfit,
+      maxStreak,
+      totalPredictions: predictions.length,
+      settledCount: settled.length,
+      wonCount: wins.length,
+      longTermCount: tournamentBets.length,
+    };
+  }, [predictions, tournamentBets]);
 
-  const recentActions = useMemo(() => {
-    return txs
-      .filter((tx) => tx.type !== 'INITIAL_GRANT')
-      .slice(0, 6)
-      .map((tx) => ({
-        id: tx.id,
-        title: getTxTypeLabel(tx.type),
-        note: tx.note,
-        amount: tx.amount,
-        createdAt: tx.createdAt,
-      }));
-  }, [txs]);
+  const recentSettlements = useMemo(
+    () =>
+      predictions
+        .filter((item) => item.status === 'WON' || item.status === 'LOST')
+        .sort((a, b) => (b.settledAt || b.placedAt).localeCompare(a.settledAt || a.placedAt))
+        .slice(0, 4),
+    [predictions],
+  );
 
-  const achievements: AchievementCard[] = [
-    {
-      id: 'first-prediction',
-      title: '开局入场',
-      description: '完成第一笔竞猜',
-      current: Math.min(predictions.length, 1),
-      target: 1,
-      unlocked: predictions.length >= 1,
-    },
-    {
-      id: 'streak',
-      title: '连胜挑战',
-      description: '达成 3 连胜',
-      current: Math.min(maxStreak, 3),
-      target: 3,
-      unlocked: maxStreak >= 3,
-    },
-    {
-      id: 'accuracy',
-      title: '稳定命中',
-      description: '结算命中率达到 60%',
-      current: Math.min(accuracy, 60),
-      target: 60,
-      suffix: '%',
-      unlocked: settledPredictions.length >= 3 && accuracy >= 60,
-    },
-    {
-      id: 'score-master',
-      title: '比分捕手',
-      description: '命中 1 次比分玩法',
-      current: predictions.some((item) => item.market === 'CORRECT_SCORE' && item.status === 'WON') ? 1 : 0,
-      target: 1,
-      unlocked: predictions.some((item) => item.market === 'CORRECT_SCORE' && item.status === 'WON'),
-    },
-  ];
+  const recentTransactions = useMemo(() => transactions.slice(0, 5), [transactions]);
+
+  const styleTags = useMemo(() => {
+    const tags: string[] = [];
+    if (stats.hitRate >= 60 && stats.settledCount >= 3) tags.push('稳健命中');
+    if (stats.maxStreak >= 3) tags.push('连胜节奏');
+    if (stats.netProfit > 3000) tags.push('收益向上');
+    if (tournamentBets.length > 0) tags.push('长线参与');
+    if (tags.length === 0) tags.push('观察中');
+    return tags;
+  }, [stats, tournamentBets]);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[70vh] flex-col items-center justify-center space-y-4">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent" />
+        <p className="text-xs font-medium text-slate-500">正在整理你的战绩中心...</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6 pb-20 text-left">
-      <section className="relative overflow-hidden rounded-[32px] border border-slate-900/80 bg-slate-950 p-6 text-white shadow-[0_24px_60px_rgba(15,23,42,0.18)]">
-        <div className="pointer-events-none absolute -right-8 top-0 h-32 w-32 rounded-full bg-emerald-400/10 blur-3xl" />
+    <div className="space-y-5 pb-20">
+      <section className="overflow-hidden rounded-[30px] border border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-5 text-white shadow-[0_20px_48px_rgba(15,23,42,0.18)]">
         <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 text-3xl ring-1 ring-white/10">
-              {user?.avatarUrl || '👤'}
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-xl font-black">{user?.displayName || '观赛用户'}</h2>
-                <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-[10px] font-bold text-emerald-300 ring-1 ring-emerald-400/20">
-                  单群使用
-                </span>
-              </div>
-              <p className="mt-1 text-xs text-slate-300">身份卡 · 战绩概览 · 成就进度</p>
-            </div>
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-emerald-300">Record Center</p>
+            <h2 className="mt-2 text-2xl font-black">{user?.displayName || '观赛玩家'}</h2>
+            <p className="mt-2 text-xs leading-6 text-slate-300">这一页不讲故事，直接看你这届世界杯目前打成什么样。</p>
           </div>
-
           <button
             onClick={onLogout}
-            className="inline-flex items-center gap-1 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-white transition hover:bg-white/10"
+            className="rounded-2xl border border-white/15 bg-white/10 px-3 py-2 text-xs font-black text-white transition hover:bg-white/15"
           >
-            <LogOut className="h-4 w-4" />
-            退出
+            <span className="inline-flex items-center gap-1.5">
+              <LogOut className="h-3.5 w-3.5" />
+              退出
+            </span>
           </button>
         </div>
 
-        <div className="mt-6 grid grid-cols-2 gap-3">
-          <div className="rounded-3xl border border-white/10 bg-white/5 px-4 py-4">
-            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-300">
-              <KeyRound className="h-3.5 w-3.5 text-emerald-300" />
-              登录码
-            </div>
-            <div className="mt-3 text-lg font-black tracking-[0.08em] text-white">{user?.loginCode || 'WC0000'}</div>
-            <p className="mt-1 text-[11px] text-slate-400">只展示登录码，不再展示 PIN。</p>
-          </div>
-
-          <div className="rounded-3xl border border-white/10 bg-white/5 px-4 py-4">
-            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-300">
-              <Coins className="h-3.5 w-3.5 text-emerald-300" />
+        <div className="mt-5 grid grid-cols-2 gap-3">
+          <div className="rounded-3xl bg-white/8 p-4 ring-1 ring-white/10">
+            <div className="flex items-center gap-2 text-xs font-bold text-emerald-200">
+              <Coins className="h-4 w-4" />
               当前积分
             </div>
-            <div className="mt-3 text-lg font-black text-white">{wallet?.balance?.toLocaleString() || '10,000'} PTS</div>
-            <p className="mt-1 text-[11px] text-slate-400">当前群内观赛积分资产。</p>
+            <p className="mt-3 text-3xl font-black tracking-tight">{wallet?.balance?.toLocaleString() || '0'}</p>
+            <p className="mt-1 text-[11px] text-slate-300">娱乐积分余额</p>
           </div>
-        </div>
 
-        <div className="mt-4 flex items-center gap-2 rounded-2xl border border-emerald-400/10 bg-emerald-400/5 px-4 py-3 text-xs text-emerald-100">
-          <ShieldCheck className="h-4 w-4 text-emerald-300" />
-          PIN 已从个人页移除，当前只保留群内使用所需的身份信息。
+          <div className="rounded-3xl bg-white/8 p-4 ring-1 ring-white/10">
+            <div className="flex items-center gap-2 text-xs font-bold text-cyan-200">
+              <Target className="h-4 w-4" />
+              命中率
+            </div>
+            <p className="mt-3 text-3xl font-black tracking-tight">{stats.hitRate}%</p>
+            <p className="mt-1 text-[11px] text-slate-300">
+              已结算 {stats.settledCount} 场，命中 {stats.wonCount} 场
+            </p>
+          </div>
+
+          <div className="rounded-3xl bg-white/8 p-4 ring-1 ring-white/10">
+            <div className="flex items-center gap-2 text-xs font-bold text-amber-200">
+              <TrendingUp className="h-4 w-4" />
+              净收益
+            </div>
+            <p className={`mt-3 text-3xl font-black tracking-tight ${stats.netProfit >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+              {formatSigned(stats.netProfit)}
+            </p>
+            <p className="mt-1 text-[11px] text-slate-300">按已结算单场统计</p>
+          </div>
+
+          <div className="rounded-3xl bg-white/8 p-4 ring-1 ring-white/10">
+            <div className="flex items-center gap-2 text-xs font-bold text-violet-200">
+              <Trophy className="h-4 w-4" />
+              最长连胜
+            </div>
+            <p className="mt-3 text-3xl font-black tracking-tight">{stats.maxStreak}</p>
+            <p className="mt-1 text-[11px] text-slate-300">长线参与 {stats.longTermCount} 项</p>
+          </div>
         </div>
       </section>
 
       <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-        <div className="flex items-center gap-2">
-          <BarChart3 className="h-4.5 w-4.5 text-emerald-600" />
-          <h3 className="text-sm font-black text-slate-900">战绩概览</h3>
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-black text-slate-900">我的标签</h3>
+            <p className="mt-1 text-xs text-slate-500">先看你现在更像哪一类玩家。</p>
+          </div>
+          <Award className="h-4.5 w-4.5 text-amber-500" />
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          {[
-            { label: '当前积分', value: `${wallet?.balance?.toLocaleString() || '10,000'} PTS`, tone: 'text-emerald-700 bg-emerald-50 border-emerald-100' },
-            { label: '命中率', value: `${accuracy}%`, tone: 'text-cyan-700 bg-cyan-50 border-cyan-100' },
-            { label: '净收益', value: `${netProfit >= 0 ? '+' : ''}${netProfit.toFixed(1)} PTS`, tone: `${netProfit >= 0 ? 'text-emerald-700 bg-emerald-50 border-emerald-100' : 'text-rose-700 bg-rose-50 border-rose-100'}` },
-            { label: '最长连胜', value: `${maxStreak} 场`, tone: 'text-amber-700 bg-amber-50 border-amber-100' },
-          ].map((item) => (
-            <div key={item.label} className={`rounded-3xl border px-4 py-4 ${item.tone}`}>
-              <div className="text-[11px] font-bold">{item.label}</div>
-              <div className="mt-3 text-xl font-black">{item.value}</div>
-            </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {styleTags.map((tag) => (
+            <span
+              key={tag}
+              className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-700"
+            >
+              {tag}
+            </span>
           ))}
         </div>
       </section>
 
       <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Award className="h-4.5 w-4.5 text-amber-500" />
-            <h3 className="text-sm font-black text-slate-900">成就进度</h3>
+          <div>
+            <h3 className="text-sm font-black text-slate-900">长线竞猜</h3>
+            <p className="mt-1 text-xs text-slate-500">冠军、金靴、金球这些更看整届走势。</p>
           </div>
-          <span className="text-xs font-semibold text-slate-400">
-            已解锁 {achievements.filter((item) => item.unlocked).length}/{achievements.length}
-          </span>
+          <Ticket className="h-4.5 w-4.5 text-emerald-600" />
         </div>
 
-        <div className="mt-4 space-y-3">
-          {achievements.map((achievement) => {
-            const progress = Math.min((achievement.current / achievement.target) * 100, 100);
-
-            return (
+        {tournamentBets.length === 0 ? (
+          <div className="mt-4 rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+            你还没有参与长线竞猜，后续开放后会在竞猜页里进入。
+          </div>
+        ) : (
+          <div className="mt-4 space-y-3">
+            {tournamentBets.slice(0, 4).map((bet) => (
               <div
-                key={achievement.id}
-                className={`rounded-3xl border px-4 py-4 ${
-                  achievement.unlocked ? 'border-amber-200 bg-amber-50/60' : 'border-slate-200 bg-slate-50'
-                }`}
+                key={bet.id}
+                className="flex items-center justify-between rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-black text-slate-900">{achievement.title}</span>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                          achievement.unlocked
-                            ? 'bg-amber-100 text-amber-700 ring-1 ring-amber-200'
-                            : 'bg-white text-slate-500 ring-1 ring-slate-200'
-                        }`}
-                      >
-                        {achievement.unlocked ? '已解锁' : '进行中'}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-xs text-slate-500">{achievement.description}</p>
-                  </div>
-                  <div className="text-right text-xs font-bold text-slate-500">
-                    {achievement.current}
-                    {achievement.suffix || ''}
-                    {' / '}
-                    {achievement.target}
-                    {achievement.suffix || ''}
-                  </div>
+                <div>
+                  <p className="text-sm font-black text-slate-900">{(bet as any).marketLabel || bet.type}</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {bet.targetLabel}
+                    {bet.targetSubLabel ? ` · ${bet.targetSubLabel}` : ''}
+                  </p>
                 </div>
-
-                <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-white">
-                  <div
-                    className={`h-full rounded-full ${achievement.unlocked ? 'bg-amber-500' : 'bg-slate-300'}`}
-                    style={{ width: `${progress}%` }}
-                  />
+                <div className="text-right">
+                  <p className="text-sm font-black text-slate-900">{bet.potentialReturn.toLocaleString()} PTS</p>
+                  <p className="mt-1 text-[11px] text-slate-500">{bet.stakePoints} PTS 投入</p>
                 </div>
               </div>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-4.5 w-4.5 text-indigo-500" />
-          <h3 className="text-sm font-black text-slate-900">最近操作</h3>
-        </div>
-
-        <div className="mt-4 space-y-3">
-          {loading ? (
-            <div className="flex items-center justify-center gap-2 rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-xs text-slate-500">
-              <RefreshCw className="h-4 w-4 animate-spin" />
-              正在加载最近操作...
-            </div>
-          ) : recentActions.length === 0 ? (
-            <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-xs text-slate-500">
-              还没有新的操作记录，去首页或竞猜页看看。
-            </div>
-          ) : (
-            recentActions.map((action) => (
-              <div key={action.id} className="rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-black text-slate-900">{action.title}</div>
-                    <p className="mt-1 text-xs leading-6 text-slate-500">{action.note}</p>
-                  </div>
-                  <div className={`text-sm font-black ${action.amount >= 0 ? 'text-emerald-600' : 'text-slate-700'}`}>
-                    {action.amount >= 0 ? `+${action.amount}` : action.amount}
-                  </div>
-                </div>
-                <div className="mt-2 text-[11px] text-slate-400">{formatDate(action.createdAt)}</div>
-              </div>
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="h-4.5 w-4.5 text-cyan-500" />
-            <h3 className="text-sm font-black text-slate-900">更多明细</h3>
+          <div>
+            <h3 className="text-sm font-black text-slate-900">最近结算</h3>
+            <p className="mt-1 text-xs text-slate-500">先看最近几单到底是红是黑。</p>
           </div>
+          <Trophy className="h-4.5 w-4.5 text-amber-500" />
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-3">
-          <button
-            onClick={() => setShowPredictionDetails((value) => !value)}
-            className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-black text-slate-700 transition hover:bg-white"
-          >
-            {showPredictionDetails ? '收起竞猜明细' : '查看竞猜明细'}
-          </button>
-          <button
-            onClick={() => setShowTransactions((value) => !value)}
-            className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-black text-slate-700 transition hover:bg-white"
-          >
-            {showTransactions ? '收起积分流水' : '查看积分流水'}
-          </button>
+        {recentSettlements.length === 0 ? (
+          <div className="mt-4 rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+            还没有结算记录，等第一批比赛结束后这里会开始滚动起来。
+          </div>
+        ) : (
+          <div className="mt-4 space-y-3">
+            {recentSettlements.map((prediction) => (
+              <div
+                key={prediction.id}
+                className="rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-black text-slate-900">
+                      {prediction.match?.homeTeam?.nameZh || '主队'} vs {prediction.match?.awayTeam?.nameZh || '客队'}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {prediction.optionLabel} · {formatDate(prediction.match?.startTimeUtc || prediction.placedAt)}
+                    </p>
+                  </div>
+                  <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${getPredictionTone(prediction.status)}`}>
+                    {prediction.status === 'WON' ? '命中' : '未中'}
+                  </span>
+                </div>
+
+                <div className="mt-3 flex items-center justify-between text-xs">
+                  <span className="font-semibold text-slate-500">投入 {prediction.stakePoints} PTS</span>
+                  <span className={`font-black ${Number(prediction.settledProfit || 0) >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                    {formatSigned(prediction.settledProfit || 0)} PTS
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-black text-slate-900">近期操作</h3>
+            <p className="mt-1 text-xs text-slate-500">账本和下注动作放一起，方便快速复盘。</p>
+          </div>
+          <RefreshCw className="h-4.5 w-4.5 text-slate-400" />
         </div>
 
-        {showPredictionDetails && (
-          <div className="mt-4 space-y-3">
-            {predictions.length === 0 ? (
-              <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-xs text-slate-500">
-                还没有竞猜明细。
+        <div className="mt-4 space-y-3">
+          {recentTransactions.map((tx) => (
+            <div key={tx.id} className="flex items-center justify-between rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-black text-slate-900">{tx.note}</p>
+                <p className="mt-1 text-xs text-slate-500">{formatDate(tx.createdAt)}</p>
               </div>
-            ) : (
-              predictions.slice(0, 12).map((prediction) => (
-                <div key={prediction.id} className="rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2 text-sm font-black text-slate-900">
-                        <FlagBadge flagCode={prediction.match?.homeTeam?.code} size="sm" />
-                        <span>{prediction.match?.homeTeam?.nameZh}</span>
-                        <span className="text-slate-400">vs</span>
-                        <span>{prediction.match?.awayTeam?.nameZh}</span>
-                        <FlagBadge flagCode={prediction.match?.awayTeam?.code} size="sm" />
-                      </div>
-                      <p className="mt-2 text-xs text-slate-500">
-                        {prediction.optionLabel} · 赔率 {Number(prediction.oddsDecimal).toFixed(2)} · 投入 {prediction.stakePoints} PTS
-                      </p>
-                    </div>
-                    <div
-                      className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
-                        prediction.status === 'WON'
-                          ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100'
-                          : prediction.status === 'LOST'
-                            ? 'bg-rose-50 text-rose-700 ring-1 ring-rose-100'
-                            : 'bg-amber-50 text-amber-700 ring-1 ring-amber-100'
-                      }`}
-                    >
-                      {prediction.status === 'WON' ? '命中' : prediction.status === 'LOST' ? '未中' : '待结算'}
-                    </div>
-                  </div>
-                  <div className="mt-2 text-[11px] text-slate-400">{formatDate(prediction.placedAt)}</div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-
-        {showTransactions && (
-          <div className="mt-4 space-y-3">
-            {txs.length === 0 ? (
-              <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-xs text-slate-500">
-                暂无积分流水。
+              <div className="text-right">
+                <p className={`text-sm font-black ${tx.amount >= 0 ? 'text-emerald-700' : 'text-slate-700'}`}>
+                  {formatSigned(tx.amount)}
+                </p>
+                <p className="mt-1 text-[11px] text-slate-500">余额 {tx.balanceAfter.toLocaleString()}</p>
               </div>
-            ) : (
-              txs.slice(0, 16).map((tx) => (
-                <div key={tx.id} className="rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-black text-slate-900">{getTxTypeLabel(tx.type)}</div>
-                      <p className="mt-1 text-xs text-slate-500">{tx.note}</p>
-                    </div>
-                    <div className={`text-sm font-black ${tx.amount >= 0 ? 'text-emerald-600' : 'text-slate-700'}`}>
-                      {tx.amount >= 0 ? `+${tx.amount}` : tx.amount}
-                    </div>
-                  </div>
-                  <div className="mt-2 flex items-center justify-between text-[11px] text-slate-400">
-                    <span>{formatDate(tx.createdAt)}</span>
-                    <span>余额 {tx.balanceAfter}</span>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
+            </div>
+          ))}
+        </div>
       </section>
     </div>
   );
