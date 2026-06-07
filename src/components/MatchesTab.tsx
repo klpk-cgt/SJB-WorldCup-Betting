@@ -50,6 +50,7 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
   );
   const [filterTeam, setFilterTeam] = useState('');
   const [filterStage, setFilterStage] = useState('All');
+  const [filterGroup, setFilterGroup] = useState<string>('All');
   const [filterDate, setFilterDate] = useState<string>('all');
   const [primaryView, setPrimaryView] = useState<PrimaryView>('schedule');
   const [loading, setLoading] = useState(true);
@@ -162,6 +163,16 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
     return dates;
   }, [matches]);
 
+  const groupList = useMemo(() => {
+    const groups = [...new Set(matches
+      .filter(m => (m.stage || '').toLowerCase().includes('group'))
+      .map(m => m.homeTeam?.groupName || m.awayTeam?.groupName || '')
+      .filter(Boolean)
+    )];
+    groups.sort();
+    return groups;
+  }, [matches]);
+
   const filtered = useMemo(() => {
     return matches.filter((match) => {
       const homeName = match.homeTeam?.nameZh || '';
@@ -175,6 +186,10 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
       } else {
         if (match.stage !== filterStage) return false;
       }
+      if (filterGroup !== 'All') {
+        const matchGroup = match.homeTeam?.groupName || match.awayTeam?.groupName || '';
+        if (matchGroup !== filterGroup) return false;
+      }
       if (filterDate !== 'all') {
         const d = new Date(match.startTimeUtc);
         const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -182,7 +197,7 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
       }
       return true;
     });
-  }, [filterStage, filterTeam, filterDate, matches]);
+  }, [filterStage, filterTeam, filterGroup, filterDate, matches]);
 
   useEffect(() => {
     if (loading || primaryView !== 'schedule' || filtered.length === 0) return;
@@ -278,11 +293,11 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
 
         {primaryView === 'schedule' && (
           <div className="mt-4 space-y-3">
-            {/* 日期横滑选择器 */}
-            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide" style={{ scrollbarWidth: 'none' }}>
+            {/* 日期横滑选择器 - 紧凑双行 */}
+            <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
               <button
                 onClick={() => setFilterDate('all')}
-                className={`shrink-0 rounded-2xl px-3 py-1.5 text-xs font-bold transition ${
+                className={`shrink-0 rounded-xl px-2.5 py-1 text-[11px] font-bold transition ${
                   filterDate === 'all' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
@@ -291,7 +306,7 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
               {dateList.map(dateStr => {
                 const d = new Date(dateStr + 'T00:00:00');
                 const weekday = ['日','一','二','三','四','五','六'][d.getDay()];
-                const label = `${d.getMonth()+1}/${d.getDate()} 周${weekday}`;
+                const label = `${d.getMonth()+1}/${d.getDate()}`;
                 const count = matches.filter(m => {
                   const md = new Date(m.startTimeUtc);
                   return `${md.getFullYear()}-${String(md.getMonth()+1).padStart(2,'0')}-${String(md.getDate()).padStart(2,'0')}` === dateStr;
@@ -300,17 +315,45 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
                   <button
                     key={dateStr}
                     onClick={() => setFilterDate(dateStr)}
-                    className={`shrink-0 rounded-2xl px-3 py-1.5 text-xs font-bold transition ${
+                    className={`shrink-0 rounded-xl px-2.5 py-1 text-[11px] font-bold transition ${
                       filterDate === dateStr ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
                   >
-                    {label} <span className="opacity-60">{count}场</span>
+                    {label}<span className="opacity-60 ml-0.5">{count}场</span>
                   </button>
                 );
               })}
             </div>
 
-            {/* 搜索+分组筛选 */}
+            {/* 小组筛选 - 仅小组赛阶段显示 */}
+            {filterStage === 'Group Stage' && groupList.length > 0 && (
+              <div className="flex gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+                <button
+                  onClick={() => setFilterGroup('All')}
+                  className={`shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-bold transition ${
+                    filterGroup === 'All' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  全部小组
+                </button>
+                {groupList.map(g => {
+                  const letter = g.match(/Group\s+([A-Z])/i)?.[1] || g;
+                  return (
+                    <button
+                      key={g}
+                      onClick={() => setFilterGroup(g)}
+                      className={`shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-bold transition ${
+                        filterGroup === g ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {letter}组
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* 搜索+阶段筛选 */}
             <div className="grid grid-cols-2 gap-2">
               <input
                 type="text"
@@ -321,7 +364,7 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
               />
               <select
                 value={filterStage}
-                onChange={(e) => setFilterStage(e.target.value)}
+                onChange={(e) => { setFilterStage(e.target.value); setFilterGroup('All'); }}
                 className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-emerald-400 focus:bg-white"
               >
                 <option value="All">全部阶段</option>
