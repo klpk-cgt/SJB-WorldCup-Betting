@@ -30,6 +30,52 @@ export interface Team {
   code: string;
   logoUrl: string;
   groupName: string;
+  // 扩展字段（球队资料）
+  fifaRank?: number;
+  confederation?: string;
+  coachName?: string;
+  coachNationality?: string;
+  formation?: string;
+  worldCupAppearances?: number;
+  bestResult?: string;
+  qualificationStatus?: string;
+  profileSummary?: string;
+  heroPlayerNames?: string[];
+  primaryColor?: string;
+  secondaryColor?: string;
+}
+
+export interface Player {
+  id: string;
+  teamId: string;
+  name: string;
+  nameZh?: string;
+  shirtNumber?: number;
+  position: 'GK' | 'DEF' | 'MID' | 'FWD';
+  club?: string;
+  age?: number;
+  heightCm?: number;
+  weightKg?: number;
+  preferredFoot?: '左' | '右' | '双脚';
+  marketValue?: number;
+  avatarUrl?: string;
+  isCaptain?: boolean;
+  bioSummary?: string;
+}
+
+export interface TeamHistoryResult {
+  id: string;
+  teamId: string;
+  year: number;
+  host: string;
+  result: string;
+  matchesPlayed: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  note?: string;
 }
 
 export interface MatchStatistics {
@@ -219,26 +265,150 @@ export interface Prediction {
   oddsSnapshot?: OddsSnapshotRecord;
 }
 
+export type TournamentBetType = 'champion' | 'golden_boot' | 'golden_ball';
+export type TournamentBetStatus = 'OPEN' | 'LOCKED' | 'WON' | 'LOST' | 'VOID';
+
+export interface TournamentBetOption {
+  id: string;
+  label: string;
+  subLabel?: string;
+  targetType: 'team' | 'player';
+  oddsDecimal: number;
+  marketType: TournamentBetType;
+}
+
+export interface TournamentBet {
+  id: string;
+  userId: string;
+  roomId: string;
+  type: TournamentBetType;
+  targetId: string;
+  targetLabel: string;
+  targetSubLabel?: string;
+  stakePoints: number;
+  oddsDecimal: number;
+  potentialReturn: number;
+  status: TournamentBetStatus;
+  openedAt: string;
+  lockedAt?: string;
+  placedAt: string;
+  settledAt?: string;
+  settledReturn?: number;
+  settledProfit?: number;
+}
+
+export type BracketRoundKey =
+  | 'ROUND_OF_32'
+  | 'ROUND_OF_16'
+  | 'QUARTER_FINAL'
+  | 'SEMI_FINAL'
+  | 'THIRD_PLACE'
+  | 'FINAL';
+
+export interface BracketMatchNode {
+  id: string;
+  round: BracketRoundKey;
+  title: string;
+  slotLabel?: string;
+  matchId?: string;
+  homeTeamId?: string;
+  awayTeamId?: string;
+  homeTeamName?: string;
+  awayTeamName?: string;
+  homeTeamCode?: string;
+  awayTeamCode?: string;
+  homeScore?: number;
+  awayScore?: number;
+  winnerTeamId?: string;
+  startTimeUtc?: string;
+  status?: MatchStatus;
+  nextMatchId?: string;
+}
+
+export interface BracketRound {
+  key: BracketRoundKey;
+  label: string;
+  matches: BracketMatchNode[];
+}
+
+export interface BracketState {
+  generatedAt: string;
+  rounds: BracketRound[];
+}
+
+export type AIContentType =
+  | 'DAILY_RECOMMENDATION'
+  | 'MATCH_PREDICTION'
+  | 'PRE_MATCH_ANALYSIS'
+  | 'POST_MATCH_RECAP'
+  | 'LEADERBOARD_COMMENTARY'
+  | 'SEARCH_ENHANCEMENT'
+  | 'BET_SHARE_COPY';
+
+export type AIProvider = 'DeepSeek' | 'Mimo' | 'Gemini' | 'Local';
+export type AIContentScopeType = 'match' | 'room' | 'global';
+export type AIEnhancementMode = 'off' | 'search' | 'multimodal' | 'search_multimodal';
+export type AIContentStatus = 'ready' | 'stale' | 'error';
+export type AIConfidenceBand = 'low' | 'medium' | 'high';
+
+export interface AIPredictionResult {
+  winner_pick: 'home' | 'draw' | 'away';
+  score_pick: string;
+  confidence_band: AIConfidenceBand;
+  summary: string;
+  bullets: string[];
+  risk_warning: string;
+}
+
+export interface AIPreMatchAnalysisResult {
+  summary: string;
+  prediction: Pick<AIPredictionResult, 'winner_pick' | 'score_pick'>;
+  bullets: string[];
+  risk_warning: string;
+  search_enhanced: boolean;
+  multimodal_enhanced: boolean;
+}
+
+export interface AILeaderboardCommentaryResult {
+  headline: string;
+  summary: string;
+  highlights: string[];
+  fun_tags: string[];
+  risk_warning?: string;
+}
+
 export interface AIContent {
   id: string;
-  type:
-    | 'DAILY_RECOMMENDATION'
-    | 'PRE_MATCH_ANALYSIS'
-    | 'POST_MATCH_RECAP'
-    | 'LEADERBOARD_COMMENTARY'
-    | 'BET_SHARE_COPY';
+  type: AIContentType;
   matchId?: string;
   predictionId?: string;
   title: string;
   content: string;
   model: string;
   createdAt: string;
-  provider?: 'DeepSeek' | 'MiMo' | 'Gemini' | 'Local';
+  provider?: AIProvider;
   summary?: string;
   bullets?: string[];
   riskWarning?: string;
   fallbackUsed?: boolean;
-  debugMeta?: Record<string, string | number | boolean | null>;
+  contentType?: AIContentType;
+  scopeType?: AIContentScopeType;
+  scopeId?: string;
+  promptVersion?: string;
+  dataVersion?: string;
+  enhancementMode?: AIEnhancementMode;
+  predictionJson?: AIPredictionResult;
+  outputJson?: AIPredictionResult | AIPreMatchAnalysisResult | AILeaderboardCommentaryResult | Record<string, unknown>;
+  inputSnapshotJson?: Record<string, unknown>;
+  searchEnhanced?: boolean;
+  multimodalEnhanced?: boolean;
+  status?: AIContentStatus;
+  expiresAt?: string;
+  cacheKey?: string;
+  headline?: string;
+  highlights?: string[];
+  funTags?: string[];
+  roomId?: string;
 }
 
 export interface ShareCardRecord {
@@ -249,14 +419,14 @@ export interface ShareCardRecord {
   mode: 'image' | 'text';
   text: string;
   imageDataUrl?: string;
-  provider: 'DeepSeek' | 'MiMo' | 'Gemini' | 'Local';
+  provider: AIProvider;
   model: string;
   fallbackUsed: boolean;
   createdAt: string;
   debugMeta?: Record<string, string | number | boolean | null>;
 }
 
-export type SyncProvider = 'API-Football' | 'The Odds API' | 'DeepSeek' | 'MiMo' | 'Gemini' | 'Local';
+export type SyncProvider = 'API-Football' | 'The Odds API' | 'DeepSeek' | 'Mimo' | 'Gemini' | 'Local';
 export type SyncStatus = 'SUCCESS' | 'FAILED' | 'PARTIAL';
 export type SyncType = 'fixtures' | 'livescore' | 'lineups' | 'events' | 'odds' | 'ai';
 

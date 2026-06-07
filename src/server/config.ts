@@ -5,10 +5,16 @@ export interface RuntimeConfig {
   geminiApiKey: string;
   mimoApiKey: string;
   mimoBaseUrl: string;
-  mimoModel: string;
+  mimoDefaultModel: string;
+  mimoMultimodalModel: string;
+  mimoFastModel: string;
   deepSeekModel: string;
   geminiTextModel: string;
   geminiImageModel: string;
+  aiPrimaryProvider: 'deepseek' | 'mimo' | 'gemini';
+  aiFallbackProvider: 'mimo' | 'gemini' | 'local';
+  aiEnableWebSearch: boolean;
+  aiEnableMultimodal: boolean;
   adminUsername: string;
   adminPassword: string;
   adminSessionTtlMs: number;
@@ -27,11 +33,17 @@ export function getRuntimeConfig(): RuntimeConfig {
     deepSeekApiKey: readEnv('DEEPSEEK_API_KEY'),
     geminiApiKey: readEnv('GEMINI_API_KEY'),
     mimoApiKey: readEnv('MIMO_API_KEY'),
-    mimoBaseUrl: readEnv('MIMO_BASE_URL'),
-    mimoModel: readEnv('MIMO_MODEL', 'mimo-v2.5-pro'),
+    mimoBaseUrl: readEnv('MIMO_BASE_URL', 'https://api.xiaomimimo.com/v1'),
+    mimoDefaultModel: readEnv('MIMO_DEFAULT_MODEL', 'mimo-v2.5-pro'),
+    mimoMultimodalModel: readEnv('MIMO_MULTIMODAL_MODEL', 'mimo-v2.5'),
+    mimoFastModel: readEnv('MIMO_FAST_MODEL', 'mimo-v2-flash'),
     deepSeekModel: readEnv('DEEPSEEK_MODEL', 'deepseek-v4-pro'),
     geminiTextModel: readEnv('GEMINI_TEXT_MODEL', 'gemini-2.5-flash'),
     geminiImageModel: readEnv('GEMINI_IMAGE_MODEL', 'gemini-2.5-flash-image-preview'),
+    aiPrimaryProvider: (readEnv('AI_PRIMARY_PROVIDER', 'deepseek').toLowerCase() as RuntimeConfig['aiPrimaryProvider']),
+    aiFallbackProvider: (readEnv('AI_FALLBACK_PROVIDER', 'mimo').toLowerCase() as RuntimeConfig['aiFallbackProvider']),
+    aiEnableWebSearch: readEnv('AI_ENABLE_WEB_SEARCH', 'true') !== 'false',
+    aiEnableMultimodal: readEnv('AI_ENABLE_MULTIMODAL', 'true') !== 'false',
     adminUsername: readEnv('ADMIN_USERNAME', 'admin'),
     adminPassword: readEnv('ADMIN_PASSWORD', 'admin_worldcup2026'),
     adminSessionTtlMs: Number(process.env.ADMIN_SESSION_TTL_MS || 12 * 60 * 60 * 1000),
@@ -56,7 +68,7 @@ export function summarizeProviderConfig(config: RuntimeConfig) {
     mimo: {
       configured: hasProviderKey(config.mimoApiKey) && Boolean(config.mimoBaseUrl),
       env: 'MIMO_API_KEY',
-      model: config.mimoModel,
+      model: config.mimoDefaultModel,
       baseUrlConfigured: Boolean(config.mimoBaseUrl),
     },
     geminiText: {

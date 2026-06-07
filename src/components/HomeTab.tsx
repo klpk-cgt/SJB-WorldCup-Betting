@@ -5,13 +5,14 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Brain, Calendar, CheckCircle2, Coins, Sparkles, UserRound, XCircle } from 'lucide-react';
+import { Brain, Calendar, CheckCircle2, Coins, GitBranch, Sparkles, UserRound, XCircle } from 'lucide-react';
 import { AIContent, Match, MatchStatus } from '../types';
 import { apiRequest, formatDate } from '../utils/api';
 import { getBeijingDayLabel, getMatchesForNearestDay } from '../utils/matchDisplay';
 import FocusMatchCard from './home/FocusMatchCard';
 import { FocusMatch, FocusMatchStatus, TeamStats, mockFocusMatch } from './home/focusMatch';
 import FlagBadge from './home/FlagBadge';
+import TeamDetailDrawer from './TeamDetailDrawer';
 
 interface HomeTabProps {
   user: any;
@@ -111,12 +112,20 @@ function buildFocusMatch(match: Match | undefined, now: number): FocusMatch {
     homeTeam: {
       name: match.homeTeam.nameZh,
       flagCode: match.homeTeam.code,
-      stats: showcaseStatsByTeamCode[match.homeTeam.code],
+      stats: {
+        goals: showcaseStatsByTeamCode[match.homeTeam.code]?.goals,
+        avgGoals: showcaseStatsByTeamCode[match.homeTeam.code]?.avgGoals,
+        worldRank: match.homeTeam.fifaRank,
+      },
     },
     awayTeam: {
       name: match.awayTeam.nameZh,
       flagCode: match.awayTeam.code,
-      stats: showcaseStatsByTeamCode[match.awayTeam.code],
+      stats: {
+        goals: showcaseStatsByTeamCode[match.awayTeam.code]?.goals,
+        avgGoals: showcaseStatsByTeamCode[match.awayTeam.code]?.avgGoals,
+        worldRank: match.awayTeam.fifaRank,
+      },
     },
     odds: {
       homeWin: match.odds?.h2h.homeWin,
@@ -161,6 +170,8 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
   const [quizCompleted, setQuizCompleted] = useState(false);
   const [quizScore, setQuizScore] = useState(0);
   const [quizFinishedToday, setQuizFinishedToday] = useState(false);
+  const [teamDetailId, setTeamDetailId] = useState<string | null>(null);
+  const [teamDetailOpen, setTeamDetailOpen] = useState(false);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -311,6 +322,7 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
           };
           onNavigate(tabMap[target] || 'matches', featuredMatch?.id);
         }}
+        onTeamClick={(teamCode) => { setTeamDetailId(teamCode); setTeamDetailOpen(true); }}
       />
 
       <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
@@ -324,22 +336,24 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
           </span>
         </div>
 
-        <div className="mt-4 rounded-3xl bg-gradient-to-br from-cyan-50 via-white to-emerald-50 p-4 ring-1 ring-slate-100">
-          <p className="text-base font-black text-slate-900">{aiView.title}</p>
-          <p className="mt-3 text-sm leading-6 text-slate-700">{aiView.summary}</p>
+        <div className="mt-3 rounded-3xl bg-gradient-to-br from-cyan-50 via-white to-emerald-50 p-4 ring-1 ring-slate-100">
+          <p className="text-sm font-black text-slate-900">{aiView.title}</p>
+          <p className="mt-2 text-xs leading-5 text-slate-600">{aiView.summary}</p>
 
-          <div className="mt-4 space-y-2">
-            {aiView.bullets.map((bullet) => (
-              <div key={bullet} className="flex items-start gap-2 text-sm text-slate-600">
-                <span className="mt-1 h-1.5 w-1.5 rounded-full bg-cyan-500" />
-                <span>{bullet}</span>
-              </div>
-            ))}
-          </div>
+          {aiView.bullets.length > 0 && (
+            <div className="mt-3 space-y-1.5">
+              {aiView.bullets.slice(0, 2).map((bullet) => (
+                <div key={bullet} className="flex items-start gap-1.5 text-xs text-slate-600">
+                  <span className="mt-1 h-1 w-1 rounded-full bg-cyan-500 shrink-0" />
+                  <span>{bullet}</span>
+                </div>
+              ))}
+            </div>
+          )}
 
-          <div className="mt-4 rounded-2xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+          <p className="mt-3 text-[10px] leading-4 text-amber-700/70">
             风险提醒：{aiView.riskWarning}
-          </div>
+          </p>
         </div>
       </section>
 
@@ -380,13 +394,23 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
                       <span>{formatDate(match.startTimeUtc)}</span>
                     </div>
                     <div className="mt-2 flex items-center gap-2 text-sm font-black text-slate-900">
-                      <FlagBadge flagCode={match.homeTeam?.code} size="sm" />
+                      <span
+                        className="cursor-pointer"
+                        onClick={(e) => { e.stopPropagation(); setTeamDetailId(match.homeTeam?.id); setTeamDetailOpen(true); }}
+                      >
+                        <FlagBadge flagCode={match.homeTeam?.code} size="sm" />
+                      </span>
                       <span className="truncate">{match.homeTeam?.nameZh}</span>
                       <span className="text-slate-400">
                         {isLive || isFinished ? `${match.homeScore ?? 0} : ${match.awayScore ?? 0}` : 'VS'}
                       </span>
                       <span className="truncate">{match.awayTeam?.nameZh}</span>
-                      <FlagBadge flagCode={match.awayTeam?.code} size="sm" />
+                      <span
+                        className="cursor-pointer"
+                        onClick={(e) => { e.stopPropagation(); setTeamDetailId(match.awayTeam?.id); setTeamDetailOpen(true); }}
+                      >
+                        <FlagBadge flagCode={match.awayTeam?.code} size="sm" />
+                      </span>
                     </div>
                   </div>
 
@@ -642,6 +666,12 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
           </motion.div>
         )}
       </AnimatePresence>
+
+      <TeamDetailDrawer
+        teamId={teamDetailId}
+        open={teamDetailOpen}
+        onClose={() => setTeamDetailOpen(false)}
+      />
     </div>
   );
 }

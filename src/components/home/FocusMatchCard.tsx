@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { CalendarDays, Clock3, MapPin, Zap, Trophy, Flame, Radio, ArrowRight, BarChart3, Shirt, Tv } from 'lucide-react';
+import { CalendarDays, Clock3, MapPin, Zap, Trophy, Flame, Radio, ArrowRight, BarChart3, Shirt, Tv, Info } from 'lucide-react';
 import stadiumBackground from '../../assets/focus-match-stadium.png';
 import { FocusMatch, mockFocusMatch, normalizeFlagCode, toFlagEmoji, formatIndexValue, flagStyles } from './focusMatch';
 
@@ -9,6 +9,7 @@ interface FocusMatchCardProps {
   onPrimaryAction?: () => void;
   onSecondaryAction?: () => void;
   onQuickNavigate?: (target: 'schedule' | 'lineup' | 'score' | 'leaderboard') => void;
+  onTeamClick?: (teamCode: string) => void;
 }
 
 /* ─── 主组件 ─── */
@@ -17,6 +18,7 @@ export default function FocusMatchCard({
   onPrimaryAction,
   onSecondaryAction,
   onQuickNavigate,
+  onTeamClick,
 }: FocusMatchCardProps) {
   const isLive = match.status === 'live';
   const isFinished = match.status === 'finished';
@@ -100,7 +102,10 @@ export default function FocusMatchCard({
           <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center">
             {/* 主队 */}
             <div className="flex items-center gap-2.5">
-              <div className="relative flex h-10 w-10 shrink-0 items-center justify-center sm:h-12 sm:w-12">
+              <div
+                className="relative flex h-10 w-10 shrink-0 items-center justify-center sm:h-12 sm:w-12 cursor-pointer"
+                onClick={() => onTeamClick?.(match.homeTeam.flagCode)}
+              >
                 <span className="text-[1.75rem] leading-none sm:text-[2.1rem]">{homeEmoji}</span>
                 <div className="absolute -right-1.5 -bottom-1 flex h-[18px] w-[18px] items-center justify-center overflow-hidden rounded-full border-[1.5px] border-white/30 shadow-md">
                   {flagStyles[homeCode] ? (
@@ -111,12 +116,23 @@ export default function FocusMatchCard({
                 </div>
               </div>
               <div className="min-w-0">
-                <div className="truncate text-sm font-black text-white sm:text-base">{match.homeTeam.name}</div>
-                {typeof match.homeTeam.stats?.worldRank === 'number' && (
+                <div
+                  className="truncate text-sm font-black text-white sm:text-base cursor-pointer hover:text-emerald-300 transition-colors"
+                  onClick={() => onTeamClick?.(match.homeTeam.flagCode)}
+                >
+                  {match.homeTeam.name}
+                </div>
+                <div className="mt-0.5 flex flex-col items-start gap-0.5">
                   <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-amber-400/80">
-                    <Trophy className="h-2 w-2" />世界第{match.homeTeam.stats.worldRank}
+                    <Trophy className="h-2 w-2" />世界排名{typeof match.homeTeam.stats?.worldRank === 'number' ? match.homeTeam.stats.worldRank : '--'}
                   </span>
-                )}
+                  <button
+                    className="inline-flex items-center gap-0.5 rounded-full bg-white/10 px-2 py-0.5 text-[8px] font-bold text-white/70 ring-1 ring-white/10 hover:bg-white/20 hover:text-emerald-300 hover:ring-emerald-400/30 transition-all"
+                    onClick={(e) => { e.stopPropagation(); onTeamClick?.(match.homeTeam.flagCode); }}
+                  >
+                    <Info className="h-2.5 w-2.5" />资料
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -158,14 +174,28 @@ export default function FocusMatchCard({
             {/* 客队 */}
             <div className="flex items-center justify-end gap-2.5">
               <div className="min-w-0 text-right">
-                <div className="truncate text-sm font-black text-white sm:text-base">{match.awayTeam.name}</div>
-                {typeof match.awayTeam.stats?.worldRank === 'number' && (
-                  <span className="inline-flex items-center justify-end gap-0.5 text-[9px] font-bold text-amber-400/80">
-                    <Trophy className="h-2 w-2" />世界第{match.awayTeam.stats.worldRank}
+                <div
+                  className="truncate text-sm font-black text-white sm:text-base cursor-pointer hover:text-emerald-300 transition-colors"
+                  onClick={() => onTeamClick?.(match.awayTeam.flagCode)}
+                >
+                  {match.awayTeam.name}
+                </div>
+                <div className="mt-0.5 flex flex-col items-end gap-0.5">
+                  <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-amber-400/80">
+                    <Trophy className="h-2 w-2" />世界排名{typeof match.awayTeam.stats?.worldRank === 'number' ? match.awayTeam.stats.worldRank : '--'}
                   </span>
-                )}
+                  <button
+                    className="inline-flex items-center gap-0.5 rounded-full bg-white/10 px-2 py-0.5 text-[8px] font-bold text-white/70 ring-1 ring-white/10 hover:bg-white/20 hover:text-emerald-300 hover:ring-emerald-400/30 transition-all"
+                    onClick={(e) => { e.stopPropagation(); onTeamClick?.(match.awayTeam.flagCode); }}
+                  >
+                    资料<Info className="h-2.5 w-2.5" />
+                  </button>
+                </div>
               </div>
-              <div className="relative flex h-10 w-10 shrink-0 items-center justify-center sm:h-12 sm:w-12">
+              <div
+                className="relative flex h-10 w-10 shrink-0 items-center justify-center sm:h-12 sm:w-12 cursor-pointer"
+                onClick={() => onTeamClick?.(match.awayTeam.flagCode)}
+              >
                 <span className="text-[1.75rem] leading-none sm:text-[2.1rem]">{awayEmoji}</span>
                 <div className="absolute -left-1.5 -bottom-1 flex h-[18px] w-[18px] items-center justify-center overflow-hidden rounded-full border-[1.5px] border-white/30 shadow-md">
                   {flagStyles[awayCode] ? (
