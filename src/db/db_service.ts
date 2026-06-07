@@ -51,6 +51,8 @@ const DB_FILE_PATH = path.join(process.cwd(), 'db.json');
 
 class DatabaseService {
   private cache: DatabaseSchema | null = null;
+  private _derived = false;
+  private _saveTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     this.init();
@@ -269,7 +271,9 @@ class DatabaseService {
     if (!this.cache) {
       this.init();
     }
-    this.ensureDerivedState();
+    if (!this._derived) {
+      this.ensureDerivedState();
+    }
     return this.cache!;
   }
 
@@ -279,6 +283,18 @@ class DatabaseService {
     } catch (e) {
       console.error('Failed to write database to disk!', e);
     }
+  }
+
+  /** 延迟异步写入，合并短时间内的多次写入请求，不阻塞事件循环 */
+  public saveAsync() {
+    if (this._saveTimer) return; // 已有待写入的定时器，跳过
+    this._saveTimer = setTimeout(() => {
+      this._saveTimer = null;
+      const data = JSON.stringify(this.cache, null, 2);
+      fs.promises.writeFile(DB_FILE_PATH, data, 'utf-8').catch((e) => {
+        console.error('Failed to write database to disk!', e);
+      });
+    }, 100);
   }
 
   // Update wrapper helpers
@@ -316,6 +332,48 @@ class DatabaseService {
     }
     if (!Array.isArray(this.cache.players)) {
       this.cache.players = SQUAD_PLAYERS;
+    } else {
+      // 合并 SQUAD_PLAYERS 中缺失的球员（确保所有 48 队都有完整阵容）
+      const existingIds = new Set(this.cache.players.map(p => p.id));
+      const missing = SQUAD_PLAYERS.filter(p => !existingIds.has(p.id));
+      if (missing.length > 0) {
+        this.cache.players = [...this.cache.players, ...missing];
+      }
+      // 去重：同一球队中，如果两个球员的 nameZh 是包含关系（如"姆巴佩"和"基利安·姆巴佩"），视为同一人
+      // 优先保留有 avatarUrl 或 nameZh 更长的记录
+      const deduped: Player[] = [];
+      const used = new Set<number>();
+      for (let i = 0; i < this.cache.players.length; i++) {
+        if (used.has(i)) continue;
+        const pi = this.cache.players[i];
+        let best = pi;
+        let bestIdx = i;
+        for (let j = i + 1; j < this.cache.players.length; j++) {
+          if (used.has(j)) continue;
+          const pj = this.cache.players[j];
+          if (pi.teamId !== pj.teamId) continue;
+          // 检查 nameZh 是否是包含关系
+          if (pi.nameZh.includes(pj.nameZh) || pj.nameZh.includes(pi.nameZh)) {
+            // 优先保留 nameZh 更长的（全名），或 avatarUrl 存在的
+            const iHasAvatar = !!(best as any).avatarUrl;
+            const jHasAvatar = !!(pj as any).avatarUrl;
+            if (jHasAvatar && !iHasAvatar) {
+              best = pj;
+              bestIdx = j;
+            } else if (pj.nameZh.length > best.nameZh.length && iHasAvatar === jHasAvatar) {
+              best = pj;
+              bestIdx = j;
+            }
+            used.add(j === bestIdx ? i : j);
+          }
+        }
+        deduped.push(best);
+        used.add(bestIdx);
+      }
+      if (deduped.length !== this.cache.players.length) {
+        this.cache.players = deduped;
+      }
+      this.saveAsync();
     }
     if (!Array.isArray(this.cache.teamHistory)) {
       this.cache.teamHistory = SEED_TEAM_HISTORY;
@@ -343,6 +401,7 @@ class DatabaseService {
     if (!this.cache.bracketState || !Array.isArray(this.cache.bracketState.rounds)) {
       this.cache.bracketState = buildBracketState(this.cache.matches || [], this.cache.teams || []);
     }
+    this._derived = true;
   }
 }
 

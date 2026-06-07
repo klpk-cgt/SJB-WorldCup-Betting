@@ -315,6 +315,8 @@ export interface TournamentBetOption {
   targetType: 'team' | 'player';
   oddsDecimal: number;
   marketType: TournamentBetType;
+  flagCode?: string;
+  avatarUrl?: string;
 }
 
 export interface TournamentBet {

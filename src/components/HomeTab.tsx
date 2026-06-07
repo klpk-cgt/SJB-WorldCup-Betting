@@ -5,14 +5,16 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Brain, Calendar, CheckCircle2, Coins, GitBranch, Sparkles, UserRound, XCircle } from 'lucide-react';
+import { Brain, Calendar, CheckCircle2, Coins, Sparkles, XCircle } from 'lucide-react';
 import { AIContent, Match, MatchStatus } from '../types';
 import { apiRequest, formatDate } from '../utils/api';
 import { getBeijingDayLabel, getMatchesForNearestDay } from '../utils/matchDisplay';
 import FocusMatchCard from './home/FocusMatchCard';
 import { FocusMatch, FocusMatchStatus, TeamStats, mockFocusMatch } from './home/focusMatch';
 import FlagBadge from './home/FlagBadge';
+import SmartAvatar from './SmartAvatar';
 import TeamDetailDrawer from './TeamDetailDrawer';
+import { useToast } from './ToastProvider';
 
 interface HomeTabProps {
   user: any;
@@ -94,7 +96,7 @@ function buildFocusMatch(match: Match | undefined, now: number): FocusMatch {
   const status: FocusMatchStatus =
     match.status === MatchStatus.LIVE
       ? 'live'
-      : match.status === MatchStatus.FT || match.status === MatchStatus.AET || match.status === MatchStatus.PEN
+      : [MatchStatus.FT, MatchStatus.AET, MatchStatus.PEN].includes(match.status)
         ? 'finished'
         : 'upcoming';
 
@@ -140,7 +142,7 @@ function extractAiView(ai: AIContent | null) {
     return {
       summary: '今晚先盯焦点战节奏，再决定娱乐积分怎么分配。',
       bullets: ['首发出来后再加注', '热门方向别一把压满', '比分玩法更适合小档位试水'],
-      riskWarning: '临场首发和锁盘时间都可能改变判断，娱乐积分建议分档操作。',
+      riskWarning: '临场首发和锁盘时间都可能改变判断，建议娱乐积分分档操作。',
       provider: 'AI 赛前助手',
       title: '今日焦点推荐已生成',
     };
@@ -160,7 +162,6 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
   const [dailyAI, setDailyAI] = useState<AIContent | null>(null);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(Date.now());
-
   const [showQuizModal, setShowQuizModal] = useState(false);
   const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([]);
   const [quizLoading, setQuizLoading] = useState(false);
@@ -172,6 +173,7 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
   const [quizFinishedToday, setQuizFinishedToday] = useState(false);
   const [teamDetailId, setTeamDetailId] = useState<string | null>(null);
   const [teamDetailOpen, setTeamDetailOpen] = useState(false);
+  const toast = useToast();
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -181,11 +183,7 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
   useEffect(() => {
     async function initHome() {
       try {
-        const [matchesData, aiData] = await Promise.all([
-          apiRequest('/api/matches'),
-          apiRequest('/api/ai/daily'),
-        ]);
-
+        const [matchesData, aiData] = await Promise.all([apiRequest('/api/matches'), apiRequest('/api/ai/daily')]);
         setMatches(matchesData);
         setDailyAI(aiData);
 
@@ -221,7 +219,7 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
       const data = await apiRequest('/api/quiz/daily');
       setQuizQuestions(data.questions);
     } catch (error: any) {
-      alert(error.message || '获取今日问答失败，请稍后重试。');
+      toast.error('获取今日问答失败', error.message || '请稍后重试。');
       setShowQuizModal(false);
     } finally {
       setQuizLoading(false);
@@ -248,7 +246,7 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
         setQuizScore((prev) => prev + (res.pointsEarned || 100));
       }
     } catch {
-      // Keep the local feedback even if the request fails
+      // Keep local feedback even if request fails
     }
   };
 
@@ -275,9 +273,22 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
 
   if (loading) {
     return (
-      <div className="flex min-h-[70vh] flex-col items-center justify-center space-y-4">
-        <div className="h-10 w-10 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent" />
-        <p className="text-xs font-medium text-slate-500">正在加载世界杯首页...</p>
+      <div className="space-y-5 pb-6">
+        <div className="rounded-3xl bg-white p-5 shadow-sm">
+          <div className="h-5 w-32 animate-pulse rounded-lg bg-slate-200" />
+          <div className="mt-3 h-4 w-48 animate-pulse rounded-lg bg-slate-100" />
+        </div>
+        <div className="rounded-3xl bg-white p-5 shadow-sm">
+          <div className="h-5 w-24 animate-pulse rounded-lg bg-slate-200" />
+          <div className="mt-3 space-y-3">
+            <div className="h-20 animate-pulse rounded-2xl bg-slate-100" />
+            <div className="h-20 animate-pulse rounded-2xl bg-slate-100" />
+          </div>
+        </div>
+        <div className="rounded-3xl bg-white p-5 shadow-sm">
+          <div className="h-5 w-28 animate-pulse rounded-lg bg-slate-200" />
+          <div className="mt-3 h-32 animate-pulse rounded-2xl bg-slate-100" />
+        </div>
       </div>
     );
   }
@@ -286,9 +297,7 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
     <div className="space-y-5 pb-6">
       <section className="flex items-center justify-between rounded-[28px] border border-slate-200 bg-white px-4 py-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
         <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-2xl text-emerald-600 ring-1 ring-emerald-100">
-            {user?.avatarUrl || '🎯'}
-          </div>
+          <SmartAvatar name={user?.displayName || '游客观赛模式'} src={user?.avatarUrl} size={48} className="ring-1 ring-emerald-100" />
           <div>
             <div className="flex items-center gap-2">
               <span className="text-sm font-black text-slate-900">{user?.displayName || '游客观赛模式'}</span>
@@ -314,19 +323,24 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
         onPrimaryAction={() => onNavigate('prediction', featuredMatch?.id)}
         onSecondaryAction={() => onNavigate('matches', featuredMatch?.id)}
         onQuickNavigate={(target) => {
-          const tabMap: Record<string, string> = {
-            schedule: 'matches',
-            lineup: 'matches',
-            score: 'matches',
-            leaderboard: 'leaderboard',
-          };
           if (target === 'lineup') {
-            onNavigate('matches', featuredMatch?.id, 'lineup');
-          } else {
-            onNavigate(tabMap[target] || 'matches', featuredMatch?.id);
+            onNavigate('match-detail', featuredMatch?.id, 'lineup');
+            return;
           }
+          if (target === 'score') {
+            onNavigate('match-detail', featuredMatch?.id, 'overview');
+            return;
+          }
+          if (target === 'leaderboard') {
+            onNavigate('leaderboard');
+            return;
+          }
+          onNavigate('matches', featuredMatch?.id);
         }}
-        onTeamClick={(teamCode) => { setTeamDetailId(teamCode); setTeamDetailOpen(true); }}
+        onTeamClick={(teamCode) => {
+          setTeamDetailId(teamCode);
+          setTeamDetailOpen(true);
+        }}
       />
 
       <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
@@ -348,16 +362,14 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
             <div className="mt-3 space-y-1.5">
               {aiView.bullets.slice(0, 2).map((bullet) => (
                 <div key={bullet} className="flex items-start gap-1.5 text-xs text-slate-600">
-                  <span className="mt-1 h-1 w-1 rounded-full bg-cyan-500 shrink-0" />
+                  <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-cyan-500" />
                   <span>{bullet}</span>
                 </div>
               ))}
             </div>
           )}
 
-          <p className="mt-3 text-[10px] leading-4 text-amber-700/70">
-            风险提醒：{aiView.riskWarning}
-          </p>
+          <p className="mt-3 text-[10px] leading-4 text-amber-700/70">风险提醒：{aiView.riskWarning}</p>
         </div>
       </section>
 
@@ -383,12 +395,12 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
           ) : (
             recentMatches.map((match) => {
               const isLive = match.status === MatchStatus.LIVE;
-              const isFinished = match.status === MatchStatus.FT;
+              const isFinished = [MatchStatus.FT, MatchStatus.AET, MatchStatus.PEN].includes(match.status);
 
               return (
                 <button
                   key={match.id}
-                  onClick={() => onNavigate('matches', match.id)}
+                  onClick={() => onNavigate('match-detail', match.id, 'overview')}
                   className="flex w-full items-center gap-3 rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-left transition hover:border-slate-300 hover:bg-white"
                 >
                   <div className="min-w-0 flex-1">
@@ -400,18 +412,24 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
                     <div className="mt-2 flex items-center gap-2 text-sm font-black text-slate-900">
                       <span
                         className="cursor-pointer"
-                        onClick={(e) => { e.stopPropagation(); setTeamDetailId(match.homeTeam?.id); setTeamDetailOpen(true); }}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setTeamDetailId(match.homeTeam?.id);
+                          setTeamDetailOpen(true);
+                        }}
                       >
                         <FlagBadge flagCode={match.homeTeam?.code} size="sm" />
                       </span>
                       <span className="truncate">{match.homeTeam?.nameZh}</span>
-                      <span className="text-slate-400">
-                        {isLive || isFinished ? `${match.homeScore ?? 0} : ${match.awayScore ?? 0}` : 'VS'}
-                      </span>
+                      <span className="text-slate-400">{isLive || isFinished ? `${match.homeScore ?? 0} : ${match.awayScore ?? 0}` : 'VS'}</span>
                       <span className="truncate">{match.awayTeam?.nameZh}</span>
                       <span
                         className="cursor-pointer"
-                        onClick={(e) => { e.stopPropagation(); setTeamDetailId(match.awayTeam?.id); setTeamDetailOpen(true); }}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setTeamDetailId(match.awayTeam?.id);
+                          setTeamDetailOpen(true);
+                        }}
                       >
                         <FlagBadge flagCode={match.awayTeam?.code} size="sm" />
                       </span>
@@ -502,7 +520,7 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.96, opacity: 0 }}
               transition={{ duration: 0.2 }}
-              onClick={(e) => e.stopPropagation()}
+              onClick={(event) => event.stopPropagation()}
               className="w-full max-w-sm rounded-[32px] bg-white p-5 shadow-2xl"
             >
               {quizLoading ? (
@@ -518,12 +536,10 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
                     transition={{ type: 'spring', stiffness: 300, damping: 20 }}
                   >
                     <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-violet-100 to-amber-100 text-3xl">
-                      {quizScore > 0 ? '🏅' : '🫡'}
+                      {quizScore > 0 ? '🏆' : '🫡'}
                     </div>
                   </motion.div>
-                  <h3 className="mt-4 text-lg font-black text-slate-950">
-                    {quizScore > 0 ? '挑战完成' : '今日挑战结束'}
-                  </h3>
+                  <h3 className="mt-4 text-lg font-black text-slate-950">{quizScore > 0 ? '挑战完成' : '今日挑战结束'}</h3>
                   <motion.p
                     className="mt-2 text-3xl font-black text-violet-600"
                     initial={{ scale: 0.5, opacity: 0 }}
@@ -566,11 +582,11 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
                   </div>
 
                   <div className="mt-3 flex gap-1.5">
-                    {quizQuestions.map((_, i) => (
+                    {quizQuestions.map((_, index) => (
                       <div
-                        key={i}
+                        key={index}
                         className={`h-1.5 flex-1 rounded-full transition-colors ${
-                          i < currentQIndex ? 'bg-violet-400' : i === currentQIndex ? 'bg-violet-500' : 'bg-slate-200'
+                          index < currentQIndex ? 'bg-violet-400' : index === currentQIndex ? 'bg-violet-500' : 'bg-slate-200'
                         }`}
                       />
                     ))}
@@ -581,9 +597,9 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
                       <p className="text-sm font-black leading-6 text-slate-900">{quizQuestions[currentQIndex].question}</p>
 
                       <div className="mt-4 space-y-2.5">
-                        {quizQuestions[currentQIndex].options.map((option, i) => {
-                          const isCorrect = i === quizQuestions[currentQIndex].correctIndex;
-                          const isSelected = selectedOption === i;
+                        {quizQuestions[currentQIndex].options.map((option, index) => {
+                          const isCorrect = index === quizQuestions[currentQIndex].correctIndex;
+                          const isSelected = selectedOption === index;
                           let optionStyle = 'border-slate-200 bg-slate-50 text-slate-800';
 
                           if (answered) {
@@ -600,9 +616,9 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
 
                           return (
                             <motion.button
-                              key={i}
+                              key={index}
                               type="button"
-                              onClick={() => handleAnswer(i)}
+                              onClick={() => handleAnswer(index)}
                               disabled={answered}
                               className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left text-sm font-bold transition ${optionStyle} ${
                                 !answered ? 'hover:border-violet-200 hover:bg-violet-50/50 active:scale-[0.98]' : ''
@@ -623,7 +639,7 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
                                 ) : answered && isSelected ? (
                                   <XCircle className="h-4 w-4" />
                                 ) : (
-                                  String.fromCharCode(65 + i)
+                                  String.fromCharCode(65 + index)
                                 )}
                               </span>
                               <span className="flex-1">{option}</span>
@@ -671,11 +687,7 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
         )}
       </AnimatePresence>
 
-      <TeamDetailDrawer
-        teamId={teamDetailId}
-        open={teamDetailOpen}
-        onClose={() => setTeamDetailOpen(false)}
-      />
+      <TeamDetailDrawer teamId={teamDetailId} open={teamDetailOpen} onClose={() => setTeamDetailOpen(false)} />
     </div>
   );
 }

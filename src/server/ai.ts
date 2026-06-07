@@ -488,7 +488,7 @@ async function callProvider(options: ProviderCallOptions) {
 
 async function callDeepSeek(apiKey: string, systemPrompt: string, userPrompt: string) {
   const data = await withRetry(async () => {
-    const response = await fetch('https://api.deepseek.com/chat/completions', {
+    const response = await fetchWithTimeout('https://api.deepseek.com/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -537,7 +537,7 @@ async function callMimo(options: ProviderCallOptions) {
       : options.userPrompt;
 
   const data = await withRetry(async () => {
-    const response = await fetch(`${options.config.mimoBaseUrl}/chat/completions`, {
+    const response = await fetchWithTimeout(`${options.config.mimoBaseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1147,6 +1147,8 @@ function assertMatch(match: Match | undefined): Match {
   return match;
 }
 
+const AI_API_TIMEOUT_MS = 30_000; // AI API 请求超时 30 秒
+
 async function withRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
   let lastError: unknown;
   for (let attempt = 0; attempt <= retries; attempt += 1) {
@@ -1159,6 +1161,17 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
     }
   }
   throw lastError;
+}
+
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = AI_API_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    return response;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 function sleep(ms: number) {

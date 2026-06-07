@@ -141,9 +141,15 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
 
   if (loading) {
     return (
-      <div className="flex min-h-[70vh] flex-col items-center justify-center space-y-4">
-        <div className="h-10 w-10 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent" />
-        <p className="text-xs font-medium text-slate-500">正在加载赛程中心...</p>
+      <div className="space-y-4 pb-6">
+        <div className="rounded-3xl bg-white p-5 shadow-sm">
+          <div className="h-5 w-24 animate-pulse rounded-lg bg-slate-200" />
+          <div className="mt-3 space-y-3">
+            <div className="h-16 animate-pulse rounded-2xl bg-slate-100" />
+            <div className="h-16 animate-pulse rounded-2xl bg-slate-100" />
+            <div className="h-16 animate-pulse rounded-2xl bg-slate-100" />
+          </div>
+        </div>
       </div>
     );
   }

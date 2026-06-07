@@ -60,7 +60,6 @@ export const SEED_PLAYERS: Player[] = [
   { id: 'fra-6', teamId: 'FRA', name: '坎特', nameZh: '坎特', shirtNumber: 6, position: 'MID', club: '吉达联合', preferredFoot: '右', marketValue: 10000000 },
   { id: 'fra-7', teamId: 'FRA', name: '琼阿梅尼', nameZh: '琼阿梅尼', shirtNumber: 8, position: 'MID', club: '皇家马德里', preferredFoot: '右', marketValue: 90000000 },
   { id: 'fra-8', teamId: 'FRA', name: '格列兹曼', nameZh: '格列兹曼', shirtNumber: 7, position: 'MID', club: '马德里竞技', preferredFoot: '左', marketValue: 25000000 },
-  { id: 'fra-9', teamId: 'FRA', name: '姆巴佩', nameZh: '姆巴佩', shirtNumber: 10, position: 'FWD', club: '皇家马德里', preferredFoot: '右', marketValue: 180000000, isCaptain: true },
   { id: 'fra-10', teamId: 'FRA', name: '登贝莱', nameZh: '登贝莱', shirtNumber: 11, position: 'FWD', club: '巴黎圣日耳曼', preferredFoot: '左', marketValue: 60000000 },
   { id: 'fra-11', teamId: 'FRA', name: '穆阿尼', nameZh: '穆阿尼', shirtNumber: 9, position: 'FWD', club: '尤文图斯', preferredFoot: '右', marketValue: 30000000 },
 

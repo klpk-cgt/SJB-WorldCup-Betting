@@ -3,10 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
-import { Settings, Shield, Users, Trophy, Play, CheckCircle, RefreshCw, BarChart3, Database, Key, Coins, HelpCircle, FileText, AlertCircle, Sparkles } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Settings, Shield, Users, Trophy, Play, CheckCircle, RefreshCw, BarChart3, Database, Key, Coins, HelpCircle, FileText, AlertCircle, Sparkles, Plus, Trash2, Upload, X } from 'lucide-react';
 import { apiRequest } from '../utils/api';
 import { Match, User, SyncLog } from '../types';
+import { useToast } from './ToastProvider';
 
 interface AdminPanelProps {
   onBackToApp: () => void;
@@ -30,6 +31,20 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
   const [provisionRoom, setProvisionRoom] = useState('room-1');
   const [userMsg, setUserMsg] = useState('');
 
+  // 单个创建账号
+  const [singleName, setSingleName] = useState('');
+  const [singleLoginCode, setSingleLoginCode] = useState('');
+  const [singleRoom, setSingleRoom] = useState('room-1');
+  const [singlePoints, setSinglePoints] = useState('10000');
+
+  // 头像上传
+  const [avatarUploadUserId, setAvatarUploadUserId] = useState<string | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string>('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 删除确认
+  const [deleteConfirmUserId, setDeleteConfirmUserId] = useState<string | null>(null);
+
   // Balance adjust helpers
   const [adjustTargetUser, setAdjustTargetUser] = useState<any | null>(null);
   const [adjustAmount, setAdjustAmount] = useState('1000');
@@ -51,6 +66,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
 
   const [settleStatusMsg, setSettleStatusMsg] = useState('');
   const [isWorking, setIsWorking] = useState(false);
+  const toast = useToast();
 
   useEffect(() => {
     const savedToken = localStorage.getItem('wc_admin_token');
@@ -124,6 +140,102 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
     }
   };
 
+  // 单个创建账号
+  const handleCreateSingleUser = async () => {
+    if (!singleLoginCode.trim()) {
+      toast.error('创建失败', '请输入登录码。');
+      return;
+    }
+    if (!singleName.trim()) {
+      toast.error('创建失败', '请输入用户昵称。');
+      return;
+    }
+    setIsWorking(true);
+    try {
+      const res = await apiRequest('/api/admin/users/create', {
+        method: 'POST',
+        body: JSON.stringify({
+          displayName: singleName,
+          loginCode: singleLoginCode.trim().toUpperCase(),
+          roomId: singleRoom,
+          initialPoints: parseInt(singlePoints) || 10000,
+        })
+      });
+      toast.success('创建成功', `账号 "${singleName}" 已创建，登录码: ${res.loginCode}`);
+      setSingleName('');
+      setSingleLoginCode('');
+      await loadAdminData();
+    } catch (e: any) {
+      toast.error('创建失败', e.message);
+    } finally {
+      setIsWorking(false);
+    }
+  };
+
+  // 删除账号
+  const handleDeleteUser = async (userId: string) => {
+    setIsWorking(true);
+    try {
+      const res = await apiRequest(`/api/admin/users/${userId}`, {
+        method: 'DELETE',
+      });
+      toast.success('删除成功', res.message);
+      setDeleteConfirmUserId(null);
+      await loadAdminData();
+    } catch (e: any) {
+      toast.error('删除失败', e.message);
+    } finally {
+      setIsWorking(false);
+    }
+  };
+
+  // 头像上传处理
+  const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>, userId: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // 验证文件类型
+    if (!file.type.startsWith('image/')) {
+      toast.error('格式错误', '请选择图片文件。');
+      return;
+    }
+
+    // 验证文件大小（2MB）
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('文件过大', '请选择小于 2MB 的图片。');
+      return;
+    }
+
+    // 读取为 Base64
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const base64 = event.target?.result as string;
+      setAvatarPreview(base64);
+
+      // 上传到服务器
+      setIsWorking(true);
+      try {
+        await apiRequest(`/api/admin/users/${userId}/avatar`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ avatarUrl: base64 })
+        });
+        toast.success('上传成功', '头像已更新。');
+        setAvatarUploadUserId(null);
+        setAvatarPreview('');
+        await loadAdminData();
+      } catch (err: any) {
+        toast.error('上传失败', err.message);
+      } finally {
+        setIsWorking(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   // Adjust funds
   const handleAdjustFunds = async () => {
     if (!adjustTargetUser) return;
@@ -136,9 +248,9 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
       });
       setAdjustTargetUser(null);
       await loadAdminData();
-      alert('调整成功');
+      toast.success('调整成功', '用户积分已经更新。');
     } catch (e: any) {
-      alert(`调整拨款出错: ${e.message}`);
+      toast.error('调整积分失败', e.message);
     } finally {
       setIsWorking(false);
     }
@@ -191,11 +303,11 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
         })
       });
 
-      alert('比赛成绩与即时赔率指数已一并保存修改！');
+      toast.success('比赛数据已保存', '比分与赔率修改已经生效。');
       setSelectedMatch(null);
       await loadAdminData();
     } catch (e: any) {
-      alert(`更新赛果出错: ${e.message}`);
+      toast.error('更新比赛失败', e.message);
     } finally {
       setIsWorking(false);
     }
@@ -222,10 +334,10 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
     setIsWorking(true);
     try {
       await apiRequest('/api/admin/sync/today', { method: 'POST' });
-      alert('已模拟拉取 API-Football 重新构建本地 World Cup 静态赛程与动态缓存。');
+      toast.success('赛程同步完成', '本地赛程与缓存已重新构建。');
       await loadAdminData();
     } catch (e: any) {
-      alert(e.message);
+      toast.error('赛程同步失败', e.message);
     } finally {
       setIsWorking(false);
     }
@@ -238,7 +350,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
       setLastTestSyncResult(result);
       await loadAdminData();
     } catch (e: any) {
-      alert(e.message || '鍚屾楠岃瘉澶辫触');
+      toast.error('同步校验失败', e.message || '请稍后重试。');
     } finally {
       setIsWorking(false);
     }
@@ -249,10 +361,10 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
     setIsWorking(true);
     try {
       await apiRequest(`/api/admin/sync/matches/${selectedMatch.id}`, { method: 'POST' });
-      alert('已重新同步这场比赛。');
+      toast.success('单场同步完成', '这场比赛已经重新同步。');
       await loadAdminData();
     } catch (e: any) {
-      alert(e.message);
+      toast.error('单场同步失败', e.message);
     } finally {
       setIsWorking(false);
     }
@@ -561,20 +673,72 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
 
       {/* PROVISION AND WALLET ADJUST TAB */}
       {activeTab === 'users' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* provision form */}
+        <div className="space-y-6">
+          {/* 单个创建账号 */}
+          <div className="bg-white p-5 rounded-3xl border border-slate-200 space-y-4 shadow-2xs">
+            <h4 className="text-xs font-black text-slate-800 flex items-center gap-1.5 font-display border-b border-slate-100 pb-2">
+              <Plus className="w-5 h-5 text-emerald-500" />
+              快速创建账号
+            </h4>
+            <p className="text-[10.5px] text-slate-450 leading-relaxed font-bold">
+              手动设置登录码、昵称和初始积分。创建后无需 PIN，好友直接用登录码即可进入。
+            </p>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div>
+                <label className="text-[9px] text-slate-400 block mb-1 font-bold">登录码</label>
+                <input
+                  type="text"
+                  placeholder="例如：ZS"
+                  value={singleLoginCode}
+                  onChange={(e) => setSingleLoginCode(e.target.value.toUpperCase())}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 font-mono font-bold focus:outline-none focus:border-emerald-400"
+                />
+              </div>
+              <div>
+                <label className="text-[9px] text-slate-400 block mb-1 font-bold">用户昵称</label>
+                <input
+                  type="text"
+                  placeholder="例如：张三"
+                  value={singleName}
+                  onChange={(e) => setSingleName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 font-bold focus:outline-none focus:border-emerald-400"
+                />
+              </div>
+              <div>
+                <label className="text-[9px] text-slate-400 block mb-1 font-bold">初始积分</label>
+                <input
+                  type="text"
+                  value={singlePoints}
+                  onChange={(e) => setSinglePoints(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 font-bold focus:outline-none focus:border-emerald-400"
+                />
+              </div>
+              <div className="flex items-end">
+                <button
+                  onClick={handleCreateSingleUser}
+                  disabled={isWorking}
+                  className="w-full bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold py-2 rounded-xl transition cursor-pointer"
+                >
+                  {isWorking ? '创建中...' : '创建账号'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* 批量创建账号 */}
           <div className="bg-white p-5 rounded-3xl border border-slate-200 space-y-4 shadow-2xs">
             <h4 className="text-xs font-black text-slate-800 flex items-center gap-1.5 font-display border-b border-slate-100 pb-2">
               <Users className="w-5 h-5 text-rose-500" />
-              世界杯圈：批量人员账号预置
+              批量创建账号
             </h4>
             <p className="text-[10.5px] text-slate-450 leading-relaxed font-bold">
-              支持群主在后台以硬编码或纯文本预创建好友身份。支持在下方文本框中按换行录入吹牛的好友，默认分配10,000底注娱乐积分、默认PIN「1234」、提供专属自研WC代码。
+              支持按换行录入多个昵称，默认分配 10,000 积分、默认 PIN「1234」。
             </p>
 
             <div className="space-y-3 pt-1">
               <div>
-                <label className="text-[9px] text-slate-400 block mb-1 font-bold">选择宿主群组</label>
+                <label className="text-[9px] text-slate-400 block mb-1 font-bold">选择群组</label>
                 <select
                   value={provisionRoom}
                   onChange={(e) => setProvisionRoom(e.target.value)}
@@ -586,9 +750,9 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
               </div>
 
               <div>
-                <label className="text-[9px] text-slate-400 block mb-1 font-bold">粘贴昵称花名列表 (换行分割)</label>
+                <label className="text-[9px] text-slate-400 block mb-1 font-bold">粘贴昵称列表 (换行分割)</label>
                 <textarea
-                  rows={4}
+                  rows={3}
                   placeholder={`阿强大哥\n老王粉丝\n冷门收割豪`}
                   value={pasteNames}
                   onChange={(e) => setPasteNames(e.target.value)}
@@ -601,7 +765,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
                 disabled={isWorking}
                 className="w-full bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold py-3 rounded-xl transition cursor-pointer"
               >
-                {isWorking ? '预置导入中...' : '确认预置并自动化派发账号'}
+                {isWorking ? '预置导入中...' : '批量创建账号'}
               </button>
 
               {userMsg && (
@@ -612,22 +776,22 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
             </div>
           </div>
 
-          {/* Users lists & Wallets console */}
+          {/* 用户列表 */}
           <div className="bg-white p-5 rounded-3xl border border-slate-200 space-y-4 shadow-2xs">
             <h4 className="text-xs font-black text-slate-800 flex items-center gap-1.5 font-display border-b border-slate-100 pb-2">
               <Coins className="w-5 h-5 text-rose-500" />
-              现存群友账号目录(调账及密钥重置)
+              现存账号管理
             </h4>
 
-            {/* Adjustment Pop Form */}
+            {/* 调账弹窗 */}
             {adjustTargetUser && (
               <div className="bg-gradient-to-tr from-rose-50/25 via-white to-white p-4 border border-rose-200 rounded-2xl space-y-3 shadow-2xs">
                 <p className="text-xs font-bold text-rose-600">
-                  划拨调拨：群友 「{adjustTargetUser.displayName}」 娱乐积分
+                  调整用户 「{adjustTargetUser.displayName}」 积分
                 </p>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-[9px] text-slate-400 block font-bold">积分调幅 (负数代表扣减)</label>
+                    <label className="text-[9px] text-slate-400 block font-bold">积分调幅 (负数扣减)</label>
                     <input
                       type="text"
                       value={adjustAmount}
@@ -636,7 +800,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
                     />
                   </div>
                   <div>
-                    <label className="text-[9px] text-slate-400 block font-bold">调拨事因备注</label>
+                    <label className="text-[9px] text-slate-400 block font-bold">备注</label>
                     <input
                       type="text"
                       value={adjustReason}
@@ -656,41 +820,128 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
                     onClick={handleAdjustFunds}
                     className="px-3.5 py-1.5 bg-rose-500 hover:bg-rose-600 text-white text-[10px] rounded-lg font-bold cursor-pointer transition"
                   >
-                    确认划拨
+                    确认调整
                   </button>
                 </div>
               </div>
             )}
 
-            <div className="max-h-[340px] overflow-y-auto divide-y divide-slate-100 pr-1">
+            {/* 头像上传弹窗 */}
+            {avatarUploadUserId && (
+              <div className="bg-gradient-to-tr from-emerald-50/25 via-white to-white p-4 border border-emerald-200 rounded-2xl space-y-3 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold text-emerald-600">上传头像</p>
+                  <button
+                    onClick={() => { setAvatarUploadUserId(null); setAvatarPreview(''); }}
+                    className="text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleAvatarFileChange(e, avatarUploadUserId)}
+                  className="w-full text-xs"
+                />
+                {avatarPreview && (
+                  <div className="flex justify-center">
+                    <img src={avatarPreview} alt="预览" className="w-20 h-20 rounded-full object-cover border-2 border-emerald-200" />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 删除确认弹窗 - 模态 */}
+            {deleteConfirmUserId && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setDeleteConfirmUserId(null)}>
+                <div className="w-[90vw] max-w-sm rounded-3xl border border-red-200 bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                  <h4 className="text-sm font-black text-red-600">确认删除</h4>
+                  <p className="mt-2 text-xs text-slate-700 font-bold">
+                    确认删除用户「{users.find(u => u.id === deleteConfirmUserId)?.displayName}」？
+                  </p>
+                  <p className="mt-1 text-[10px] text-slate-500">
+                    删除后将同时删除该用户的所有数据（钱包、预测记录、交易记录），此操作不可撤销。
+                  </p>
+                  <div className="mt-4 flex justify-end space-x-3">
+                    <button
+                      onClick={() => setDeleteConfirmUserId(null)}
+                      className="px-4 py-2 text-slate-500 text-xs font-bold rounded-xl border border-slate-200 hover:bg-slate-50 transition cursor-pointer"
+                    >
+                      取消
+                    </button>
+                    <button
+                      onClick={() => handleDeleteUser(deleteConfirmUserId)}
+                      disabled={isWorking}
+                      className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-xs rounded-xl font-bold cursor-pointer transition disabled:opacity-50"
+                    >
+                      {isWorking ? '删除中...' : '确认删除'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="max-h-[400px] overflow-y-auto divide-y divide-slate-100 pr-1">
               {users.map((u) => (
                 <div key={u.id} className="flex justify-between items-center py-3 text-xs text-left">
-                  <div>
-                    <p className="font-extrabold text-slate-800">
-                      {u.displayName}{' '}
-                      <span className="text-[9.5px] text-slate-405 text-slate-400 font-mono font-bold bg-slate-50 px-1 py-0.5 rounded border border-slate-150">
-                        {u.loginCode}
-                      </span>
-                    </p>
-                    <p className="text-[9px] text-slate-400 font-bold mt-1">
-                      宿群房: {u.groupName || '宿主观赛群'} | 累计猜单: {u.betsCount} 场次
-                    </p>
+                  <div className="flex items-center gap-3">
+                    {/* 头像 */}
+                    <div className="relative">
+                      {u.avatarUrl && u.avatarUrl.startsWith('data:image/') ? (
+                        <img src={u.avatarUrl} alt={u.displayName} className="w-10 h-10 rounded-full object-cover border border-slate-200" />
+                      ) : u.avatarUrl && u.avatarUrl.length <= 2 ? (
+                        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-lg border border-slate-200">
+                          {u.avatarUrl}
+                        </div>
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-xs text-slate-400 border border-slate-200">
+                          {u.displayName?.charAt(0) || '?'}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-extrabold text-slate-800">
+                        {u.displayName}{' '}
+                        <span className="text-[9.5px] text-slate-400 font-mono font-bold bg-slate-50 px-1 py-0.5 rounded border border-slate-150">
+                          {u.loginCode}
+                        </span>
+                      </p>
+                      <p className="text-[9px] text-slate-400 font-bold mt-1">
+                        群组: {u.groupName || '未分组'} | 猜单: {u.betsCount} 场
+                      </p>
+                    </div>
                   </div>
 
-                  <div className="flex items-center space-x-2.5 font-mono text-right">
-                    <div>
+                  <div className="flex items-center space-x-2 font-mono text-right">
+                    <div className="text-right">
                       <span className="text-emerald-600 font-black block">{u.balance?.toLocaleString()} PTS</span>
                       <span className="text-[9px] text-slate-400 block font-bold">Wallet</span>
                     </div>
+                    <button
+                      onClick={() => setAvatarUploadUserId(u.id)}
+                      className="text-[10px] bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-150 px-2 py-1.5 rounded-lg font-bold cursor-pointer transition"
+                      title="上传头像"
+                    >
+                      <Upload className="w-3 h-3" />
+                    </button>
                     <button
                       onClick={() => {
                         setAdjustTargetUser(u);
                         setAdjustAmount('1000');
                         setAdjustReason('群友调增奖励');
                       }}
-                      className="text-[10px] bg-rose-50 hover:bg-rose-100 text-rose-605 text-rose-600 border border-rose-150 px-2 py-1.5 rounded-lg font-bold cursor-pointer transition"
+                      className="text-[10px] bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-150 px-2 py-1.5 rounded-lg font-bold cursor-pointer transition"
                     >
                       调账
+                    </button>
+                    <button
+                      onClick={() => setDeleteConfirmUserId(u.id)}
+                      className="text-[10px] bg-red-50 hover:bg-red-100 text-red-600 border border-red-150 px-2 py-1.5 rounded-lg font-bold cursor-pointer transition"
+                      title="删除账号"
+                    >
+                      <Trash2 className="w-3 h-3" />
                     </button>
                   </div>
                 </div>

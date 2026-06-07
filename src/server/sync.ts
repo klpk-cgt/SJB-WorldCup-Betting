@@ -46,11 +46,16 @@ export function ensureDefaultOdds(db: DatabaseSchema): string[] {
   return filled;
 }
 
-// ── 带重试的 fetch ──
+// ── 带超时和重试的 fetch ──
+const EXTERNAL_API_TIMEOUT_MS = 15_000; // 外部 API 请求超时 15 秒
+
 async function fetchWithRetry(url: string, options: RequestInit, retries = 2, delayMs = 1000): Promise<Response> {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const res = await fetch(url, options);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), EXTERNAL_API_TIMEOUT_MS);
+      const res = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(timeoutId);
       if (res.status === 429) {
         // Rate limited — wait longer
         const retryAfter = Number(res.headers.get('Retry-After')) || 5;

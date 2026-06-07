@@ -81,12 +81,30 @@ function getRankDeltaMeta(delta?: number) {
   };
 }
 
-function PodiumCard({ item, rank }: { item: LeaderboardEntry; rank: 1 | 2 | 3 }) {
+function PodiumCard({ item, rank, tabKey }: { item: LeaderboardEntry; rank: 1 | 2 | 3; tabKey: LeaderboardKey }) {
   const rankMeta = {
     1: { bg: 'from-amber-300 to-yellow-100', badge: 'bg-amber-500 text-white', height: 'h-28' },
     2: { bg: 'from-slate-300 to-slate-50', badge: 'bg-slate-500 text-white', height: 'h-20' },
     3: { bg: 'from-orange-300 to-amber-50', badge: 'bg-orange-500 text-white', height: 'h-16' },
   }[rank];
+
+  // 根据榜单类型显示对应的核心数据
+  const displayValue = (() => {
+    switch (tabKey) {
+      case 'total':
+        return item.balance?.toLocaleString() || 0;
+      case 'today':
+        return formatSignedNumber(item.todayProfit);
+      case 'wonProfit':
+        return `+${item.totalWonProfit?.toLocaleString() || 0}`;
+      case 'rate':
+        return `${item.rate || 0}%`;
+      case 'streak':
+        return `${item.currentStreak || 0} 连中`;
+      default:
+        return item.balance?.toLocaleString() || 0;
+    }
+  })();
 
   return (
     <div className="flex flex-1 flex-col items-center">
@@ -97,7 +115,7 @@ function PodiumCard({ item, rank }: { item: LeaderboardEntry; rank: 1 | 2 | 3 })
       </div>
       <div className={`mt-3 flex w-full flex-col items-center justify-end rounded-t-3xl bg-gradient-to-b ${rankMeta.bg} ${rankMeta.height} px-2 py-3`}>
         <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${rankMeta.badge}`}>#{rank}</span>
-        <div className="mt-2 text-sm font-black text-slate-900">{item.balance?.toLocaleString() || 0}</div>
+        <div className="mt-2 text-sm font-black text-slate-900">{displayValue}</div>
         {item.featuredBadge && (
           <span className={`mt-2 rounded-full px-2 py-0.5 text-[9px] font-bold ${TONE_CLASS[item.badgeTone || 'slate']}`}>
             {item.featuredBadge}
@@ -195,7 +213,7 @@ export default function LeaderboardTab({ user }: LeaderboardTabProps) {
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-600">排行榜</div>
-            <h2 className="mt-1 text-lg font-black text-slate-900">首屏先看领奖台，再直接看完整名次</h2>
+            <h2 className="mt-1 text-lg font-black text-slate-900">群聊排行榜</h2>
           </div>
           <button
             onClick={fetchRanks}
@@ -255,12 +273,12 @@ export default function LeaderboardTab({ user }: LeaderboardTabProps) {
 
             <div className="mb-3 flex items-center justify-between">
               <div className="text-sm font-black text-slate-900">前三领奖台</div>
-              <div className="text-[11px] font-medium text-slate-500">压缩展示，下面直接看全榜</div>
+              <div className="text-[11px] font-medium text-slate-500">{tabMeta[activeLeaderboardTab].label}</div>
             </div>
             <div className="flex items-end gap-2">
-              {totalList[1] && <PodiumCard item={totalList[1]} rank={2} />}
-              {totalList[0] && <PodiumCard item={totalList[0]} rank={1} />}
-              {totalList[2] && <PodiumCard item={totalList[2]} rank={3} />}
+              {activeList[1] && <PodiumCard item={activeList[1]} rank={2} tabKey={activeLeaderboardTab} />}
+              {activeList[0] && <PodiumCard item={activeList[0]} rank={1} tabKey={activeLeaderboardTab} />}
+              {activeList[2] && <PodiumCard item={activeList[2]} rank={3} tabKey={activeLeaderboardTab} />}
             </div>
           </div>
         )}
@@ -286,7 +304,8 @@ export default function LeaderboardTab({ user }: LeaderboardTabProps) {
             </div>
 
             <div className="mt-3 space-y-2">
-              {activeList.map((item, idx) => {
+              {activeList.slice(3).map((item, idx) => {
+                const rank = idx + 4;
                 const isCurrentUser = item.userId === user?.id;
                 const isSelected = selectedUserId === item.userId;
                 const deltaMeta = getRankDeltaMeta(item.rankDelta);
@@ -304,7 +323,7 @@ export default function LeaderboardTab({ user }: LeaderboardTabProps) {
                   >
                     <div className="w-[14%] shrink-0 text-center">
                       <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-xs font-black text-slate-600 ring-1 ring-slate-200">
-                        #{idx + 1}
+                        #{rank}
                       </div>
                     </div>
 

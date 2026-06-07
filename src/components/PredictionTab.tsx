@@ -21,6 +21,7 @@ import {
 import { Match, MatchOdds, MatchOperationalStatus, Prediction, TournamentBet, TournamentBetOption, TournamentBetType } from '../types';
 import { apiRequest, formatDate } from '../utils/api';
 import FlagBadge from './home/FlagBadge';
+import { useToast } from './ToastProvider';
 
 interface PredictionTabProps {
   user: any;
@@ -131,6 +132,7 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
   const [showHistory, setShowHistory] = useState(false);
   const [showAllMatches, setShowAllMatches] = useState(false);
   const VISIBLE_MATCH_LIMIT = 5;
+  const toast = useToast();
 
   const fetchMatches = async () => {
     const data = await apiRequest('/api/matches');
@@ -438,7 +440,7 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
             <div className="space-y-3">
               <RecordBlock title="等待结算" bets={pendingBets} />
               <RecordBlock title="已结算" bets={settledBets} />
-              <TournamentRecordBlock title="长线玩法" bets={myTournamentBets} />
+              <TournamentRecordBlock title="长线玩法" bets={myTournamentBets} markets={tournamentMarkets} />
             </div>
           )}
         </div>
@@ -634,15 +636,40 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
                         <button
                           key={option.id}
                           onClick={() => setSelectedTournamentOption(option)}
-                          className={`rounded-2xl border px-3 py-3 text-left transition ${
+                          className={`flex items-center gap-2.5 rounded-2xl border px-3 py-2.5 text-left transition ${
                             selectedTournamentOption?.id === option.id
                               ? 'border-emerald-300 bg-emerald-50'
                               : 'border-slate-200 bg-white hover:border-slate-300'
                           }`}
                         >
-                          <div className="text-xs font-black text-slate-900">{option.label}</div>
-                          {option.subLabel && <div className="mt-1 text-[11px] text-slate-500">{option.subLabel}</div>}
-                          <div className="mt-2 text-sm font-black text-slate-950">{option.oddsDecimal.toFixed(2)}</div>
+                          {/* 头像+国旗 */}
+                          <div className="relative shrink-0">
+                            {option.avatarUrl ? (
+                              <img
+                                src={option.avatarUrl}
+                                alt={option.label}
+                                className="h-9 w-9 rounded-full object-cover ring-2 ring-slate-100"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                  (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                                }}
+                              />
+                            ) : null}
+                            <div className={`flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-sm font-black text-slate-500 ${option.avatarUrl ? 'hidden' : ''}`}>
+                              {option.label.charAt(0)}
+                            </div>
+                            {option.flagCode && (
+                              <div className="absolute -right-0.5 -bottom-0.5">
+                                <FlagBadge flagCode={option.flagCode} size="sm" className="!h-4 !w-4 !border-white/80" />
+                              </div>
+                            )}
+                          </div>
+                          {/* 文字 */}
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-xs font-black text-slate-900">{option.label}</div>
+                            {option.subLabel && <div className="truncate text-[10px] text-slate-500">{option.subLabel}</div>}
+                            <div className="mt-0.5 text-sm font-black text-emerald-700">{option.oddsDecimal.toFixed(2)}</div>
+                          </div>
                         </button>
                       ))}
                     </div>
@@ -775,6 +802,8 @@ function TournamentMarketCard({
   subdued?: boolean;
 }) {
   const Icon = getTournamentMarketIcon(market.type);
+  const isChampion = market.type === 'champion';
+  const visibleCount = isChampion ? 8 : 5;
 
   return (
     <div
@@ -809,11 +838,37 @@ function TournamentMarketCard({
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2">
-        {market.options.slice(0, market.type === 'champion' ? 6 : 4).map((option) => (
-          <div key={option.id} className="rounded-2xl border border-slate-200 bg-white px-3 py-3">
-            <div className="text-xs font-black text-slate-900">{option.label}</div>
-            {option.subLabel && <div className="mt-1 text-[11px] text-slate-500">{option.subLabel}</div>}
-            <div className="mt-2 text-sm font-black text-slate-950">{option.oddsDecimal.toFixed(2)}</div>
+        {market.options.slice(0, visibleCount).map((option) => (
+          <div key={option.id} className="flex items-center gap-2.5 rounded-2xl border border-slate-200 bg-white px-3 py-2.5">
+            {/* 头像/国旗区域 */}
+            <div className="relative shrink-0">
+              {option.avatarUrl ? (
+                <img
+                  src={option.avatarUrl}
+                  alt={option.label}
+                  className="h-9 w-9 rounded-full object-cover ring-2 ring-slate-100"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                    (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                  }}
+                />
+              ) : null}
+              <div className={`flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-sm font-black text-slate-500 ${option.avatarUrl ? 'hidden' : ''}`}>
+                {option.label.charAt(0)}
+              </div>
+              {/* 国旗角标 */}
+              {option.flagCode && (
+                <div className="absolute -right-0.5 -bottom-0.5">
+                  <FlagBadge flagCode={option.flagCode} size="sm" className="!h-4 !w-4 !border-white/80" />
+                </div>
+              )}
+            </div>
+            {/* 文字区域 */}
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-xs font-black text-slate-900">{option.label}</div>
+              {option.subLabel && <div className="truncate text-[10px] text-slate-500">{option.subLabel}</div>}
+              <div className="mt-0.5 text-sm font-black text-emerald-700">{option.oddsDecimal.toFixed(2)}</div>
+            </div>
           </div>
         ))}
       </div>
@@ -884,7 +939,7 @@ function RecordBlock({ title, bets }: { title: string; bets: Prediction[] }) {
   );
 }
 
-function TournamentRecordBlock({ title, bets }: { title: string; bets: TournamentBet[] }) {
+function TournamentRecordBlock({ title, bets, markets }: { title: string; bets: TournamentBet[]; markets: TournamentMarketConfig[] }) {
   return (
     <div className="space-y-2">
       <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">{title}</div>
@@ -893,36 +948,63 @@ function TournamentRecordBlock({ title, bets }: { title: string; bets: Tournamen
           还没有长线玩法记录。
         </div>
       ) : (
-        bets.map((bet: any) => (
-          <div key={bet.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="text-sm font-black text-slate-900">{bet.marketLabel || bet.type}</div>
-                <div className="mt-1 text-xs text-slate-500">
-                  {bet.targetLabel}
-                  {bet.targetSubLabel ? ` · ${bet.targetSubLabel}` : ''}
+        bets.map((bet: any) => {
+          const market = markets.find((m) => m.type === bet.type);
+          const option = market?.options?.find((o) => o.id === bet.targetId);
+          return (
+            <div key={bet.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <div className="flex items-center gap-3">
+                {/* 头像+国旗 */}
+                <div className="relative shrink-0">
+                  {option?.avatarUrl ? (
+                    <img
+                      src={option.avatarUrl}
+                      alt={bet.targetLabel}
+                      className="h-9 w-9 rounded-full object-cover ring-2 ring-slate-100"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                        (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                      }}
+                    />
+                  ) : null}
+                  <div className={`flex h-9 w-9 items-center justify-center rounded-full bg-slate-200 text-xs font-black text-slate-500 ${option?.avatarUrl ? 'hidden' : ''}`}>
+                    {bet.targetLabel?.charAt(0) || '?'}
+                  </div>
+                  {option?.flagCode && (
+                    <div className="absolute -right-0.5 -bottom-0.5">
+                      <FlagBadge flagCode={option.flagCode} size="sm" className="!h-4 !w-4 !border-white/80" />
+                    </div>
+                  )}
                 </div>
-                <div className="mt-1 text-xs text-slate-500">
-                  指数 {bet.oddsDecimal?.toFixed(2)} · 投入 {bet.stakePoints}
+                {/* 信息 */}
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-black text-slate-900">{bet.marketLabel || bet.type}</div>
+                  <div className="mt-0.5 text-xs text-slate-500">
+                    {bet.targetLabel}
+                    {bet.targetSubLabel ? ` · ${bet.targetSubLabel}` : ''}
+                  </div>
+                  <div className="mt-0.5 text-xs text-slate-500">
+                    指数 {bet.oddsDecimal?.toFixed(2)} · 投入 {bet.stakePoints}
+                  </div>
                 </div>
-              </div>
-              <div className="text-right">
-                <span
-                  className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold ring-1 ${
-                    bet.status === 'WON'
-                      ? 'bg-emerald-50 text-emerald-700 ring-emerald-100'
-                      : bet.status === 'LOST'
-                        ? 'bg-rose-50 text-rose-700 ring-rose-100'
-                        : 'bg-amber-50 text-amber-700 ring-amber-100'
-                  }`}
-                >
-                  {bet.status === 'OPEN' ? '进行中' : bet.status}
-                </span>
-                <div className="mt-1 text-[10px] text-slate-400">{formatDate(bet.placedAt)}</div>
+                <div className="text-right">
+                  <span
+                    className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold ring-1 ${
+                      bet.status === 'WON'
+                        ? 'bg-emerald-50 text-emerald-700 ring-emerald-100'
+                        : bet.status === 'LOST'
+                          ? 'bg-rose-50 text-rose-700 ring-rose-100'
+                          : 'bg-amber-50 text-amber-700 ring-amber-100'
+                    }`}
+                  >
+                    {bet.status === 'OPEN' ? '进行中' : bet.status}
+                  </span>
+                  <div className="mt-1 text-[10px] text-slate-400">{formatDate(bet.placedAt)}</div>
+                </div>
               </div>
             </div>
-          </div>
-        ))
+          );
+        })
       )}
     </div>
   );

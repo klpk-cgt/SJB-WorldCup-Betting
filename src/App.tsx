@@ -3,52 +3,55 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Award, Calendar, Menu, Settings, Sparkles, Trophy, UserRound, X } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import HomeTab from './components/HomeTab';
-import MatchesTab from './components/MatchesTab';
-import PredictionTab from './components/PredictionTab';
-import LeaderboardTab from './components/LeaderboardTab';
-import MeTab from './components/MeTab';
+import { Award, BarChart3, Calendar, GitBranch, History, Home, Menu, Settings, Sparkles, Trophy, UserRound, X } from 'lucide-react';
 import AdminPanel from './components/AdminPanel';
+import BracketPage from './components/BracketPage';
+import HistoryHallPage from './components/HistoryHallPage';
+import HomeTab from './components/HomeTab';
+import LeaderboardTab from './components/LeaderboardTab';
+import MatchDetailPage from './components/MatchDetailPage';
+import MatchesTab from './components/MatchesTab';
+import MeTab from './components/MeTab';
+import PredictionTab from './components/PredictionTab';
+import StatsPage from './components/StatsPage';
 import { ADMIN_KEY_STORAGE, apiRequest, ROOM_SLUG_STORAGE, USER_CODE_STORAGE } from './utils/api';
+import type { User, Wallet } from './types';
 
-type TabType = 'home' | 'matches' | 'prediction' | 'leaderboard' | 'me' | 'admin';
+type RootTab = 'home' | 'matches' | 'prediction' | 'leaderboard' | 'me' | 'admin';
+type PageTab = RootTab | 'match-detail' | 'history-hall' | 'bracket' | 'stats';
+type MatchDetailTab = 'overview' | 'lineup' | 'events' | 'stats';
+
+const FOOTER_TABS: Array<{
+  id: RootTab;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+}> = [
+  { id: 'home', label: '首页', icon: Sparkles },
+  { id: 'matches', label: '赛程', icon: Calendar },
+  { id: 'prediction', label: '竞猜', icon: Trophy },
+  { id: 'leaderboard', label: '排行', icon: Award },
+  { id: 'me', label: '我的', icon: UserRound },
+];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<TabType>('home');
+  const [activeTab, setActiveTab] = useState<PageTab>('home');
   const [selectedMatchId, setSelectedMatchId] = useState<string | undefined>(undefined);
-  const [user, setUser] = useState<any | null>(null);
-  const [wallet, setWallet] = useState<any | null>(null);
+  const [selectedDetailTab, setSelectedDetailTab] = useState<MatchDetailTab>('overview');
+  const [user, setUser] = useState<User | null>(null);
+  const [wallet, setWallet] = useState<Wallet | null>(null);
   const [loading, setLoading] = useState(true);
   const [loginCode, setLoginCode] = useState('');
   const [loginPin, setLoginPin] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
-  const [footerVisible, setFooterVisible] = useState(true);
-  const [selectedDetailTab, setSelectedDetailTab] = useState<'events' | 'lineup' | 'stats'>('events');
   const [navDrawerOpen, setNavDrawerOpen] = useState(false);
-  const lastScrollY = useRef(0);
-  const scrollTimer = useRef<ReturnType<typeof setTimeout>>();
+  const [showAdminLogin, setShowAdminLogin] = useState(false);
+  const [adminUsername, setAdminUsername] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [adminLoginError, setAdminLoginError] = useState('');
 
   const isAdmin = !!localStorage.getItem(ADMIN_KEY_STORAGE);
-
-  const handleMainScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    const currentY = e.currentTarget.scrollTop;
-    const delta = currentY - lastScrollY.current;
-    lastScrollY.current = currentY;
-
-    if (currentY < 24) {
-      setFooterVisible(true);
-    } else if (delta > 16 && currentY > 96) {
-      setFooterVisible(false);
-    } else if (delta < -10) {
-      setFooterVisible(true);
-    }
-
-    clearTimeout(scrollTimer.current);
-    scrollTimer.current = setTimeout(() => setFooterVisible(true), 1800);
-  }, []);
 
   const fetchUserProfileAndWallet = async () => {
     try {
@@ -71,8 +74,8 @@ export default function App() {
     event.preventDefault();
     setErrorMsg('');
 
-    if (!loginCode.trim() || !loginPin.trim()) {
-      setErrorMsg('请输入身份码和 4 位 PIN。');
+    if (!loginCode.trim()) {
+      setErrorMsg('请输入身份码。');
       return;
     }
 
@@ -81,7 +84,7 @@ export default function App() {
         method: 'POST',
         body: JSON.stringify({
           loginCode,
-          pin: loginPin,
+          pin: loginPin || undefined,
         }),
       });
 
@@ -104,19 +107,93 @@ export default function App() {
     setActiveTab('home');
   };
 
-  const navigateTo = (targetTab: string, matchId?: string, detailTab?: string) => {
-    setSelectedMatchId(matchId);
-    setActiveTab(targetTab as TabType);
-    if (detailTab) {
-      setSelectedDetailTab(detailTab as 'events' | 'lineup' | 'stats');
+  const handleAdminLogin = async () => {
+    setAdminLoginError('');
+    if (!adminUsername.trim() || !adminPassword.trim()) {
+      setAdminLoginError('请输入管理员账号和密码。');
+      return;
+    }
+    try {
+      const resp = await apiRequest('/api/admin/login', {
+        method: 'POST',
+        body: JSON.stringify({ username: adminUsername, password: adminPassword }),
+      });
+      if (resp.success) {
+        localStorage.setItem(ADMIN_KEY_STORAGE, resp.token);
+        setShowAdminLogin(false);
+        setAdminUsername('');
+        setAdminPassword('');
+        setActiveTab('admin');
+      }
+    } catch (err: any) {
+      setAdminLoginError(err.message || '管理员账号或密码不正确。');
     }
   };
 
+  const handleAdminLogout = () => {
+    localStorage.removeItem(ADMIN_KEY_STORAGE);
+    setActiveTab('home');
+  };
+
+  const navigateTo = (targetTab: string, matchId?: string, detailTab?: string) => {
+    if (targetTab === 'home') {
+      setSelectedMatchId(undefined);
+      setSelectedDetailTab('overview');
+    } else if (matchId) {
+      setSelectedMatchId(matchId);
+    } else if (targetTab !== 'prediction') {
+      setSelectedMatchId(undefined);
+    }
+
+    if (detailTab && ['overview', 'lineup', 'events', 'stats'].includes(detailTab)) {
+      setSelectedDetailTab(detailTab as MatchDetailTab);
+    } else if (targetTab === 'match-detail') {
+      setSelectedDetailTab('overview');
+    }
+
+    setActiveTab(targetTab as PageTab);
+    setNavDrawerOpen(false);
+  };
+
+  const goToRootTab = (target: RootTab) => {
+    if (target !== 'prediction') {
+      setSelectedMatchId(undefined);
+    }
+    if (target === 'home') {
+      setSelectedDetailTab('overview');
+    }
+    setActiveTab(target);
+  };
+
+  const drawerItems = useMemo(
+    () => [
+      { id: 'home' as PageTab, label: '首页', desc: '回到焦点战和最近赛程', icon: <Home className="h-5 w-5" /> },
+      { id: 'leaderboard' as PageTab, label: '排行榜', desc: '查看群聊实时排行', icon: <Award className="h-5 w-5" /> },
+      { id: 'history-hall' as PageTab, label: '历史长廊', desc: '浏览历届世界杯经典内容', icon: <History className="h-5 w-5" /> },
+      { id: 'bracket' as PageTab, label: '淘汰赛对阵图', desc: '查看晋级路径与实时比分', icon: <GitBranch className="h-5 w-5" /> },
+      { id: 'stats' as PageTab, label: '统计页', desc: '查看群聊投注热度与分布', icon: <BarChart3 className="h-5 w-5" /> },
+      ...(isAdmin
+        ? [
+            {
+              id: 'admin' as PageTab,
+              label: '管理后台',
+              desc: '同步、赔率、用户和运营控制台',
+              icon: <Settings className="h-5 w-5" />,
+            },
+          ]
+        : []),
+    ],
+    [isAdmin],
+  );
+
   if (loading) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center space-y-4 bg-slate-100">
-        <div className="h-10 w-10 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent" />
-        <p className="text-xs font-medium text-slate-500">正在加载世界杯前台...</p>
+      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-100">
+        <div className="w-72 space-y-4">
+          <div className="mx-auto h-12 w-12 animate-pulse rounded-2xl bg-slate-200" />
+          <div className="mx-auto h-4 w-40 animate-pulse rounded-lg bg-slate-200" />
+          <div className="mx-auto h-3 w-32 animate-pulse rounded-lg bg-slate-100" />
+        </div>
       </div>
     );
   }
@@ -125,7 +202,7 @@ export default function App() {
     return (
       <div className="min-h-screen bg-slate-100 px-4 py-6 md:px-8">
         <div className="mx-auto max-w-4xl">
-          <AdminPanel onBackToApp={() => setActiveTab('home')} />
+          <AdminPanel onBackToApp={handleAdminLogout} />
         </div>
       </div>
     );
@@ -133,8 +210,8 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-100 sm:px-4">
-      <div className="relative mx-auto flex min-h-screen max-w-md flex-col overflow-hidden border-x border-slate-200 bg-[linear-gradient(180deg,#f8fafc_0%,#f1f5f9_100%)] shadow-[0_0_50px_rgba(100,116,139,0.10)]">
-        <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/88 px-4 py-3.5 text-left shadow-[0_2px_12px_rgba(148,163,184,0.04)] backdrop-blur-md">
+      <div className="relative mx-auto flex min-h-screen max-w-md flex-col border-x border-slate-200 bg-[linear-gradient(180deg,#f8fafc_0%,#f1f5f9_100%)] shadow-[0_0_50px_rgba(100,116,139,0.10)]">
+        <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/88 px-4 py-3.5 shadow-[0_2px_12px_rgba(148,163,184,0.04)] backdrop-blur-md">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="flex items-center gap-2 text-[14px] font-black leading-none text-slate-900">
@@ -145,13 +222,15 @@ export default function App() {
                 </span>
               </h2>
               <p className="mt-1 text-[11px] font-medium text-slate-500">
-                {user ? '群聊观赛入口已登录，可直接查看赛程和竞猜。' : '当前为游客模式，可先浏览焦点战和赛程。'}
+                {user ? '群聊入口已登录，可直接查看赛程、竞猜和榜单。' : '当前为游客模式，可先浏览焦点战、赛程和历史内容。'}
               </p>
             </div>
             <button
+              type="button"
               onClick={() => setNavDrawerOpen(true)}
               className="rounded-xl border border-slate-200 bg-slate-50 p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
-              title="导航菜单"
+              title="打开导航"
+              aria-label="打开导航"
             >
               <Menu className="h-4 w-4" />
             </button>
@@ -160,41 +239,34 @@ export default function App() {
 
         <main
           className="flex-1 overflow-y-auto px-4 py-4"
-          style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}
-          onScroll={handleMainScroll}
+          style={{ paddingBottom: 'calc(7.25rem + env(safe-area-inset-bottom, 0px))' }}
         >
           {activeTab === 'home' && (
-            <HomeTab
-              user={user}
-              wallet={wallet}
-              onRefreshWallet={fetchUserProfileAndWallet}
-              onNavigate={navigateTo}
+            <HomeTab user={user} wallet={wallet} onRefreshWallet={fetchUserProfileAndWallet} onNavigate={navigateTo} />
+          )}
+          {activeTab === 'matches' && <MatchesTab onNavigate={navigateTo} selectedMatchId={selectedMatchId} isAdmin={isAdmin} />}
+          {activeTab === 'match-detail' && (
+            <MatchDetailPage
+              matchId={selectedMatchId}
+              defaultTab={selectedDetailTab}
+              onBackToMatches={() => setActiveTab('matches')}
+              onGoPrediction={(matchId) => navigateTo('prediction', matchId)}
             />
           )}
-
-          {activeTab === 'matches' && (
-            <MatchesTab onNavigate={navigateTo} selectedMatchId={selectedMatchId} isAdmin={isAdmin} defaultDetailTab={selectedDetailTab} />
-          )}
-
           {activeTab === 'prediction' && (
-            <PredictionTab
-              user={user}
-              wallet={wallet}
-              focusedMatchId={selectedMatchId}
-              onRefreshWallet={fetchUserProfileAndWallet}
-            />
+            <PredictionTab user={user} wallet={wallet} focusedMatchId={selectedMatchId} onRefreshWallet={fetchUserProfileAndWallet} />
           )}
-
           {activeTab === 'leaderboard' && <LeaderboardTab user={user} />}
-
+          {activeTab === 'history-hall' && <HistoryHallPage />}
+          {activeTab === 'bracket' && <BracketPage onOpenMatch={(matchId) => navigateTo('match-detail', matchId, 'overview')} />}
+          {activeTab === 'stats' && <StatsPage />}
           {activeTab === 'me' &&
             (user ? (
-              <MeTab user={user} wallet={wallet} onLogout={handleLogout} />
+              <MeTab user={user} wallet={wallet} onLogout={handleLogout} onAdminLogin={isAdmin ? undefined : () => setShowAdminLogin(true)} />
             ) : (
-              <div className="space-y-6 pb-20 text-left">
+              <div className="space-y-6 pb-8 text-left">
                 <div className="relative overflow-hidden rounded-3xl border border-slate-800 bg-gradient-to-tr from-slate-950 to-slate-800 p-6 shadow-2xl">
                   <div className="pointer-events-none absolute right-0 top-0 h-36 w-36 rounded-full bg-emerald-500/10 blur-3xl" />
-
                   <div className="flex items-start justify-between">
                     <div className="space-y-1.5">
                       <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-400">
@@ -212,17 +284,15 @@ export default function App() {
                 <div className="space-y-5 rounded-3xl border border-slate-100 bg-white p-6 shadow-[0_15px_40px_rgba(100,116,139,0.08)]">
                   <div className="space-y-1 border-b border-slate-100 pb-2 text-center">
                     <h2 className="text-sm font-black text-slate-800">身份码登录</h2>
-                    <p className="text-[11px] font-medium text-slate-500">请输入你的 WC 身份码和 4 位 PIN。</p>
+                    <p className="text-[11px] font-medium text-slate-500">输入你的登录码即可进入（有 PIN 的账号需输入 PIN）。</p>
                   </div>
 
                   <form onSubmit={handleLogin} className="space-y-4">
                     <div>
-                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                        我的 WC 代码
-                      </label>
+                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-slate-500">登录码</label>
                       <input
                         type="text"
-                        placeholder="例如：WC1001"
+                        placeholder="例如：ZS（首字母）或 WC1001"
                         value={loginCode}
                         onChange={(e) => setLoginCode(e.target.value)}
                         className="w-full rounded-xl border border-slate-200/80 bg-slate-50 px-4 py-3 font-mono text-xs text-slate-800 focus:border-emerald-500/50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500/20"
@@ -230,13 +300,11 @@ export default function App() {
                     </div>
 
                     <div>
-                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                        4 位登录 PIN
-                      </label>
+                      <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-slate-500">登录 PIN（可选）</label>
                       <input
                         type="password"
                         maxLength={4}
-                        placeholder="例如：1234"
+                        placeholder="管理员分配的账号无需 PIN"
                         value={loginPin}
                         onChange={(e) => setLoginPin(e.target.value)}
                         className="w-full rounded-xl border border-slate-200/80 bg-slate-50 px-4 py-3 text-xs text-slate-800 focus:border-emerald-500/50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500/20"
@@ -247,10 +315,10 @@ export default function App() {
                       type="submit"
                       className="mt-2 w-full rounded-xl bg-emerald-500 py-3.5 text-xs font-black text-slate-950 shadow-md transition hover:bg-emerald-600 hover:shadow-emerald-500/20"
                     >
-                      验证并进入
+                      进入
                     </button>
                     <p className="text-center text-[9.5px] leading-relaxed text-slate-400">
-                      当前版本不开放公开注册，没有自己的 WC 代码时，请联系群管理员分配。
+                      当前版本不开放公开注册，没有登录码时，请联系群管理员分配。
                     </p>
                   </form>
 
@@ -259,150 +327,158 @@ export default function App() {
               </div>
             ))}
         </main>
+      </div>
 
-        <AnimatePresence>
-          {footerVisible && (
-            <motion.footer
-              initial={{ y: 0 }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
-              transition={{ duration: 0.25, ease: 'easeInOut' }}
-              className="sticky bottom-0 z-40 flex items-center justify-between border-t border-slate-200/80 bg-white/92 px-3.5 py-2.5 shadow-[0_-8px_24px_rgba(148,163,184,0.06)] backdrop-blur-lg"
-              style={{ paddingBottom: 'calc(0.875rem + env(safe-area-inset-bottom, 0px))' }}
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-0 sm:px-4">
+        <footer
+          className="pointer-events-auto w-full max-w-md border-x border-t border-slate-200/80 bg-white/94 px-3.5 py-2 shadow-[0_-12px_30px_rgba(148,163,184,0.10)] backdrop-blur-lg"
+          style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}
+        >
+          <div className="flex items-end justify-between">
+            {FOOTER_TABS.map((item) => {
+              const Icon = item.icon;
+              const active = activeTab === item.id;
+              const isCenter = item.id === 'prediction';
+
+              return (
+                <div key={item.id} className={isCenter ? 'relative -top-4' : ''}>
+                  <button
+                    type="button"
+                    onClick={() => goToRootTab(item.id)}
+                    aria-label={item.label}
+                    className={
+                      isCenter
+                        ? `z-50 flex h-12 w-12 items-center justify-center rounded-full border-4 border-white bg-gradient-to-tr from-emerald-500 to-teal-600 text-white shadow-[0_8px_24px_rgba(16,185,129,0.25)] transition hover:scale-105 active:scale-95 ${
+                            active ? 'scale-105 saturate-110' : ''
+                          }`
+                        : `flex flex-col items-center space-y-1 rounded-xl px-3 py-1 transition ${
+                            active ? 'font-bold text-emerald-600' : 'text-slate-400 hover:text-slate-600'
+                          }`
+                    }
+                  >
+                    <Icon className={isCenter ? 'h-5 w-5 shrink-0 text-white' : 'h-5 w-5'} />
+                    {!isCenter && <span className="text-[10px] font-bold">{item.label}</span>}
+                  </button>
+                  {isCenter && <span className="mt-1 block text-center text-[10px] font-extrabold text-emerald-600">{item.label}</span>}
+                </div>
+              );
+            })}
+          </div>
+        </footer>
+      </div>
+
+      <AnimatePresence>
+        {navDrawerOpen && (
+          <>
+            <motion.div
+              className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setNavDrawerOpen(false)}
+            />
+
+            <motion.div
+              className="fixed right-0 top-0 z-50 flex h-full w-72 flex-col bg-white shadow-2xl"
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 28, stiffness: 300 }}
             >
-              <button
-                onClick={() => {
-                  setActiveTab('home');
-                  setSelectedMatchId(undefined);
-                }}
-                className={`flex cursor-pointer flex-col items-center space-y-1 rounded-xl px-3 py-1.5 transition ${
-                  activeTab === 'home' ? 'font-bold text-emerald-600' : 'text-slate-400 hover:text-slate-600'
-                }`}
-              >
-                <Sparkles className="h-5 w-5" />
-                <span className="text-[10px] font-bold">首页</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  setActiveTab('matches');
-                  setSelectedMatchId(undefined);
-                }}
-                className={`flex cursor-pointer flex-col items-center space-y-1 rounded-xl px-3 py-1.5 transition ${
-                  activeTab === 'matches' ? 'font-bold text-emerald-600' : 'text-slate-400 hover:text-slate-600'
-                }`}
-              >
-                <Calendar className="h-5 w-5" />
-                <span className="text-[10px] font-bold">赛程</span>
-              </button>
-
-              <div className="relative -top-5">
+              <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+                <h3 className="text-sm font-black text-slate-900">导航</h3>
                 <button
                   type="button"
-                  aria-label="去竞猜"
-                  onClick={() => {
-                    setActiveTab('prediction');
-                    setSelectedMatchId(undefined);
-                  }}
-                  className={`z-50 flex h-14 w-14 cursor-pointer items-center justify-center rounded-full border-4 border-white bg-gradient-to-tr from-emerald-500 to-teal-600 text-white shadow-[0_8px_24px_rgba(16,185,129,0.25)] transition hover:scale-105 active:scale-95 ${
-                    activeTab === 'prediction' ? 'scale-105 saturate-110' : ''
-                  }`}
+                  onClick={() => setNavDrawerOpen(false)}
+                  className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                  aria-label="关闭导航"
                 >
-                  <Trophy className="h-6 w-6 shrink-0 text-white" />
+                  <X className="h-4 w-4" />
                 </button>
-                <span className="mt-1 block text-center text-[10px] font-extrabold text-emerald-600">去竞猜</span>
               </div>
 
-              <button
-                onClick={() => {
-                  setActiveTab('leaderboard');
-                  setSelectedMatchId(undefined);
-                }}
-                className={`flex cursor-pointer flex-col items-center space-y-1 rounded-xl px-3 py-1.5 transition ${
-                  activeTab === 'leaderboard' ? 'font-bold text-emerald-600' : 'text-slate-400 hover:text-slate-600'
-                }`}
-              >
-                <Award className="h-5 w-5" />
-                <span className="text-[10px] font-bold">排行</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  setActiveTab('me');
-                  setSelectedMatchId(undefined);
-                }}
-                className={`flex cursor-pointer flex-col items-center space-y-1 rounded-xl px-3 py-1.5 transition ${
-                  activeTab === 'me' ? 'font-bold text-emerald-600' : 'text-slate-400 hover:text-slate-600'
-                }`}
-              >
-                <UserRound className="h-5 w-5" />
-                <span className="text-[10px] font-bold">我的</span>
-              </button>
-            </motion.footer>
-          )}
-        </AnimatePresence>
-
-        {/* 导航抽屉 */}
-        <AnimatePresence>
-          {navDrawerOpen && (
-            <>
-              {/* 遮罩 */}
-              <motion.div
-                className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={() => setNavDrawerOpen(false)}
-              />
-              {/* 抽屉面板 */}
-              <motion.div
-                className="fixed right-0 top-0 z-50 flex h-full w-72 flex-col bg-white shadow-2xl"
-                initial={{ x: '100%' }}
-                animate={{ x: 0 }}
-                exit={{ x: '100%' }}
-                transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-              >
-                <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-                  <h3 className="text-sm font-black text-slate-900">导航</h3>
+              <nav className="flex-1 overflow-y-auto px-3 py-4">
+                {drawerItems.map((item) => (
                   <button
-                    onClick={() => setNavDrawerOpen(false)}
-                    className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                    key={item.id}
+                    type="button"
+                    onClick={() => navigateTo(item.id)}
+                    className="flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left transition hover:bg-slate-50 active:bg-slate-100"
                   >
-                    <X className="h-4 w-4" />
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-600">{item.icon}</div>
+                    <div>
+                      <p className="text-sm font-bold text-slate-900">{item.label}</p>
+                      <p className="mt-0.5 text-[11px] text-slate-500">{item.desc}</p>
+                    </div>
                   </button>
-                </div>
-                <nav className="flex-1 overflow-y-auto px-3 py-4">
-                  {[
-                    { id: 'leaderboard', label: '排行榜', icon: <Award className="h-5 w-5" />, desc: '查看群友积分排名' },
-                    ...(isAdmin ? [{ id: 'admin' as TabType, label: '管理员后台', icon: <Settings className="h-5 w-5" />, desc: '数据同步与系统管理' }] : []),
-                  ].map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => {
-                        setActiveTab(item.id);
-                        setSelectedMatchId(undefined);
-                        setNavDrawerOpen(false);
-                      }}
-                      className="flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left transition hover:bg-slate-50 active:bg-slate-100"
-                    >
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
-                        {item.icon}
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-slate-900">{item.label}</p>
-                        <p className="mt-0.5 text-[11px] text-slate-500">{item.desc}</p>
-                      </div>
-                    </button>
-                  ))}
-                </nav>
-                <div className="border-t border-slate-100 px-5 py-3">
-                  <p className="text-[10px] text-slate-400">2026 世界杯竞猜局 · 虚拟娱乐积分</p>
-                </div>
-              </motion.div>
-            </>
-          )}
-        </AnimatePresence>
-      </div>
+                ))}
+              </nav>
+
+              <div className="border-t border-slate-100 px-5 py-3">
+                <p className="text-[10px] text-slate-400">2026 世界杯竞猜局 · 导航中心</p>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* 管理员登录弹窗 */}
+      <AnimatePresence>
+        {showAdminLogin && (
+          <>
+            <motion.div
+              className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => { setShowAdminLogin(false); setAdminLoginError(''); }}
+            />
+            <motion.div
+              className="fixed left-1/2 top-1/2 z-50 w-[90vw] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+            >
+              <h3 className="text-lg font-black text-slate-900">管理员登录</h3>
+              <p className="mt-1 text-xs text-slate-500">输入管理员账号和密码以进入管理后台。</p>
+              <div className="mt-4 space-y-3">
+                <input
+                  type="text"
+                  placeholder="管理员账号"
+                  value={adminUsername}
+                  onChange={(e) => { setAdminUsername(e.target.value); setAdminLoginError(''); }}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-800 focus:border-emerald-500/50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500/20"
+                />
+                <input
+                  type="password"
+                  placeholder="管理员密码"
+                  value={adminPassword}
+                  onChange={(e) => { setAdminPassword(e.target.value); setAdminLoginError(''); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleAdminLogin(); }}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-800 focus:border-emerald-500/50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500/20"
+                />
+              </div>
+              {adminLoginError && (
+                <div className="mt-3 rounded-xl border border-red-100 bg-red-50 p-3 text-xs text-red-600">{adminLoginError}</div>
+              )}
+              <div className="mt-4 flex gap-3">
+                <button
+                  onClick={() => { setShowAdminLogin(false); setAdminLoginError(''); }}
+                  className="flex-1 rounded-xl border border-slate-200 bg-slate-50 py-3 text-xs font-black text-slate-600 transition hover:bg-slate-100"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleAdminLogin}
+                  className="flex-1 rounded-xl bg-emerald-500 py-3 text-xs font-black text-slate-950 shadow-md transition hover:bg-emerald-600"
+                >
+                  登录
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
