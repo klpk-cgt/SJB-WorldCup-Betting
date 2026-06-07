@@ -18,7 +18,7 @@ interface HomeTabProps {
   user: any;
   wallet: any;
   onRefreshWallet: () => void;
-  onNavigate: (tab: string, matchId?: string) => void;
+  onNavigate: (tab: string, matchId?: string, detailTab?: string) => void;
 }
 
 interface QuizQuestion {
@@ -320,7 +320,11 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
             score: 'matches',
             leaderboard: 'leaderboard',
           };
-          onNavigate(tabMap[target] || 'matches', featuredMatch?.id);
+          if (target === 'lineup') {
+            onNavigate('matches', featuredMatch?.id, 'lineup');
+          } else {
+            onNavigate(tabMap[target] || 'matches', featuredMatch?.id);
+          }
         }}
         onTeamClick={(teamCode) => { setTeamDetailId(teamCode); setTeamDetailOpen(true); }}
       />

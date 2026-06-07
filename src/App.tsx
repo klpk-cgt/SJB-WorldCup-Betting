@@ -4,7 +4,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Award, Calendar, Settings, Sparkles, Trophy, UserRound } from 'lucide-react';
+import { Award, Calendar, Home, Settings, Sparkles, Trophy, UserRound } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import HomeTab from './components/HomeTab';
 import MatchesTab from './components/MatchesTab';
@@ -26,6 +26,7 @@ export default function App() {
   const [loginPin, setLoginPin] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [footerVisible, setFooterVisible] = useState(true);
+  const [selectedDetailTab, setSelectedDetailTab] = useState<'events' | 'lineup' | 'stats'>('events');
   const lastScrollY = useRef(0);
   const scrollTimer = useRef<ReturnType<typeof setTimeout>>();
 
@@ -102,9 +103,12 @@ export default function App() {
     setActiveTab('home');
   };
 
-  const navigateTo = (targetTab: string, matchId?: string) => {
+  const navigateTo = (targetTab: string, matchId?: string, detailTab?: string) => {
     setSelectedMatchId(matchId);
     setActiveTab(targetTab as TabType);
+    if (detailTab) {
+      setSelectedDetailTab(detailTab as 'events' | 'lineup' | 'stats');
+    }
   };
 
   if (loading) {
@@ -143,13 +147,33 @@ export default function App() {
                 {user ? '群聊观赛入口已登录，可直接查看赛程和竞猜。' : '当前为游客模式，可先浏览焦点战和赛程。'}
               </p>
             </div>
-            <button
-              onClick={() => setActiveTab('admin')}
-              className="rounded-xl border border-slate-200 bg-slate-50 p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
-              title="后台管理"
-            >
-              <Settings className="h-4 w-4" />
-            </button>
+          </div>
+          {/* 顶部导航栏 */}
+          <div className="mt-2.5 flex items-center gap-1 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+            {[
+              { id: 'home', label: '首页', icon: <Home className="h-3 w-3" /> },
+              { id: 'matches', label: '赛程', icon: <Calendar className="h-3 w-3" /> },
+              { id: 'prediction', label: '竞猜', icon: <Trophy className="h-3 w-3" /> },
+              { id: 'leaderboard', label: '排行', icon: <Award className="h-3 w-3" /> },
+              { id: 'me', label: '我的', icon: <UserRound className="h-3 w-3" /> },
+              ...(isAdmin ? [{ id: 'admin', label: '管理', icon: <Settings className="h-3 w-3" /> }] : []),
+            ].map((item) => (
+              <button
+                key={item.id}
+                onClick={() => {
+                  setActiveTab(item.id as TabType);
+                  setSelectedMatchId(undefined);
+                }}
+                className={`flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-bold transition ${
+                  activeTab === item.id
+                    ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
+                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+                }`}
+              >
+                {item.icon}
+                {item.label}
+              </button>
+            ))}
           </div>
         </header>
 
@@ -168,7 +192,7 @@ export default function App() {
           )}
 
           {activeTab === 'matches' && (
-            <MatchesTab onNavigate={navigateTo} selectedMatchId={selectedMatchId} isAdmin={isAdmin} />
+            <MatchesTab onNavigate={navigateTo} selectedMatchId={selectedMatchId} isAdmin={isAdmin} defaultDetailTab={selectedDetailTab} />
           )}
 
           {activeTab === 'prediction' && (

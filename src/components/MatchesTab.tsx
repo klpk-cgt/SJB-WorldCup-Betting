@@ -23,9 +23,10 @@ import FlagBadge from './home/FlagBadge';
 import TeamDetailDrawer from './TeamDetailDrawer';
 
 interface MatchesTabProps {
-  onNavigate: (tab: string, matchId?: string) => void;
+  onNavigate: (tab: string, matchId?: string, detailTab?: string) => void;
   selectedMatchId?: string;
   isAdmin: boolean;
+  defaultDetailTab?: 'events' | 'lineup' | 'stats';
 }
 
 type PrimaryView = 'schedule' | 'bracket';
@@ -41,7 +42,7 @@ function formatCountdown(target: string, now: number) {
   return [hours, minutes, seconds].map((value) => value.toString().padStart(2, '0')).join(':');
 }
 
-export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: MatchesTabProps) {
+export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin, defaultDetailTab }: MatchesTabProps) {
   const [matches, setMatches] = useState<Match[]>([]);
   const [bracket, setBracket] = useState<BracketState | null>(null);
   const [friendPicks, setFriendPicks] = useState<any[]>([]);
@@ -120,7 +121,7 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
       setAiReport(analysisResponse);
       setFriendPicks(friendResponse?.picks || []);
       setFriendVisibility(friendResponse?.visibility || 'hidden_before_kickoff');
-      setActiveDetailTab('events');
+      setActiveDetailTab(defaultDetailTab || 'events');
     } catch (error) {
       console.error('Failed to get match details', error);
     }
