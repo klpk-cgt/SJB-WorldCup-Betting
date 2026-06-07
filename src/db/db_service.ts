@@ -21,8 +21,11 @@ import {
   BracketState,
   BracketRound,
   TournamentBet,
+  Player,
+  TeamHistoryResult,
 } from '../types';
 import { SEED_ROOMS, THE_TEAMS, PRESEEDED_USERS, SEED_MATCHES, SEED_ODDS } from './initial_data';
+import { SEED_PLAYERS, SEED_TEAM_HISTORY } from './team_details_seed';
 
 export interface DatabaseSchema {
   rooms: GroupRoom[];
@@ -39,6 +42,8 @@ export interface DatabaseSchema {
   bracketState: BracketState;
   syncLogs: SyncLog[];
   adminOverrides: AdminOverride[];
+  players: Player[];
+  teamHistory: TeamHistoryResult[];
 }
 
 const DB_FILE_PATH = path.join(process.cwd(), 'db.json');
@@ -251,7 +256,9 @@ class DatabaseService {
       shareCards,
       bracketState: buildBracketState(SEED_MATCHES, THE_TEAMS),
       syncLogs,
-      adminOverrides: []
+      adminOverrides: [],
+      players: SEED_PLAYERS,
+      teamHistory: SEED_TEAM_HISTORY,
     };
 
     this.save();
@@ -288,6 +295,10 @@ class DatabaseService {
   public getBracketState(): BracketState { return this.getData().bracketState; }
   public getSyncLogs(): SyncLog[] { return this.getData().syncLogs; }
   public getAdminOverrides(): AdminOverride[] { return this.getData().adminOverrides; }
+  public getPlayers(): Player[] { return this.getData().players; }
+  public getTeamHistory(): TeamHistoryResult[] { return this.getData().teamHistory; }
+  public getPlayersByTeamId(teamId: string): Player[] { return this.getPlayers().filter(p => p.teamId === teamId); }
+  public getTeamHistoryByTeamId(teamId: string): TeamHistoryResult[] { return this.getTeamHistory().filter(h => h.teamId === teamId).sort((a, b) => b.year - a.year); }
   public refreshBracketState() {
     const db = this.getData();
     db.bracketState = buildBracketState(db.matches, db.teams);
@@ -301,6 +312,23 @@ class DatabaseService {
     }
     if (!Array.isArray(this.cache.shareCards)) {
       this.cache.shareCards = [];
+    }
+    if (!Array.isArray(this.cache.players)) {
+      this.cache.players = SEED_PLAYERS;
+    }
+    if (!Array.isArray(this.cache.teamHistory)) {
+      this.cache.teamHistory = SEED_TEAM_HISTORY;
+    }
+    // 合并球队扩展字段（fifaRank、coachName等）
+    if (Array.isArray(this.cache.teams)) {
+      const seedTeamMap = new Map(THE_TEAMS.map(t => [t.id, t]));
+      this.cache.teams = this.cache.teams.map(team => {
+        const seed = seedTeamMap.get(team.id);
+        if (seed && !team.fifaRank && seed.fifaRank) {
+          return { ...team, ...seed };
+        }
+        return team;
+      });
     }
     if (!this.cache.bracketState || !Array.isArray(this.cache.bracketState.rounds)) {
       this.cache.bracketState = buildBracketState(this.cache.matches || [], this.cache.teams || []);

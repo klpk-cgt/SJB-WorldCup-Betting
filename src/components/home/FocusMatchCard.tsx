@@ -9,6 +9,7 @@ interface FocusMatchCardProps {
   onPrimaryAction?: () => void;
   onSecondaryAction?: () => void;
   onQuickNavigate?: (target: 'schedule' | 'lineup' | 'score' | 'leaderboard') => void;
+  onTeamClick?: (teamCode: string) => void;
 }
 
 /* ─── 主组件 ─── */
@@ -17,6 +18,7 @@ export default function FocusMatchCard({
   onPrimaryAction,
   onSecondaryAction,
   onQuickNavigate,
+  onTeamClick,
 }: FocusMatchCardProps) {
   const isLive = match.status === 'live';
   const isFinished = match.status === 'finished';
@@ -100,7 +102,10 @@ export default function FocusMatchCard({
           <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center">
             {/* 主队 */}
             <div className="flex items-center gap-2.5">
-              <div className="relative flex h-10 w-10 shrink-0 items-center justify-center sm:h-12 sm:w-12">
+              <div
+                className="relative flex h-10 w-10 shrink-0 items-center justify-center sm:h-12 sm:w-12 cursor-pointer"
+                onClick={() => onTeamClick?.(match.homeTeam.flagCode)}
+              >
                 <span className="text-[1.75rem] leading-none sm:text-[2.1rem]">{homeEmoji}</span>
                 <div className="absolute -right-1.5 -bottom-1 flex h-[18px] w-[18px] items-center justify-center overflow-hidden rounded-full border-[1.5px] border-white/30 shadow-md">
                   {flagStyles[homeCode] ? (
@@ -111,7 +116,12 @@ export default function FocusMatchCard({
                 </div>
               </div>
               <div className="min-w-0">
-                <div className="truncate text-sm font-black text-white sm:text-base">{match.homeTeam.name}</div>
+                <div
+                  className="truncate text-sm font-black text-white sm:text-base cursor-pointer hover:text-emerald-300 transition-colors"
+                  onClick={() => onTeamClick?.(match.homeTeam.flagCode)}
+                >
+                  {match.homeTeam.name}
+                </div>
                 {typeof match.homeTeam.stats?.worldRank === 'number' && (
                   <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-amber-400/80">
                     <Trophy className="h-2 w-2" />世界第{match.homeTeam.stats.worldRank}
@@ -158,14 +168,22 @@ export default function FocusMatchCard({
             {/* 客队 */}
             <div className="flex items-center justify-end gap-2.5">
               <div className="min-w-0 text-right">
-                <div className="truncate text-sm font-black text-white sm:text-base">{match.awayTeam.name}</div>
+                <div
+                  className="truncate text-sm font-black text-white sm:text-base cursor-pointer hover:text-emerald-300 transition-colors"
+                  onClick={() => onTeamClick?.(match.awayTeam.flagCode)}
+                >
+                  {match.awayTeam.name}
+                </div>
                 {typeof match.awayTeam.stats?.worldRank === 'number' && (
                   <span className="inline-flex items-center justify-end gap-0.5 text-[9px] font-bold text-amber-400/80">
                     <Trophy className="h-2 w-2" />世界第{match.awayTeam.stats.worldRank}
                   </span>
                 )}
               </div>
-              <div className="relative flex h-10 w-10 shrink-0 items-center justify-center sm:h-12 sm:w-12">
+              <div
+                className="relative flex h-10 w-10 shrink-0 items-center justify-center sm:h-12 sm:w-12 cursor-pointer"
+                onClick={() => onTeamClick?.(match.awayTeam.flagCode)}
+              >
                 <span className="text-[1.75rem] leading-none sm:text-[2.1rem]">{awayEmoji}</span>
                 <div className="absolute -left-1.5 -bottom-1 flex h-[18px] w-[18px] items-center justify-center overflow-hidden rounded-full border-[1.5px] border-white/30 shadow-md">
                   {flagStyles[awayCode] ? (

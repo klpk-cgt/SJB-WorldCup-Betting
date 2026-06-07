@@ -19,6 +19,7 @@ import {
 import { BracketState, Match, MatchOdds, MatchStatus } from '../types';
 import { apiRequest, formatDate } from '../utils/api';
 import FlagBadge from './home/FlagBadge';
+import TeamDetailDrawer from './TeamDetailDrawer';
 
 interface MatchesTabProps {
   onNavigate: (tab: string, matchId?: string) => void;
@@ -57,6 +58,8 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
   const [aiReport, setAiReport] = useState<any | null>(null);
   const [generatingAi, setGeneratingAi] = useState(false);
   const [now, setNow] = useState(Date.now());
+  const [teamDetailId, setTeamDetailId] = useState<string | null>(null);
+  const [teamDetailOpen, setTeamDetailOpen] = useState(false);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -560,13 +563,23 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
                             <span>{formatDate(match.startTimeUtc)}</span>
                           </div>
                           <div className="mt-2 flex items-center gap-2 text-sm font-black text-slate-900">
-                            <span className="truncate">{match.homeTeam?.nameZh}</span>
+                            <span
+                              className="truncate cursor-pointer hover:text-emerald-600 transition-colors"
+                              onClick={(e) => { e.stopPropagation(); setTeamDetailId(match.homeTeam?.id); setTeamDetailOpen(true); }}
+                            >
+                              {match.homeTeam?.nameZh}
+                            </span>
                             <span className="text-slate-400">
                               {[MatchStatus.LIVE, MatchStatus.HT, MatchStatus.FT, MatchStatus.AET, MatchStatus.PEN].includes(match.status)
                                 ? `${match.homeScore ?? 0} : ${match.awayScore ?? 0}`
                                 : 'VS'}
                             </span>
-                            <span className="truncate">{match.awayTeam?.nameZh}</span>
+                            <span
+                              className="truncate cursor-pointer hover:text-emerald-600 transition-colors"
+                              onClick={(e) => { e.stopPropagation(); setTeamDetailId(match.awayTeam?.id); setTeamDetailOpen(true); }}
+                            >
+                              {match.awayTeam?.nameZh}
+                            </span>
                           </div>
                         </div>
 
@@ -585,6 +598,12 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
           </section>
         </>
       )}
+
+      <TeamDetailDrawer
+        teamId={teamDetailId}
+        open={teamDetailOpen}
+        onClose={() => setTeamDetailOpen(false)}
+      />
     </div>
   );
 }

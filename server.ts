@@ -971,6 +971,39 @@ app.post('/api/auth/claim', (req: Request, res: Response) => {
   res.json({ success: true, user: serializeUserForClient(user), wallet });
 });
 
+// ─── 球队资料 API ───
+app.get('/api/teams', (_req: Request, res: Response) => {
+  res.json(dbService.getTeams());
+});
+
+app.get('/api/teams/:id', (req: Request, res: Response) => {
+  const team = dbService.getTeams().find(t => t.id === req.params.id);
+  if (!team) return res.status(404).json({ error: '未找到该球队。' });
+  res.json(team);
+});
+
+app.get('/api/teams/:id/players', (req: Request, res: Response) => {
+  const team = dbService.getTeams().find(t => t.id === req.params.id);
+  if (!team) return res.status(404).json({ error: '未找到该球队。' });
+  const players = dbService.getPlayersByTeamId(req.params.id);
+  res.json(players);
+});
+
+app.get('/api/teams/:id/history', (req: Request, res: Response) => {
+  const team = dbService.getTeams().find(t => t.id === req.params.id);
+  if (!team) return res.status(404).json({ error: '未找到该球队。' });
+  const history = dbService.getTeamHistoryByTeamId(req.params.id);
+  res.json(history);
+});
+
+app.get('/api/teams/:id/detail', (req: Request, res: Response) => {
+  const team = dbService.getTeams().find(t => t.id === req.params.id);
+  if (!team) return res.status(404).json({ error: '未找到该球队。' });
+  const players = dbService.getPlayersByTeamId(req.params.id);
+  const history = dbService.getTeamHistoryByTeamId(req.params.id);
+  res.json({ team, players, history });
+});
+
 app.get('/api/matches', async (_req: Request, res: Response) => {
   await runScheduledMaintenance();
   res.json(dbService.getMatches().map(serializeMatch));

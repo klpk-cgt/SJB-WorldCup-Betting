@@ -30,6 +30,52 @@ export interface Team {
   code: string;
   logoUrl: string;
   groupName: string;
+  // 扩展字段（球队资料）
+  fifaRank?: number;
+  confederation?: string;
+  coachName?: string;
+  coachNationality?: string;
+  formation?: string;
+  worldCupAppearances?: number;
+  bestResult?: string;
+  qualificationStatus?: string;
+  profileSummary?: string;
+  heroPlayerNames?: string[];
+  primaryColor?: string;
+  secondaryColor?: string;
+}
+
+export interface Player {
+  id: string;
+  teamId: string;
+  name: string;
+  nameZh?: string;
+  shirtNumber?: number;
+  position: 'GK' | 'DEF' | 'MID' | 'FWD';
+  club?: string;
+  age?: number;
+  heightCm?: number;
+  weightKg?: number;
+  preferredFoot?: '左' | '右' | '双脚';
+  marketValue?: number;
+  avatarUrl?: string;
+  isCaptain?: boolean;
+  bioSummary?: string;
+}
+
+export interface TeamHistoryResult {
+  id: string;
+  teamId: string;
+  year: number;
+  host: string;
+  result: string;
+  matchesPlayed: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  note?: string;
 }
 
 export interface MatchStatistics {

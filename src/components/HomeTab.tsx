@@ -12,6 +12,7 @@ import { getBeijingDayLabel, getMatchesForNearestDay } from '../utils/matchDispl
 import FocusMatchCard from './home/FocusMatchCard';
 import { FocusMatch, FocusMatchStatus, TeamStats, mockFocusMatch } from './home/focusMatch';
 import FlagBadge from './home/FlagBadge';
+import TeamDetailDrawer from './TeamDetailDrawer';
 
 interface HomeTabProps {
   user: any;
@@ -161,6 +162,8 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
   const [quizCompleted, setQuizCompleted] = useState(false);
   const [quizScore, setQuizScore] = useState(0);
   const [quizFinishedToday, setQuizFinishedToday] = useState(false);
+  const [teamDetailId, setTeamDetailId] = useState<string | null>(null);
+  const [teamDetailOpen, setTeamDetailOpen] = useState(false);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -311,6 +314,7 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
           };
           onNavigate(tabMap[target] || 'matches', featuredMatch?.id);
         }}
+        onTeamClick={(teamCode) => { setTeamDetailId(teamCode); setTeamDetailOpen(true); }}
       />
 
       <section className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
@@ -402,13 +406,23 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
                       <span>{formatDate(match.startTimeUtc)}</span>
                     </div>
                     <div className="mt-2 flex items-center gap-2 text-sm font-black text-slate-900">
-                      <FlagBadge flagCode={match.homeTeam?.code} size="sm" />
+                      <span
+                        className="cursor-pointer"
+                        onClick={(e) => { e.stopPropagation(); setTeamDetailId(match.homeTeam?.id); setTeamDetailOpen(true); }}
+                      >
+                        <FlagBadge flagCode={match.homeTeam?.code} size="sm" />
+                      </span>
                       <span className="truncate">{match.homeTeam?.nameZh}</span>
                       <span className="text-slate-400">
                         {isLive || isFinished ? `${match.homeScore ?? 0} : ${match.awayScore ?? 0}` : 'VS'}
                       </span>
                       <span className="truncate">{match.awayTeam?.nameZh}</span>
-                      <FlagBadge flagCode={match.awayTeam?.code} size="sm" />
+                      <span
+                        className="cursor-pointer"
+                        onClick={(e) => { e.stopPropagation(); setTeamDetailId(match.awayTeam?.id); setTeamDetailOpen(true); }}
+                      >
+                        <FlagBadge flagCode={match.awayTeam?.code} size="sm" />
+                      </span>
                     </div>
                   </div>
 
@@ -664,6 +678,12 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
           </motion.div>
         )}
       </AnimatePresence>
+
+      <TeamDetailDrawer
+        teamId={teamDetailId}
+        open={teamDetailOpen}
+        onClose={() => setTeamDetailOpen(false)}
+      />
     </div>
   );
 }
