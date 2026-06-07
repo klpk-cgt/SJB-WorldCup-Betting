@@ -38,11 +38,17 @@ export interface Team {
   formation?: string;
   worldCupAppearances?: number;
   bestResult?: string;
+  bestResultYear?: number;
   qualificationStatus?: string;
+  qualificationMethod?: string;
+  qualificationGroup?: string;
+  qualificationRecord?: string;
+  qualificationKeyPlayers?: string;
   profileSummary?: string;
   heroPlayerNames?: string[];
   primaryColor?: string;
   secondaryColor?: string;
+  marketValueMillion?: number;
 }
 
 export interface Player {
@@ -204,6 +210,40 @@ export interface User {
   claimedAt?: string;
   lastLoginAt?: string;
   createdAt: string;
+}
+
+export type PlayerTitle =
+  | '稳健分析师'
+  | '连红猎手'
+  | '冷门先知'
+  | '金杯投资人'
+  | '群聊新星'
+  | '世界杯老炮';
+
+export type AchievementBadgeId =
+  | 'first_win'
+  | 'three_streak'
+  | 'hit_rate_60'
+  | 'big_win'
+  | 'long_term_player'
+  | 'history_scholar';
+
+export interface AchievementBadgeSummary {
+  id: AchievementBadgeId;
+  label: string;
+  description: string;
+  icon: string;
+  tone: 'emerald' | 'amber' | 'violet' | 'cyan' | 'rose' | 'slate';
+  unlocked: boolean;
+  current: number;
+  target: number;
+}
+
+export interface UserProfileSummary {
+  currentTitle: PlayerTitle;
+  featuredBadge: AchievementBadgeSummary | null;
+  achievementBadges: AchievementBadgeSummary[];
+  achievementProgress: AchievementBadgeSummary[];
 }
 
 export interface Wallet {

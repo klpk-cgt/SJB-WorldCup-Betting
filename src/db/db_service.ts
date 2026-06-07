@@ -332,8 +332,10 @@ class DatabaseService {
           ...(meta ? {
             fifaRank: team.fifaRank || meta.fifaRank || undefined,
             coachName: team.coachName || meta.coachName || undefined,
+            coachNationality: team.coachNationality || meta.coachNationality || undefined,
             worldCupAppearances: team.worldCupAppearances || meta.worldCupAppearances || undefined,
             confederation: team.confederation || meta.confederation || undefined,
+            marketValueMillion: team.marketValueMillion || meta.marketValueMillion || undefined,
           } : {}),
         };
       });
