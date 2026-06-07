@@ -123,11 +123,9 @@ export default function FocusMatchCard({
                   {match.homeTeam.name}
                 </div>
                 <div className="flex items-center gap-1">
-                  {typeof match.homeTeam.stats?.worldRank === 'number' && (
-                    <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-amber-400/80">
-                      <Trophy className="h-2 w-2" />世界第{match.homeTeam.stats.worldRank}
-                    </span>
-                  )}
+                  <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-amber-400/80">
+                    <Trophy className="h-2 w-2" />世界排名{typeof match.homeTeam.stats?.worldRank === 'number' ? match.homeTeam.stats.worldRank : '--'}
+                  </span>
                   <button
                     className="inline-flex items-center gap-0.5 rounded bg-white/15 px-1.5 py-0.5 text-[8px] font-bold text-white/60 hover:bg-white/25 hover:text-emerald-300 transition-colors"
                     onClick={(e) => { e.stopPropagation(); onTeamClick?.(match.homeTeam.flagCode); }}
@@ -183,17 +181,15 @@ export default function FocusMatchCard({
                   {match.awayTeam.name}
                 </div>
                 <div className="flex items-center justify-end gap-1">
+                  <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-amber-400/80">
+                    <Trophy className="h-2 w-2" />世界排名{typeof match.awayTeam.stats?.worldRank === 'number' ? match.awayTeam.stats.worldRank : '--'}
+                  </span>
                   <button
                     className="inline-flex items-center gap-0.5 rounded bg-white/15 px-1.5 py-0.5 text-[8px] font-bold text-white/60 hover:bg-white/25 hover:text-emerald-300 transition-colors"
                     onClick={(e) => { e.stopPropagation(); onTeamClick?.(match.awayTeam.flagCode); }}
                   >
                     资料<Info className="h-2.5 w-2.5" />
                   </button>
-                  {typeof match.awayTeam.stats?.worldRank === 'number' && (
-                    <span className="inline-flex items-center justify-end gap-0.5 text-[9px] font-bold text-amber-400/80">
-                      <Trophy className="h-2 w-2" />世界第{match.awayTeam.stats.worldRank}
-                    </span>
-                  )}
                 </div>
               </div>
               <div

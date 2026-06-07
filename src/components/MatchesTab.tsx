@@ -50,6 +50,7 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
   );
   const [filterTeam, setFilterTeam] = useState('');
   const [filterStage, setFilterStage] = useState('All');
+  const [filterDate, setFilterDate] = useState<string>('all');
   const [primaryView, setPrimaryView] = useState<PrimaryView>('schedule');
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -152,19 +153,36 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
     }
   };
 
+  const dateList = useMemo(() => {
+    const dates = [...new Set(matches.map(m => {
+      const d = new Date(m.startTimeUtc);
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    }))];
+    dates.sort();
+    return dates;
+  }, [matches]);
+
   const filtered = useMemo(() => {
     return matches.filter((match) => {
       const homeName = match.homeTeam?.nameZh || '';
       const awayName = match.awayTeam?.nameZh || '';
       const matchesTeam = filterTeam === '' || homeName.includes(filterTeam) || awayName.includes(filterTeam);
       if (!matchesTeam) return false;
-      if (filterStage === 'All') return true;
-      if (filterStage === 'Group Stage') {
-        return (match.stage || '').toLowerCase().includes('group');
+      if (filterStage === 'All') {
+        // nothing
+      } else if (filterStage === 'Group Stage') {
+        if (!(match.stage || '').toLowerCase().includes('group')) return false;
+      } else {
+        if (match.stage !== filterStage) return false;
       }
-      return match.stage === filterStage;
+      if (filterDate !== 'all') {
+        const d = new Date(match.startTimeUtc);
+        const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        if (dateStr !== filterDate) return false;
+      }
+      return true;
     });
-  }, [filterStage, filterTeam, matches]);
+  }, [filterStage, filterTeam, filterDate, matches]);
 
   useEffect(() => {
     if (loading || primaryView !== 'schedule' || filtered.length === 0) return;
@@ -259,27 +277,62 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
         </div>
 
         {primaryView === 'schedule' && (
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <input
-              type="text"
-              placeholder="搜索国家队"
-              value={filterTeam}
-              onChange={(e) => setFilterTeam(e.target.value)}
-              className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-emerald-400 focus:bg-white"
-            />
-            <select
-              value={filterStage}
-              onChange={(e) => setFilterStage(e.target.value)}
-              className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-emerald-400 focus:bg-white"
-            >
-              <option value="All">全部阶段</option>
-              <option value="Group Stage">小组赛</option>
-              <option value="Round of 32">32 强</option>
-              <option value="Round of 16">16 强</option>
-              <option value="Quarter-finals">8 强</option>
-              <option value="Semi-finals">半决赛</option>
-              <option value="Final">决赛</option>
-            </select>
+          <div className="mt-4 space-y-3">
+            {/* 日期横滑选择器 */}
+            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide" style={{ scrollbarWidth: 'none' }}>
+              <button
+                onClick={() => setFilterDate('all')}
+                className={`shrink-0 rounded-2xl px-3 py-1.5 text-xs font-bold transition ${
+                  filterDate === 'all' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                全部
+              </button>
+              {dateList.map(dateStr => {
+                const d = new Date(dateStr + 'T00:00:00');
+                const weekday = ['日','一','二','三','四','五','六'][d.getDay()];
+                const label = `${d.getMonth()+1}/${d.getDate()} 周${weekday}`;
+                const count = matches.filter(m => {
+                  const md = new Date(m.startTimeUtc);
+                  return `${md.getFullYear()}-${String(md.getMonth()+1).padStart(2,'0')}-${String(md.getDate()).padStart(2,'0')}` === dateStr;
+                }).length;
+                return (
+                  <button
+                    key={dateStr}
+                    onClick={() => setFilterDate(dateStr)}
+                    className={`shrink-0 rounded-2xl px-3 py-1.5 text-xs font-bold transition ${
+                      filterDate === dateStr ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {label} <span className="opacity-60">{count}场</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* 搜索+分组筛选 */}
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="text"
+                placeholder="搜索国家队"
+                value={filterTeam}
+                onChange={(e) => setFilterTeam(e.target.value)}
+                className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-emerald-400 focus:bg-white"
+              />
+              <select
+                value={filterStage}
+                onChange={(e) => setFilterStage(e.target.value)}
+                className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-emerald-400 focus:bg-white"
+              >
+                <option value="All">全部阶段</option>
+                <option value="Group Stage">小组赛</option>
+                <option value="Round of 32">32 强</option>
+                <option value="Round of 16">16 强</option>
+                <option value="Quarter-finals">8 强</option>
+                <option value="Semi-finals">半决赛</option>
+                <option value="Final">决赛</option>
+              </select>
+            </div>
           </div>
         )}
       </section>

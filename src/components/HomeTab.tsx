@@ -317,28 +317,6 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
         onTeamClick={(teamCode) => { setTeamDetailId(teamCode); setTeamDetailOpen(true); }}
       />
 
-      <section className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-50 text-slate-700 ring-1 ring-slate-200">
-              <GitBranch className="h-4.5 w-4.5" />
-            </div>
-            <div>
-              <p className="text-sm font-black text-slate-900">淘汰赛对阵图</p>
-              <p className="mt-1 text-xs leading-6 text-slate-500">
-                32 强到决赛的真实推进都在这里，想看整届世界杯的路线，直接一跳过去。
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={() => onNavigate('matches', '__bracket__')}
-            className="shrink-0 rounded-2xl bg-slate-950 px-4 py-2.5 text-xs font-black text-white transition hover:bg-slate-800"
-          >
-            去查看
-          </button>
-        </div>
-      </section>
-
       <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -350,22 +328,24 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
           </span>
         </div>
 
-        <div className="mt-4 rounded-3xl bg-gradient-to-br from-cyan-50 via-white to-emerald-50 p-4 ring-1 ring-slate-100">
-          <p className="text-base font-black text-slate-900">{aiView.title}</p>
-          <p className="mt-3 text-sm leading-6 text-slate-700">{aiView.summary}</p>
+        <div className="mt-3 rounded-3xl bg-gradient-to-br from-cyan-50 via-white to-emerald-50 p-4 ring-1 ring-slate-100">
+          <p className="text-sm font-black text-slate-900">{aiView.title}</p>
+          <p className="mt-2 text-xs leading-5 text-slate-600">{aiView.summary}</p>
 
-          <div className="mt-4 space-y-2">
-            {aiView.bullets.map((bullet) => (
-              <div key={bullet} className="flex items-start gap-2 text-sm text-slate-600">
-                <span className="mt-1 h-1.5 w-1.5 rounded-full bg-cyan-500" />
-                <span>{bullet}</span>
-              </div>
-            ))}
-          </div>
+          {aiView.bullets.length > 0 && (
+            <div className="mt-3 space-y-1.5">
+              {aiView.bullets.slice(0, 2).map((bullet) => (
+                <div key={bullet} className="flex items-start gap-1.5 text-xs text-slate-600">
+                  <span className="mt-1 h-1 w-1 rounded-full bg-cyan-500 shrink-0" />
+                  <span>{bullet}</span>
+                </div>
+              ))}
+            </div>
+          )}
 
-          <div className="mt-4 rounded-2xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+          <p className="mt-3 text-[10px] leading-4 text-amber-700/70">
             风险提醒：{aiView.riskWarning}
-          </div>
+          </p>
         </div>
       </section>
 

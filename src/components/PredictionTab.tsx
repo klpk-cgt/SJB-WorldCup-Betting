@@ -129,6 +129,8 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [showAllMatches, setShowAllMatches] = useState(false);
+  const VISIBLE_MATCH_LIMIT = 5;
 
   const fetchMatches = async () => {
     const data = await apiRequest('/api/matches');
@@ -490,7 +492,7 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
         </div>
       ) : (
         <div className="space-y-4">
-          {visibleMatches.map((match) => {
+          {(showAllMatches ? visibleMatches : visibleMatches.slice(0, VISIBLE_MATCH_LIMIT)).map((match) => {
             const options = activeCategory === 'BETTABLE' ? buildOptions(match, activeMode) : [];
             return (
               <div key={match.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
@@ -569,6 +571,14 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
               </div>
             );
           })}
+          {visibleMatches.length > VISIBLE_MATCH_LIMIT && (
+            <button
+              onClick={() => setShowAllMatches(!showAllMatches)}
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 text-xs font-bold text-slate-600 transition hover:bg-white hover:text-emerald-700 hover:border-emerald-200"
+            >
+              {showAllMatches ? '收起' : `查看全部 ${visibleMatches.length} 场`}
+            </button>
+          )}
         </div>
       )}
 
