@@ -47,16 +47,17 @@ export default function FocusMatchCard({
       >
         {/* 高斯模糊世界杯背景 */}
         <div
-          className="absolute inset-0 scale-125 bg-cover bg-center"
+          className="absolute inset-0 bg-cover bg-center"
           style={{
             backgroundImage: `url(${stadiumBackground})`,
-            filter: 'blur(18px) brightness(0.3) saturate(1.4)',
+            filter: 'blur(12px) brightness(0.55) saturate(1.2)',
+            transform: 'scale(1.1)',
           }}
         />
 
-        {/* 深色渐变叠加 */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/40 to-black/70" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_center,rgba(34,197,94,0.08)_0%,transparent_50%)]" />
+        {/* 深色渐变叠加 - 减弱遮罩让背景更明显 */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/20 to-black/50" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_center,rgba(34,197,94,0.06)_0%,transparent_60%)]" />
 
         {/* 顶部光带 */}
         <div
