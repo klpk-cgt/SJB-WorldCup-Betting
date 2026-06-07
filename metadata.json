@@ -1,0 +1,6 @@
+{
+  "name": "2026世界杯群竞猜平台",
+  "description": "2026美加墨世界杯朋友群观赛竞猜平台，支持赛程比分查看、娱乐积分竞猜及AI智能观赛助手分析吐槽。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
