@@ -4,7 +4,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Award, Calendar, Home, Settings, Sparkles, Trophy, UserRound } from 'lucide-react';
+import { Award, Calendar, Menu, Settings, Sparkles, Trophy, UserRound, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import HomeTab from './components/HomeTab';
 import MatchesTab from './components/MatchesTab';
@@ -27,6 +27,7 @@ export default function App() {
   const [errorMsg, setErrorMsg] = useState('');
   const [footerVisible, setFooterVisible] = useState(true);
   const [selectedDetailTab, setSelectedDetailTab] = useState<'events' | 'lineup' | 'stats'>('events');
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
   const lastScrollY = useRef(0);
   const scrollTimer = useRef<ReturnType<typeof setTimeout>>();
 
@@ -147,33 +148,13 @@ export default function App() {
                 {user ? '群聊观赛入口已登录，可直接查看赛程和竞猜。' : '当前为游客模式，可先浏览焦点战和赛程。'}
               </p>
             </div>
-          </div>
-          {/* 顶部导航栏 */}
-          <div className="mt-2.5 flex items-center gap-1 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-            {[
-              { id: 'home', label: '首页', icon: <Home className="h-3 w-3" /> },
-              { id: 'matches', label: '赛程', icon: <Calendar className="h-3 w-3" /> },
-              { id: 'prediction', label: '竞猜', icon: <Trophy className="h-3 w-3" /> },
-              { id: 'leaderboard', label: '排行', icon: <Award className="h-3 w-3" /> },
-              { id: 'me', label: '我的', icon: <UserRound className="h-3 w-3" /> },
-              ...(isAdmin ? [{ id: 'admin', label: '管理', icon: <Settings className="h-3 w-3" /> }] : []),
-            ].map((item) => (
-              <button
-                key={item.id}
-                onClick={() => {
-                  setActiveTab(item.id as TabType);
-                  setSelectedMatchId(undefined);
-                }}
-                className={`flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-bold transition ${
-                  activeTab === item.id
-                    ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
-                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
-                }`}
-              >
-                {item.icon}
-                {item.label}
-              </button>
-            ))}
+            <button
+              onClick={() => setNavDrawerOpen(true)}
+              className="rounded-xl border border-slate-200 bg-slate-50 p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+              title="导航菜单"
+            >
+              <Menu className="h-4 w-4" />
+            </button>
           </div>
         </header>
 
@@ -358,6 +339,67 @@ export default function App() {
                 <span className="text-[10px] font-bold">我的</span>
               </button>
             </motion.footer>
+          )}
+        </AnimatePresence>
+
+        {/* 导航抽屉 */}
+        <AnimatePresence>
+          {navDrawerOpen && (
+            <>
+              {/* 遮罩 */}
+              <motion.div
+                className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setNavDrawerOpen(false)}
+              />
+              {/* 抽屉面板 */}
+              <motion.div
+                className="fixed right-0 top-0 z-50 flex h-full w-72 flex-col bg-white shadow-2xl"
+                initial={{ x: '100%' }}
+                animate={{ x: 0 }}
+                exit={{ x: '100%' }}
+                transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+              >
+                <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+                  <h3 className="text-sm font-black text-slate-900">导航</h3>
+                  <button
+                    onClick={() => setNavDrawerOpen(false)}
+                    className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <nav className="flex-1 overflow-y-auto px-3 py-4">
+                  {[
+                    { id: 'leaderboard', label: '排行榜', icon: <Award className="h-5 w-5" />, desc: '查看群友积分排名' },
+                    ...(isAdmin ? [{ id: 'admin' as TabType, label: '管理员后台', icon: <Settings className="h-5 w-5" />, desc: '数据同步与系统管理' }] : []),
+                  ].map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        setActiveTab(item.id);
+                        setSelectedMatchId(undefined);
+                        setNavDrawerOpen(false);
+                      }}
+                      className="flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left transition hover:bg-slate-50 active:bg-slate-100"
+                    >
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+                        {item.icon}
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-slate-900">{item.label}</p>
+                        <p className="mt-0.5 text-[11px] text-slate-500">{item.desc}</p>
+                      </div>
+                    </button>
+                  ))}
+                </nav>
+                <div className="border-t border-slate-100 px-5 py-3">
+                  <p className="text-[10px] text-slate-400">2026 世界杯竞猜局 · 虚拟娱乐积分</p>
+                </div>
+              </motion.div>
+            </>
           )}
         </AnimatePresence>
       </div>
