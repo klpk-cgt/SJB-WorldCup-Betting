@@ -2,10 +2,18 @@ import { DatabaseSchema } from '../db/db_service';
 import { Match, MatchOdds, MatchStatus, SyncLog, SyncProvider, SyncStatus, SyncType, Team } from '../types';
 
 // ── 默认赔率生成 ──
-export function generateDefaultOdds(matchId: string): MatchOdds {
+export function generateDefaultOdds(matchId: string, homeRank?: number, awayRank?: number): MatchOdds {
+  // 基于FIFA排名的差异化赔率
+  let hw = 2.20, d = 3.20, aw = 3.10;
+  if (homeRank && awayRank) {
+    const diff = awayRank - homeRank; // 正值=主队排名更高
+    hw = Math.max(1.10, 2.20 - diff * 0.05);
+    aw = Math.max(1.10, 3.10 + diff * 0.05);
+    d = Math.max(2.50, 3.20 - Math.abs(diff) * 0.02);
+  }
   return {
     matchId,
-    h2h: { homeWin: 2.20, draw: 3.20, awayWin: 3.10 },
+    h2h: { homeWin: Math.round(hw * 100) / 100, draw: Math.round(d * 100) / 100, awayWin: Math.round(aw * 100) / 100 },
     correctScore: [
       { score: '1-0', odds: 6.50 },
       { score: '2-0', odds: 8.00 },
@@ -25,10 +33,13 @@ export function generateDefaultOdds(matchId: string): MatchOdds {
 /** 为所有缺少赔率的已确定比赛生成默认赔率 */
 export function ensureDefaultOdds(db: DatabaseSchema): string[] {
   const filled: string[] = [];
+  const teamMap = new Map(db.teams.map(t => [t.id, t]));
   for (const match of db.matches) {
     if (match.homeTeamId === 'TBD' || match.awayTeamId === 'TBD') continue;
     if (!db.matchOdds[match.id]) {
-      db.matchOdds[match.id] = generateDefaultOdds(match.id);
+      const home = teamMap.get(match.homeTeamId);
+      const away = teamMap.get(match.awayTeamId);
+      db.matchOdds[match.id] = generateDefaultOdds(match.id, home?.fifaRank, away?.fifaRank);
       filled.push(match.id);
     }
   }
