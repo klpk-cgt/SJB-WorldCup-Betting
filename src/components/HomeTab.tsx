@@ -112,12 +112,20 @@ function buildFocusMatch(match: Match | undefined, now: number): FocusMatch {
     homeTeam: {
       name: match.homeTeam.nameZh,
       flagCode: match.homeTeam.code,
-      stats: showcaseStatsByTeamCode[match.homeTeam.code],
+      stats: {
+        goals: showcaseStatsByTeamCode[match.homeTeam.code]?.goals,
+        avgGoals: showcaseStatsByTeamCode[match.homeTeam.code]?.avgGoals,
+        worldRank: match.homeTeam.fifaRank,
+      },
     },
     awayTeam: {
       name: match.awayTeam.nameZh,
       flagCode: match.awayTeam.code,
-      stats: showcaseStatsByTeamCode[match.awayTeam.code],
+      stats: {
+        goals: showcaseStatsByTeamCode[match.awayTeam.code]?.goals,
+        avgGoals: showcaseStatsByTeamCode[match.awayTeam.code]?.avgGoals,
+        worldRank: match.awayTeam.fifaRank,
+      },
     },
     odds: {
       homeWin: match.odds?.h2h.homeWin,

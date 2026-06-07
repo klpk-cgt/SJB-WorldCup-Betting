@@ -122,12 +122,12 @@ export default function FocusMatchCard({
                 >
                   {match.homeTeam.name}
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="mt-0.5 flex flex-col items-start gap-0.5">
                   <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-amber-400/80">
                     <Trophy className="h-2 w-2" />世界排名{typeof match.homeTeam.stats?.worldRank === 'number' ? match.homeTeam.stats.worldRank : '--'}
                   </span>
                   <button
-                    className="inline-flex items-center gap-0.5 rounded bg-white/15 px-1.5 py-0.5 text-[8px] font-bold text-white/60 hover:bg-white/25 hover:text-emerald-300 transition-colors"
+                    className="inline-flex items-center gap-0.5 rounded-full bg-white/10 px-2 py-0.5 text-[8px] font-bold text-white/70 ring-1 ring-white/10 hover:bg-white/20 hover:text-emerald-300 hover:ring-emerald-400/30 transition-all"
                     onClick={(e) => { e.stopPropagation(); onTeamClick?.(match.homeTeam.flagCode); }}
                   >
                     <Info className="h-2.5 w-2.5" />资料
@@ -180,12 +180,12 @@ export default function FocusMatchCard({
                 >
                   {match.awayTeam.name}
                 </div>
-                <div className="flex items-center justify-end gap-1">
+                <div className="mt-0.5 flex flex-col items-end gap-0.5">
                   <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-amber-400/80">
                     <Trophy className="h-2 w-2" />世界排名{typeof match.awayTeam.stats?.worldRank === 'number' ? match.awayTeam.stats.worldRank : '--'}
                   </span>
                   <button
-                    className="inline-flex items-center gap-0.5 rounded bg-white/15 px-1.5 py-0.5 text-[8px] font-bold text-white/60 hover:bg-white/25 hover:text-emerald-300 transition-colors"
+                    className="inline-flex items-center gap-0.5 rounded-full bg-white/10 px-2 py-0.5 text-[8px] font-bold text-white/70 ring-1 ring-white/10 hover:bg-white/20 hover:text-emerald-300 hover:ring-emerald-400/30 transition-all"
                     onClick={(e) => { e.stopPropagation(); onTeamClick?.(match.awayTeam.flagCode); }}
                   >
                     资料<Info className="h-2.5 w-2.5" />
