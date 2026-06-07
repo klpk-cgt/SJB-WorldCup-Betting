@@ -26,6 +26,7 @@ import {
 } from '../types';
 import { SEED_ROOMS, THE_TEAMS, PRESEEDED_USERS, SEED_MATCHES, SEED_ODDS } from './initial_data';
 import { SEED_PLAYERS, SEED_TEAM_HISTORY } from './team_details_seed';
+import { SQUAD_PLAYERS, TEAM_META } from '../data/squads';
 
 export interface DatabaseSchema {
   rooms: GroupRoom[];
@@ -257,7 +258,7 @@ class DatabaseService {
       bracketState: buildBracketState(SEED_MATCHES, THE_TEAMS),
       syncLogs,
       adminOverrides: [],
-      players: SEED_PLAYERS,
+      players: SQUAD_PLAYERS,
       teamHistory: SEED_TEAM_HISTORY,
     };
 
@@ -314,7 +315,7 @@ class DatabaseService {
       this.cache.shareCards = [];
     }
     if (!Array.isArray(this.cache.players)) {
-      this.cache.players = SEED_PLAYERS;
+      this.cache.players = SQUAD_PLAYERS;
     }
     if (!Array.isArray(this.cache.teamHistory)) {
       this.cache.teamHistory = SEED_TEAM_HISTORY;
@@ -324,10 +325,17 @@ class DatabaseService {
       const seedTeamMap = new Map(THE_TEAMS.map(t => [t.id, t]));
       this.cache.teams = this.cache.teams.map(team => {
         const seed = seedTeamMap.get(team.id);
-        if (seed && !team.fifaRank && seed.fifaRank) {
-          return { ...team, ...seed };
-        }
-        return team;
+        const meta = TEAM_META[team.id];
+        return {
+          ...team,
+          ...(seed && !team.fifaRank && seed.fifaRank ? seed : {}),
+          ...(meta ? {
+            fifaRank: team.fifaRank || meta.fifaRank || undefined,
+            coachName: team.coachName || meta.coachName || undefined,
+            worldCupAppearances: team.worldCupAppearances || meta.worldCupAppearances || undefined,
+            confederation: team.confederation || meta.confederation || undefined,
+          } : {}),
+        };
       });
     }
     if (!this.cache.bracketState || !Array.isArray(this.cache.bracketState.rounds)) {
