@@ -51,7 +51,7 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
   const [filterTeam, setFilterTeam] = useState('');
   const [filterStage, setFilterStage] = useState('All');
   const [filterGroup, setFilterGroup] = useState<string>('All');
-  const [filterDate, setFilterDate] = useState<string>('all');
+  const [filterDate, setFilterDate] = useState<string>('2026-06-12');
   const [primaryView, setPrimaryView] = useState<PrimaryView>('schedule');
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -293,16 +293,8 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
 
         {primaryView === 'schedule' && (
           <div className="mt-4 space-y-3">
-            {/* 日期横滑选择器 - 紧凑双行 */}
+            {/* 日期横滑选择器 - 紧凑双行，默认选中6/12，全部在最后 */}
             <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-              <button
-                onClick={() => setFilterDate('all')}
-                className={`shrink-0 rounded-xl px-2.5 py-1 text-[11px] font-bold transition ${
-                  filterDate === 'all' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                全部
-              </button>
               {dateList.map(dateStr => {
                 const d = new Date(dateStr + 'T00:00:00');
                 const weekday = ['日','一','二','三','四','五','六'][d.getDay()];
@@ -323,6 +315,14 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
                   </button>
                 );
               })}
+              <button
+                onClick={() => setFilterDate('all')}
+                className={`shrink-0 rounded-xl px-2.5 py-1 text-[11px] font-bold transition ${
+                  filterDate === 'all' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                全部
+              </button>
             </div>
 
             {/* 小组筛选 - 仅小组赛阶段显示 */}
