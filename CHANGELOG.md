@@ -1,5 +1,24 @@
 # 更新日志 (Changelog)
 
+## v2.1.2 - 2026-06-13
+
+### Bug 修复
+
+- **AI 预测卡片未渲染**：`HomeTab.tsx` 中 `AIPredictionCard` 已 import 但未在 JSX 中渲染，现已添加到首页焦点战卡片与群内动态之间
+- **useScrollReveal 未使用**：GSAP 动画系统的 `useScrollReveal` hook 已定义但无组件调用，现已应用到统计页和排行榜
+
+### 功能完善
+
+- **统计页滚动动画**：`StatsPage.tsx` 4 个图表 section 均添加 `useScrollReveal`，滚动时渐入动画
+- **排行榜头部动画**：`LeaderboardTab.tsx` 头部区域添加 `useScrollReveal`，配合已有 `useStaggerReveal` 列表行交错动画
+- **ChartCard 组件重构**：改为 `React.forwardRef` 支持外部 ref 传递
+
+### 文件变更
+
+- 修改 `src/components/HomeTab.tsx` - 添加 `<AIPredictionCard />` 渲染
+- 修改 `src/components/StatsPage.tsx` - 引入 useScrollReveal，4 个 section 添加 ref
+- 修改 `src/components/LeaderboardTab.tsx` - 引入 useScrollReveal，头部添加 ref
+
 ## v2.1.1 - 2026-06-13
 
 ### Bug 修复
