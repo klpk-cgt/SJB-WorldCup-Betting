@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -12,13 +12,13 @@ import {
   getOrGenerateMatchAnalysis,
   getOrGenerateMatchPrediction,
 } from '../ai';
-import { getRuntimeConfig, summarizeProviderConfig } from '../config';
+import { getRuntimeConfig } from '../config';
 import {
   applyLifecycleUpdates,
   deriveOperationalStatus,
   deriveSettlementStatus,
 } from '../operations';
-import { syncFixturesForDay, syncOddsForMatches, ensureDefaultOdds } from '../sync';
+import { syncFixturesForDateWindow, syncFixturesForDay, syncOddsForMatches } from '../sync';
 import {
   createId,
   createAdminSession,
@@ -32,21 +32,42 @@ import {
   markRoomLeaderboardAiStale,
   appendSyncLog,
   getIntegrationStatusPayload,
+  getSystemStatusPayload,
   pickNearestMatchDay,
   getPinyinInitials,
 } from '../helpers';
+import { emitPointsAdjusted, emitUserJoined } from '../activity_service';
+import { evaluateAllBadges, syncAllTitles } from '../badge_service';
+import { initUserCardInventory, adjustUserCards, bootstrapAllCardInventories } from '../prediction_card_service';
 
 const config = getRuntimeConfig();
 const router = Router();
 
-// ─── 管理员登录 ───
+function generateUniqueLoginCode(existingCodes: Set<string>) {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const width = attempt < 10 ? 4 : 6;
+    const min = 10 ** (width - 1);
+    const max = 10 ** width;
+    const code = `WC${Math.floor(min + Math.random() * (max - min))}`;
+    if (!existingCodes.has(code)) {
+      existingCodes.add(code);
+      return code;
+    }
+  }
+
+  throw new Error('生成唯一登录码失败，请稍后重试。');
+}
+
+// 管理员登录
 
 router.post('/api/admin/login', (req: Request, res: Response) => {
   const { username, password } = req.body;
+  if (!String(username || '').trim() || !String(password || '').trim()) {
+    return res.status(400).json({ error: '请输入管理员账号和密码。' });
+  }
   if (username !== config.adminUsername || password !== config.adminPassword) {
     return res.status(401).json({ error: '管理员账号或密码错误。' });
   }
-
   const token = createAdminSession();
   res.json({
     success: true,
@@ -55,27 +76,38 @@ router.post('/api/admin/login', (req: Request, res: Response) => {
   });
 });
 
-// ─── 管理面板 ───
+// 鈹€鈹€鈹€ 绠＄悊闈㈡澘 鈹€鈹€鈹€
 
 router.get('/api/admin/dashboard', (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
   const db = dbService.getData();
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayStartIso = todayStart.toISOString();
+
   res.json({
     usersCount: db.users.length,
     activeRooms: db.rooms.length,
     totalBetsCount: db.predictions.length,
+    todayBetsCount: db.predictions.filter((p) => p.placedAt >= todayStartIso).length,
     matchesCount: db.matches.length,
     syncLogsCount: db.syncLogs.length,
     pendingSettlement: db.matches.filter((item) => deriveSettlementStatus(item) === 'WAITING_SETTLEMENT').length,
     lockingSoonMatches: db.matches.filter((item) => deriveOperationalStatus(item, Date.now(), config.predictionLockMinutes) === 'LOCKING_SOON').length,
+    integrationStatus: getIntegrationStatusPayload(),
   });
 });
 
-// ─── 集成状态 ───
+// 鈹€鈹€鈹€ 闆嗘垚鐘舵€?鈹€鈹€鈹€
 
 router.get('/api/admin/integrations/status', (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
   res.json(getIntegrationStatusPayload());
+});
+
+router.get('/api/admin/system/status', (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  res.json(getSystemStatusPayload());
 });
 
 router.post('/api/admin/integrations/test-sync', async (req: Request, res: Response) => {
@@ -133,7 +165,7 @@ router.post('/api/admin/integrations/test-sync', async (req: Request, res: Respo
   });
 });
 
-// ─── 用户管理 ───
+// 鈹€鈹€鈹€ 鐢ㄦ埛绠＄悊 鈹€鈹€鈹€
 
 router.get('/api/admin/users', (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
@@ -143,11 +175,13 @@ router.get('/api/admin/users', (req: Request, res: Response) => {
       const wallet = db.wallets.find((item) => item.userId === user.id);
       const predictions = db.predictions.filter((item) => item.userId === user.id);
       const room = db.rooms.find((item) => item.id === user.groupId);
+      const inv = (db as any).cardInventories?.find((i: any) => i.userId === user.id);
       return {
         ...serializeUserForClient(user),
         groupName: room?.name || '未分组',
         balance: wallet?.balance || 0,
         betsCount: predictions.length,
+        cards: inv?.cards || {},
         hasPin: Boolean(user.pinHash),
       };
     }),
@@ -156,25 +190,25 @@ router.get('/api/admin/users', (req: Request, res: Response) => {
 
 router.post('/api/admin/users/bulk', (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
-  const { names, roomId } = req.body;
+  const { names, roomId = dbService.getPrimaryRoomId() } = req.body;
   if (!names || !roomId) return res.status(400).json({ error: '缺少名字列表或房间 ID。' });
 
   const db = dbService.getData();
   const createdUsers: User[] = [];
+  const existingCodes = new Set(db.users.map((item) => item.loginCode));
   const namesList = String(names)
     .split(/[\n,]/)
     .map((item) => item.trim())
     .filter(Boolean);
 
   for (const name of namesList) {
-    const suffix = Math.floor(1000 + Math.random() * 9000);
     const userId = createId('user');
     const user: User = {
       id: userId,
       groupId: roomId,
       displayName: name,
-      avatarUrl: ['⚽', '🏆', '🥅', '🔥', '🎯', '🎉'][Math.floor(Math.random() * 6)],
-      loginCode: `WC${suffix}`,
+      avatarUrl: ['⚽', '🏆', '🎯', '🔥', '🌟', '🎖️'][Math.floor(Math.random() * 6)],
+      loginCode: generateUniqueLoginCode(existingCodes),
       pinHash: '1234',
       status: 'UNCLAIMED',
       createdAt: new Date().toISOString(),
@@ -197,6 +231,7 @@ router.post('/api/admin/users/bulk', (req: Request, res: Response) => {
       createdAt: new Date().toISOString(),
     });
     createdUsers.push(user);
+    initUserCardInventory(userId);
   }
 
   dbService.save();
@@ -217,7 +252,7 @@ router.put('/api/admin/users/:id', (req: Request, res: Response) => {
   res.json({ success: true, user });
 });
 
-// ─── 单个创建账号（首字母登录） ───
+// 鈹€鈹€鈹€ 鍗曚釜鍒涘缓璐﹀彿锛堥瀛楁瘝鐧诲綍锛?鈹€鈹€鈹€
 
 router.post('/api/admin/users/create', (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
@@ -233,7 +268,7 @@ router.post('/api/admin/users/create', (req: Request, res: Response) => {
   const name = displayName.trim();
   const code = loginCode.trim().toUpperCase();
 
-  // 检查登录码是否已被占用
+  // 妫€鏌ョ櫥褰曠爜鏄惁宸茶鍗犵敤
   const existingUser = db.users.find((u) => u.loginCode === code);
   if (existingUser) {
     return res.status(400).json({
@@ -245,11 +280,11 @@ router.post('/api/admin/users/create', (req: Request, res: Response) => {
   const points = Number(initialPoints) || 10000;
   const user: User = {
     id: userId,
-    groupId: roomId || 'room-1',
+    groupId: roomId || dbService.getPrimaryRoomId(),
     displayName: name,
-    avatarUrl: '', // 初始为空，管理员后续上传
+    avatarUrl: '', // 鍒濆涓虹┖锛岀鐞嗗憳鍚庣画涓婁紶
     loginCode: code,
-    pinHash: '', // 空 PIN，支持无 PIN 登录
+    pinHash: '', // 绌?PIN锛屾敮鎸佹棤 PIN 鐧诲綍
     status: 'UNCLAIMED',
     createdAt: new Date().toISOString(),
   };
@@ -271,17 +306,20 @@ router.post('/api/admin/users/create', (req: Request, res: Response) => {
     createdAt: new Date().toISOString(),
   });
 
+  // 初始化卡牌库存
+  initUserCardInventory(userId);
+
   dbService.save();
-  console.log(`[Admin] 创建账号: ${name} (登录码: ${code})`);
+  console.log(`[Admin] 鍒涘缓璐﹀彿: ${name} (鐧诲綍鐮? ${code})`);
   res.json({
     success: true,
     user: serializeUserForClient(user),
     loginCode: code,
-    message: `账号创建成功！登录码: ${code}`,
+    message: `璐﹀彿鍒涘缓鎴愬姛锛佺櫥褰曠爜: ${code}`,
   });
 });
 
-// ─── 删除账号 ───
+// 鈹€鈹€鈹€ 鍒犻櫎璐﹀彿 鈹€鈹€鈹€
 
 router.delete('/api/admin/users/:id', (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
@@ -295,30 +333,30 @@ router.delete('/api/admin/users/:id', (req: Request, res: Response) => {
 
   const user = db.users[userIndex];
 
-  // 删除关联数据
+  // 鍒犻櫎鍏宠仈鏁版嵁
   const walletIndex = db.wallets.findIndex((item) => item.userId === userId);
   if (walletIndex !== -1) {
     db.wallets.splice(walletIndex, 1);
   }
 
-  // 删除预测记录
+  // 鍒犻櫎棰勬祴璁板綍
   db.predictions = db.predictions.filter((item) => item.userId !== userId);
 
-  // 删除交易记录
+  // 鍒犻櫎浜ゆ槗璁板綍
   db.transactions = db.transactions.filter((item) => item.userId !== userId);
 
-  // 删除用户
+  // 鍒犻櫎鐢ㄦ埛
   db.users.splice(userIndex, 1);
 
   dbService.save();
-  console.log(`[Admin] 删除账号: ${user.displayName} (${user.loginCode})`);
+  console.log(`[Admin] 鍒犻櫎璐﹀彿: ${user.displayName} (${user.loginCode})`);
   res.json({
     success: true,
     message: `已删除用户 "${user.displayName}" 及其所有数据。`,
   });
 });
 
-// ─── 上传头像（Base64 存储） ───
+// 鈹€鈹€鈹€ 涓婁紶澶村儚锛圔ase64 瀛樺偍锛?鈹€鈹€鈹€
 
 router.put('/api/admin/users/:id/avatar', (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
@@ -328,7 +366,7 @@ router.put('/api/admin/users/:id/avatar', (req: Request, res: Response) => {
     return res.status(400).json({ error: '请提供有效的头像数据（Base64 格式）。' });
   }
 
-  // 验证 Base64 图片格式
+  // 楠岃瘉 Base64 鍥剧墖鏍煎紡
   if (!avatarUrl.startsWith('data:image/')) {
     return res.status(400).json({ error: '头像格式不正确，仅支持图片格式。' });
   }
@@ -344,7 +382,7 @@ router.put('/api/admin/users/:id/avatar', (req: Request, res: Response) => {
 
   user.avatarUrl = avatarUrl;
   dbService.save();
-  console.log(`[Admin] 更新头像: ${user.displayName}`);
+  console.log(`[Admin] 鏇存柊澶村儚: ${user.displayName}`);
   res.json({
     success: true,
     message: '头像上传成功。',
@@ -363,8 +401,11 @@ router.post('/api/admin/users/:id/adjust-points', (req: Request, res: Response) 
   const wallet = db.wallets.find((item) => item.userId === req.params.id);
   if (!wallet) return res.status(404).json({ error: '钱包不存在。' });
 
+  const user = db.users.find((u) => u.id === req.params.id);
+
   const oldBalance = wallet.balance;
   wallet.balance = Math.max(0, wallet.balance + amount);
+  const reason = req.body.reason || '管理员手动调整积分';
   db.transactions.push({
     id: createId('adj'),
     userId: req.params.id,
@@ -372,14 +413,115 @@ router.post('/api/admin/users/:id/adjust-points', (req: Request, res: Response) 
     amount,
     balanceBefore: oldBalance,
     balanceAfter: wallet.balance,
-    note: req.body.reason || '管理员手动调整积分',
+    note: reason,
     createdAt: new Date().toISOString(),
   });
+
+  // 触发动态
+  if (user) {
+    try {
+      emitPointsAdjusted({
+        userId: user.id,
+        displayName: user.displayName,
+        avatarUrl: user.avatarUrl,
+        amount,
+        reason,
+        balanceAfter: wallet.balance,
+        groupId: user.groupId,
+      });
+    } catch (e) {
+      console.error('触发调账动态失败。', e);
+    }
+  }
+
   dbService.save();
   res.json({ success: true, balance: wallet.balance });
 });
 
-// ─── 比赛管理 ───
+// 鈹€鈹€鈹€ 缁存姢锛氳瘎浼版墍鏈夊窘绔犱笌绉板彿 鈹€鈹€鈹€
+router.post('/api/admin/badges/reevaluate', (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const badgeResult = evaluateAllBadges();
+  const titleResult = syncAllTitles();
+  res.json({ success: true, ...badgeResult, ...titleResult });
+});
+
+// 鈹€鈹€鈹€ 鍗＄墝绠＄悊锛氱粰鐢ㄦ埛澧炲噺鍗＄墝 鈹€鈹€鈹€
+router.post('/api/admin/users/:id/cards/adjust', (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const cardId = String(req.body.cardId || '');
+  const delta = Number(req.body.delta);
+  const VALID = ['NO_LOSS', 'DOUBLE', 'REGRET', 'FLOOR'];
+  if (!VALID.includes(cardId)) {
+    return res.status(400).json({ error: '不支持的卡牌类型。' });
+  }
+  if (!Number.isFinite(delta) || delta === 0) {
+    return res.status(400).json({ error: '调整数量必须是非 0 整数。' });
+  }
+  const inv = adjustUserCards(req.params.id, cardId as any, Math.trunc(delta));
+  dbService.save();
+  res.json({ success: true, cards: inv.cards, updatedAt: inv.updatedAt });
+});
+
+// 鈹€鈹€鈹€ 鍗＄墝绠＄悊锛氱粰鎵€鏈夌敤鎴疯ˉ榻愬垵濮嬪崱鐗?鈹€鈹€鈹€
+router.post('/api/admin/cards/bootstrap', (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const result = bootstrapAllCardInventories();
+  res.json({ success: true, ...result });
+});
+
+// 鈹€鈹€鈹€ 鍗＄墝绠＄悊锛氭煡鐪嬪崱鐗屼娇鐢ㄦ儏鍐电粺璁?鈹€鈹€鈹€
+router.get('/api/admin/cards/stats', (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const db = dbService.getData();
+  const inventories = (db as any).cardInventories || [];
+
+  // 各卡牌总库存
+  const totalStock: Record<string, number> = { NO_LOSS: 0, DOUBLE: 0, REGRET: 0, FLOOR: 0 };
+  // 鍚勫崱鐗屽凡浣跨敤娆℃暟
+  const usedCount: Record<string, number> = { NO_LOSS: 0, DOUBLE: 0, REGRET: 0, FLOOR: 0 };
+
+  for (const inv of inventories) {
+    for (const k of Object.keys(totalStock)) {
+      totalStock[k] += inv.cards?.[k] || 0;
+    }
+  }
+  for (const p of db.predictions) {
+    if (p.usedCard && usedCount[p.usedCard] !== undefined) {
+      usedCount[p.usedCard] += 1;
+    }
+  }
+
+  // 浣跨敤璁板綍锛堟渶杩?50 鏉★級
+  const recentUses = db.predictions
+    .filter((p) => p.usedCard)
+    .sort((a, b) => (b.placedAt || '').localeCompare(a.placedAt || ''))
+    .slice(0, 50)
+    .map((p) => {
+      const u = db.users.find((x) => x.id === p.userId);
+      const m = db.matches.find((x) => x.id === p.matchId);
+      return {
+        predictionId: p.id,
+        cardId: p.usedCard,
+        cardNote: p.cardEffectNotes,
+        userName: u?.displayName || '鍖垮悕',
+        userLoginCode: u?.loginCode,
+        matchLabel: m ? `${m.homeTeam?.name || ''} vs ${m.awayTeam?.name || ''}`.trim() : p.matchId,
+        placedAt: p.placedAt,
+        status: p.status,
+      };
+    });
+
+  res.json({
+    totalStock,
+    usedCount,
+    totalUsers: db.users.length,
+    inventoriedUsers: inventories.length,
+    recentUses,
+  });
+});
+
+// 鈹€鈹€鈹€ 姣旇禌绠＄悊 鈹€鈹€鈹€
 
 router.put('/api/admin/matches/:id', (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
@@ -403,7 +545,7 @@ router.put('/api/admin/matches/:id', (req: Request, res: Response) => {
   applyLifecycleUpdates(match, config.predictionLockMinutes);
   dbService.refreshBracketState();
   markMatchAiStale(match.id);
-  markRoomLeaderboardAiStale('room-1');
+  markRoomLeaderboardAiStale(dbService.getPrimaryRoomId());
   dbService.save();
   res.json({ success: true, match: serializeMatch(match) });
 });
@@ -441,33 +583,67 @@ router.post('/api/admin/matches/:id/settle', (req: Request, res: Response) => {
   if (!match) return res.status(404).json({ error: '比赛不存在。' });
 
   try {
-    const count = settleMatch(match);
+    const rawForce = req.body?.forceResettle ?? req.query.forceResettle;
+    const forceResettle = rawForce === true || rawForce === 'true' || rawForce === 1 || rawForce === '1';
+    const count = settleMatch(match, { forceResettle });
     dbService.save();
-    res.json({ success: true, count });
+    res.json({ success: true, count, forceResettle });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : '结算失败。' });
   }
 });
 
-// ─── 同步管理 ───
+// 鈹€鈹€鈹€ 鍚屾绠＄悊 鈹€鈹€鈹€
 
 router.post('/api/admin/sync/fixtures', async (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
   const db = dbService.getData();
-  const date = (req.body?.date as string) || new Date().toISOString().slice(0, 10);
-  const result = await syncFixturesForDay({
-    apiKey: config.apiFootballKey,
-    date,
-    db,
-  });
+  const date = req.body?.date as string | undefined;
+  const result = date
+    ? await syncFixturesForDay({
+        apiKey: config.apiFootballKey,
+        date,
+        db,
+      })
+    : await syncFixturesForDateWindow({
+        apiKey: config.apiFootballKey,
+        db,
+      });
   appendSyncLog(result.log);
   ensureLifecycleForAllMatches();
-  result.updatedMatches.forEach((item) => markMatchAiStale(item.id));
+  [...result.updatedMatches, ...result.createdMatches].forEach((item) => markMatchAiStale(item.id));
   dbService.refreshBracketState();
   dbService.save();
   res.json({
     success: result.log.status !== 'FAILED',
     updatedMatches: result.updatedMatches.map((item) => item.id),
+    createdMatches: result.createdMatches.map((item) => item.id),
+    log: result.log,
+  });
+});
+
+router.post('/api/admin/sync/window', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const db = dbService.getData();
+  const result = await syncFixturesForDateWindow({
+    apiKey: config.apiFootballKey,
+    db,
+    anchorDate: req.body?.anchorDate ? String(req.body.anchorDate) : undefined,
+    pastDays: Number.isFinite(Number(req.body?.pastDays)) ? Number(req.body.pastDays) : undefined,
+    futureDays: Number.isFinite(Number(req.body?.futureDays)) ? Number(req.body.futureDays) : undefined,
+  });
+
+  appendSyncLog(result.log);
+  ensureLifecycleForAllMatches();
+  [...result.updatedMatches, ...result.createdMatches].forEach((item) => markMatchAiStale(item.id));
+  dbService.refreshBracketState();
+  dbService.save();
+
+  res.json({
+    success: result.log.status !== 'FAILED',
+    dates: result.dates,
+    updatedMatches: result.updatedMatches.map((item) => item.id),
+    createdMatches: result.createdMatches.map((item) => item.id),
     log: result.log,
   });
 });
@@ -475,10 +651,8 @@ router.post('/api/admin/sync/fixtures', async (req: Request, res: Response) => {
 router.post('/api/admin/sync/today', async (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
   const db = dbService.getData();
-  const date = new Date().toISOString().slice(0, 10);
-  const fixturesResult = await syncFixturesForDay({
+  const fixturesResult = await syncFixturesForDateWindow({
     apiKey: config.apiFootballKey,
-    date,
     db,
   });
   const oddsResult = await syncOddsForMatches({
@@ -488,13 +662,14 @@ router.post('/api/admin/sync/today', async (req: Request, res: Response) => {
   appendSyncLog(fixturesResult.log);
   appendSyncLog(oddsResult.log);
   ensureLifecycleForAllMatches();
-  fixturesResult.updatedMatches.forEach((item) => markMatchAiStale(item.id));
+  [...fixturesResult.updatedMatches, ...fixturesResult.createdMatches].forEach((item) => markMatchAiStale(item.id));
   oddsResult.updatedMatchIds.forEach((item) => markMatchAiStale(item));
   dbService.refreshBracketState();
   dbService.save();
   res.json({
     success: fixturesResult.log.status !== 'FAILED' || oddsResult.log.status !== 'FAILED',
     fixturesUpdated: fixturesResult.updatedMatches.map((item) => item.id),
+    fixturesCreated: fixturesResult.createdMatches.map((item) => item.id),
     oddsUpdated: oddsResult.updatedMatchIds,
   });
 });
@@ -525,18 +700,19 @@ router.post('/api/admin/sync/matches/:id', async (req: Request, res: Response) =
     targetMatchId: match.id,
   });
   ensureLifecycleForAllMatches();
-  fixturesResult.updatedMatches.forEach((item) => markMatchAiStale(item.id));
+  [...fixturesResult.updatedMatches, ...fixturesResult.createdMatches].forEach((item) => markMatchAiStale(item.id));
   oddsResult.updatedMatchIds.forEach((item) => markMatchAiStale(item));
   dbService.refreshBracketState();
   dbService.save();
   res.json({
     success: true,
     updatedMatch: serializeMatch(match),
+    fixturesCreated: fixturesResult.createdMatches.map((item) => item.id),
     oddsUpdated: oddsResult.updatedMatchIds.includes(match.id),
   });
 });
 
-// ─── AI 管理 ───
+// 鈹€鈹€鈹€ AI 绠＄悊 鈹€鈹€鈹€
 
 router.post('/api/admin/ai/match/:id/pre', async (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
@@ -544,16 +720,16 @@ router.post('/api/admin/ai/match/:id/pre', async (req: Request, res: Response) =
   const match = db.matches.find((item) => item.id === req.params.id);
   if (!match) return res.status(404).json({ error: '比赛不存在。' });
 
-  const home = db.teams.find((team) => team.id === match.homeTeamId)?.nameZh || '主队';
-  const away = db.teams.find((team) => team.id === match.awayTeamId)?.nameZh || '客队';
+  const home = db.teams.find((team) => team.id === match.homeTeamId)?.nameZh || '涓婚槦';
+  const away = db.teams.find((team) => team.id === match.awayTeamId)?.nameZh || '瀹㈤槦';
   const odds = db.matchOdds[match.id];
-  const prompt = `请为 ${home} vs ${away} 生成一张世界杯朋友群赛前速览卡。要求：第一句给结论，再给 2 到 3 条短 bullet，最后补一句风险提醒。可参考信息：阶段 ${match.stage}，地点 ${match.venueCity}，胜平负指数 ${odds ? `${odds.h2h.homeWin}/${odds.h2h.draw}/${odds.h2h.awayWin}` : '暂无'}。`;
+  const prompt = `请为 ${home} vs ${away} 生成一张赛前速览卡。要求：先给结论，再给 2 到 3 条简短要点，最后补一句风险提醒。可参考信息：阶段 ${match.stage}，地点 ${match.venueCity || '待定'}，胜平负指数 ${odds ? `${odds.h2h.homeWin}/${odds.h2h.draw}/${odds.h2h.awayWin}` : '暂无'}。`;
 
   const aiContent = await generateStructuredAiContent({
     type: 'PRE_MATCH_ANALYSIS',
     title: `AI 赛前速览：${home} vs ${away}`,
     prompt,
-    fallbackBody: `${home} 和 ${away} 这场球适合先看首发和临场变化，再决定娱乐积分怎么分配。`,
+    fallbackBody: `${home} 和 ${away} 这场比赛适合先看首发和临场变化，再决定娱乐积分怎么分配。`,
     deepSeekApiKey: config.deepSeekApiKey,
     geminiApiKey: config.geminiApiKey,
   });
@@ -706,7 +882,7 @@ router.post('/api/admin/ai/leaderboard/:roomId/regenerate', async (req: Request,
   }
 });
 
-// ─── 同步日志 ───
+// 鈹€鈹€鈹€ 鍚屾鏃ュ織 鈹€鈹€鈹€
 
 router.get('/api/admin/sync-logs', (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
@@ -721,6 +897,132 @@ router.get('/api/admin/sync-logs', (req: Request, res: Response) => {
     return true;
   });
   res.json(logs);
+});
+
+// 鈹€鈹€鈹€ 绔炵寽璁板綍鏌ヨ 鈹€鈹€鈹€
+
+router.get('/api/admin/predictions', (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const db = dbService.getData();
+  const userId = String(req.query.userId || '');
+  const matchId = String(req.query.matchId || '');
+  const status = String(req.query.status || '');
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 20));
+
+  let result = [...db.predictions];
+  if (userId) result = result.filter((p) => p.userId === userId);
+  if (matchId) result = result.filter((p) => p.matchId === matchId);
+  if (status) result = result.filter((p) => p.status === status);
+
+  result.sort((a, b) => (b.placedAt || '').localeCompare(a.placedAt || ''));
+
+  const total = result.length;
+  const items = result.slice((page - 1) * pageSize, page * pageSize).map((p) => {
+    const user = db.users.find((u) => u.id === p.userId);
+    const match = db.matches.find((m) => m.id === p.matchId);
+    return {
+      id: p.id,
+      userId: p.userId,
+      userName: user?.displayName || '鏈煡',
+      userLoginCode: user?.loginCode,
+      matchId: p.matchId,
+      matchLabel: match ? `${match.homeTeam?.nameZh || ''} vs ${match.awayTeam?.nameZh || ''}` : p.matchId,
+      market: p.market,
+      optionLabel: p.optionLabel,
+      oddsDecimal: p.oddsDecimal,
+      stakePoints: p.stakePoints,
+      potentialReturn: p.potentialReturn,
+      status: p.status,
+      usedCard: p.usedCard || null,
+      placedAt: p.placedAt,
+      settledAt: p.settledAt || null,
+    };
+  });
+
+  res.json({ total, page, pageSize, items });
+});
+
+// 鈹€鈹€鈹€ 绉垎娴佹按鏌ョ湅 鈹€鈹€鈹€
+
+router.get('/api/admin/transactions', (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const db = dbService.getData();
+  const userId = String(req.query.userId || '');
+  const type = String(req.query.type || '');
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 20));
+
+  let result = [...db.transactions];
+  if (userId) result = result.filter((t) => t.userId === userId);
+  if (type) result = result.filter((t) => t.type === type);
+
+  result.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+  const total = result.length;
+  const items = result.slice((page - 1) * pageSize, page * pageSize).map((t) => {
+    const user = db.users.find((u) => u.id === t.userId);
+    return {
+      id: t.id,
+      userId: t.userId,
+      userName: user?.displayName || '鏈煡',
+      type: t.type,
+      amount: t.amount,
+      balanceBefore: t.balanceBefore,
+      balanceAfter: t.balanceAfter,
+      note: t.note,
+      createdAt: t.createdAt,
+    };
+  });
+
+  res.json({ total, page, pageSize, items });
+});
+
+// 鈹€鈹€鈹€ AI 鍐呭閲嶆柊鐢熸垚 鈹€鈹€鈹€
+
+router.post('/api/admin/ai/regenerate/:id', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const db = dbService.getData();
+  const aiContent = db.aiContents.find((item) => item.id === req.params.id);
+  if (!aiContent) {
+    return res.status(404).json({ error: 'AI 内容不存在。' });
+  }
+
+  try {
+    const newContent = await generateStructuredAiContent({
+      config,
+      type: aiContent.type,
+      title: aiContent.title,
+      prompt: `璇烽噸鏂扮敓鎴愪互涓嬪唴瀹圭殑鏇存柊鐗堟湰锛?{aiContent.title}`,
+      fallbackBody: aiContent.content || aiContent.summary || 'AI 鍐呭閲嶆柊鐢熸垚涓?..',
+      matchId: aiContent.matchId,
+    });
+
+    // 替换旧内容
+    const idx = db.aiContents.findIndex((item) => item.id === req.params.id);
+    if (idx >= 0) {
+      db.aiContents[idx] = newContent;
+    }
+
+    appendSyncLog({
+      id: createId('sync'),
+      source: newContent.provider || 'Local',
+      action: 'Regenerate AI content',
+      syncType: 'ai',
+      status: 'SUCCESS',
+      requestSummary: `Regenerate ${aiContent.type} content`,
+      responseSummary: `${newContent.provider || 'Local'} / ${newContent.model}`,
+      targetMatchId: aiContent.matchId,
+      startedAt: new Date().toISOString(),
+      finishedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+    });
+
+    dbService.save();
+    res.json({ success: true, aiContent: newContent });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'AI 内容重新生成失败。' });
+  }
 });
 
 export default router;

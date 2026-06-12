@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { Crown, Flag, History, Medal, Trophy, UserRound } from 'lucide-react';
+import { Crown, Flag, History, Lightbulb, Medal, Trophy, UserRound } from 'lucide-react';
 import FlagBadge from './home/FlagBadge';
-import { CHAMPION_TIMELINE, CLASSIC_TEAMS, LEGEND_PLAYERS, WORLD_CUP_RECORDS } from '../data/historyHall';
+import { CHAMPION_TIMELINE, CLASSIC_TEAMS, FUN_FACTS, GOLDEN_BOOT_WINNERS, LEGEND_PLAYERS, WORLD_CUP_RECORDS } from '../data/historyHall';
 
-type HistoryTab = 'champions' | 'teams' | 'players' | 'records';
+type HistoryTab = 'champions' | 'teams' | 'players' | 'records' | 'funfacts' | 'goldenboot';
 
 const TAB_META: Array<{
   key: HistoryTab;
@@ -11,9 +11,11 @@ const TAB_META: Array<{
   icon: React.ReactNode;
 }> = [
   { key: 'champions', label: '冠军年表', icon: <Trophy className="h-3.5 w-3.5" /> },
+  { key: 'goldenboot', label: '金靴榜', icon: <Medal className="h-3.5 w-3.5" /> },
   { key: 'teams', label: '经典球队', icon: <Crown className="h-3.5 w-3.5" /> },
   { key: 'players', label: '传奇球星', icon: <UserRound className="h-3.5 w-3.5" /> },
-  { key: 'records', label: '世界杯纪录', icon: <Medal className="h-3.5 w-3.5" /> },
+  { key: 'records', label: '世界杯纪录', icon: <Flag className="h-3.5 w-3.5" /> },
+  { key: 'funfacts', label: '冷知识', icon: <Lightbulb className="h-3.5 w-3.5" /> },
 ];
 
 export default function HistoryHallPage() {
@@ -21,8 +23,10 @@ export default function HistoryHallPage() {
 
   const activeCount = useMemo(() => {
     if (activeTab === 'champions') return CHAMPION_TIMELINE.length;
+    if (activeTab === 'goldenboot') return GOLDEN_BOOT_WINNERS.length;
     if (activeTab === 'teams') return CLASSIC_TEAMS.length;
     if (activeTab === 'players') return LEGEND_PLAYERS.length;
+    if (activeTab === 'funfacts') return FUN_FACTS.length;
     return WORLD_CUP_RECORDS.length;
   }, [activeTab]);
 
@@ -48,7 +52,7 @@ export default function HistoryHallPage() {
       </section>
 
       <section className="rounded-[28px] border border-slate-200 bg-white p-3 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-        <div className="grid grid-cols-4 gap-1 rounded-2xl bg-slate-100 p-1">
+        <div className="grid grid-cols-3 gap-1 rounded-2xl bg-slate-100 p-1">
           {TAB_META.map((tab) => {
             const active = tab.key === activeTab;
             return (
@@ -209,6 +213,45 @@ export default function HistoryHallPage() {
               </div>
 
               <p className="mt-4 text-sm leading-7 text-slate-600">{item.note}</p>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {activeTab === 'goldenboot' && (
+        <section className="space-y-2">
+          {GOLDEN_BOOT_WINNERS.map((item, idx) => (
+            <div key={item.year} className="rounded-[22px] border border-slate-200 bg-white px-4 py-3 shadow-[0_4px_12px_rgba(15,23,42,0.04)]">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-black ${
+                    idx === 0 ? 'bg-amber-100 text-amber-700' : idx === 1 ? 'bg-slate-100 text-slate-600' : idx === 2 ? 'bg-orange-100 text-orange-700' : 'bg-slate-50 text-slate-400'
+                  }`}>{item.year}</span>
+                  <FlagBadge flagCode={item.code} size="sm" />
+                  <div>
+                    <p className="text-sm font-black text-slate-900">{item.player}</p>
+                    <p className="text-[10px] text-slate-500">{item.team}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-lg font-black text-amber-600">{item.goals}</span>
+                  <span className="text-[10px] font-bold text-slate-400">球</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {activeTab === 'funfacts' && (
+        <section className="grid gap-3">
+          {FUN_FACTS.map((item) => (
+            <div key={item.title} className="rounded-[22px] border border-amber-100 bg-gradient-to-br from-amber-50 to-white p-4 shadow-[0_4px_12px_rgba(15,23,42,0.04)]">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">{item.icon}</span>
+                <h3 className="text-sm font-black text-slate-900">{item.title}</h3>
+              </div>
+              <p className="mt-2 text-xs leading-5 text-slate-600">{item.fact}</p>
             </div>
           ))}
         </section>

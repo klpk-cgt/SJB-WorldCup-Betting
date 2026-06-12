@@ -1,5 +1,7 @@
 import { DatabaseSchema } from '../db/db_service';
 import { Match, MatchOdds, MatchStatus, SyncLog, SyncProvider, SyncStatus, SyncType, Team } from '../types';
+import { mergeCorrectScoreOdds } from '../utils/odds';
+import { broadcastScoreUpdate } from './websocket';
 
 // ── 默认赔率生成 ──
 export function generateDefaultOdds(matchId: string, homeRank?: number, awayRank?: number): MatchOdds {
@@ -14,14 +16,7 @@ export function generateDefaultOdds(matchId: string, homeRank?: number, awayRank
   return {
     matchId,
     h2h: { homeWin: Math.round(hw * 100) / 100, draw: Math.round(d * 100) / 100, awayWin: Math.round(aw * 100) / 100 },
-    correctScore: [
-      { score: '1-0', odds: 6.50 },
-      { score: '2-0', odds: 8.00 },
-      { score: '2-1', odds: 8.50 },
-      { score: '0-0', odds: 8.00 },
-      { score: '1-1', odds: 6.00 },
-      { score: 'Other', odds: 12.0 },
-    ],
+    correctScore: mergeCorrectScoreOdds().map(({ score, odds }) => ({ score, odds })),
     totalGoals: { over25: 1.90, under25: 1.90 },
     lastUpdated: new Date().toISOString(),
     source: 'MANUAL',
@@ -74,26 +69,89 @@ async function fetchWithRetry(url: string, options: RequestInit, retries = 2, de
 }
 
 function normalizeName(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '');
 }
 
+const TEAM_NAME_ALIASES: Record<string, string[]> = {
+  USA: ['united states', 'usa'],
+  KOR: ['south korea', 'korea republic', 'republic of korea', 'korea'],
+  CUR: ['curacao', 'curaçao'],
+  CIV: ["cote d'ivoire", 'cote divoire', "côte d'ivoire", 'ivory coast'],
+  BIH: ['bosnia and herzegovina', 'bosnia-herzegovina', 'bosnia'],
+  CPV: ['cape verde', 'cabo verde'],
+  COD: ['dr congo', 'democratic republic of congo', 'congo dr', 'congo-kinshasa'],
+  CZE: ['czech republic', 'czechia'],
+};
+
 function buildTeamAliases(team: Team) {
-  return [team.id, team.code, team.name, team.nameZh].map((value) => normalizeName(String(value || '')));
+  return [
+    team.id,
+    team.code,
+    team.name,
+    team.nameZh,
+    ...(TEAM_NAME_ALIASES[team.id] || []),
+  ]
+    .map((value) => normalizeName(String(value || '')))
+    .filter(Boolean);
+}
+
+function resolveTeamByExternalName(db: DatabaseSchema, teamName: string) {
+  const normalized = normalizeName(teamName);
+  if (!normalized) return null;
+  return db.teams.find((team) => buildTeamAliases(team).includes(normalized)) || null;
 }
 
 function matchByTeams(db: DatabaseSchema, homeName: string, awayName: string) {
-  const homeNormalized = normalizeName(homeName);
-  const awayNormalized = normalizeName(awayName);
+  const homeTeam = resolveTeamByExternalName(db, homeName);
+  const awayTeam = resolveTeamByExternalName(db, awayName);
+  if (!homeTeam || !awayTeam) return null;
 
   return db.matches.find((match) => {
-    const homeTeam = db.teams.find((team) => team.id === match.homeTeamId);
-    const awayTeam = db.teams.find((team) => team.id === match.awayTeamId);
-    if (!homeTeam || !awayTeam) return false;
-
-    const homeAliases = buildTeamAliases(homeTeam);
-    const awayAliases = buildTeamAliases(awayTeam);
-    return homeAliases.includes(homeNormalized) && awayAliases.includes(awayNormalized);
+    return match.homeTeamId === homeTeam.id && match.awayTeamId === awayTeam.id;
   });
+}
+
+function buildFixtureMatchId(date: string, fixtureId: number, homeTeamId: string, awayTeamId: string) {
+  return `fx-${date}-${homeTeamId}-${awayTeamId}-${fixtureId}`;
+}
+
+function formatBeijingTime(utcDate: string) {
+  const date = new Date(new Date(utcDate).getTime() + 8 * 60 * 60 * 1000);
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  const hours = String(date.getUTCHours()).padStart(2, '0');
+  const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+  return `${year}/${month}/${day} ${hours}:${minutes}:00`;
+}
+
+function mapRoundToStage(round?: string): Match['stage'] {
+  const normalized = String(round || '').toLowerCase();
+  if (normalized.includes('round of 32')) return 'Round of 32';
+  if (normalized.includes('round of 16')) return 'Round of 16';
+  if (normalized.includes('quarter')) return 'Quarter-finals';
+  if (normalized.includes('semi')) return 'Semi-finals';
+  if (normalized.includes('third')) return 'Third-place play-off';
+  if (normalized.includes('final')) return 'Final';
+  return 'Group Stage';
+}
+
+function buildRoundName(round?: string) {
+  return String(round || '').trim() || 'Group Stage';
+}
+
+function buildWindowDates(anchorDate = new Date(), pastDays = 1, futureDays = 10) {
+  const dates: string[] = [];
+  for (let offset = -pastDays; offset <= futureDays; offset += 1) {
+    const date = new Date(anchorDate);
+    date.setUTCDate(date.getUTCDate() + offset);
+    dates.push(date.toISOString().slice(0, 10));
+  }
+  return dates;
 }
 
 function toMatchStatus(shortStatus?: string): MatchStatus {
@@ -145,13 +203,14 @@ export async function syncFixturesForDay(params: {
   apiKey: string;
   date: string;
   db: DatabaseSchema;
-}): Promise<{ updatedMatches: Match[]; log: SyncLog }> {
+}): Promise<{ updatedMatches: Match[]; createdMatches: Match[]; log: SyncLog }> {
   const { apiKey, date, db } = params;
   const startedAt = new Date().toISOString();
 
   if (!apiKey) {
     return {
       updatedMatches: [],
+      createdMatches: [],
       log: buildLog({
         source: 'API-Football',
         action: 'Sync fixtures by date',
@@ -200,10 +259,59 @@ export async function syncFixturesForDay(params: {
     };
 
     const updatedMatches: Match[] = [];
+    const createdMatches: Match[] = [];
+    let unmatchedTeams = 0;
     for (const item of payload.response || []) {
-      const localMatch = matchByTeams(db, item.teams?.home?.name || '', item.teams?.away?.name || '');
-      if (!localMatch) {
+      const homeName = item.teams?.home?.name || '';
+      const awayName = item.teams?.away?.name || '';
+      const homeTeam = resolveTeamByExternalName(db, homeName);
+      const awayTeam = resolveTeamByExternalName(db, awayName);
+
+      if (!homeTeam || !awayTeam) {
+        unmatchedTeams += 1;
         continue;
+      }
+
+      const kickoff = item.fixture.date || new Date(`${date}T00:00:00.000Z`).toISOString();
+      let localMatch =
+        db.matches.find((match) => match.providerMeta?.apiFootballFixtureId === item.fixture.id) ||
+        db.matches.find(
+          (match) =>
+            match.homeTeamId === homeTeam.id &&
+            match.awayTeamId === awayTeam.id &&
+            match.startTimeUtc.slice(0, 10) === kickoff.slice(0, 10),
+        ) ||
+        matchByTeams(db, homeName, awayName);
+
+      if (!localMatch) {
+        localMatch = {
+          id: buildFixtureMatchId(date, item.fixture.id, homeTeam.id, awayTeam.id),
+          homeTeamId: homeTeam.id,
+          awayTeamId: awayTeam.id,
+          stage: mapRoundToStage(item.league?.round),
+          roundName: buildRoundName(item.league?.round),
+          venueName: item.fixture.venue?.name || '',
+          venueCity: item.fixture.venue?.city || '',
+          startTimeUtc: kickoff,
+          startTimeBeijing: formatBeijingTime(kickoff),
+          status: toMatchStatus(item.fixture.status?.short),
+          homeScore: item.goals?.home ?? undefined,
+          awayScore: item.goals?.away ?? undefined,
+          homePenaltyScore: item.score?.penalty?.home ?? undefined,
+          awayPenaltyScore: item.score?.penalty?.away ?? undefined,
+          isOddsFrozen: false,
+          isPredictionLocked: false,
+          isSettled: false,
+          autoLockAt: new Date(new Date(kickoff).getTime() - 5 * 60 * 1000).toISOString(),
+          operationalStatus: 'BETTABLE',
+          settlementStatus: 'PENDING',
+          providerMeta: {
+            apiFootballFixtureId: item.fixture.id,
+            lastFixturesSyncAt: new Date().toISOString(),
+          },
+        };
+        db.matches.push(localMatch);
+        createdMatches.push(localMatch);
       }
 
       localMatch.providerMeta = {
@@ -211,7 +319,13 @@ export async function syncFixturesForDay(params: {
         apiFootballFixtureId: item.fixture.id,
         lastFixturesSyncAt: new Date().toISOString(),
       };
-      localMatch.startTimeUtc = item.fixture.date || localMatch.startTimeUtc;
+      const previousHomeScore = localMatch.homeScore;
+      const previousAwayScore = localMatch.awayScore;
+      const previousStatus = localMatch.status;
+      localMatch.stage = mapRoundToStage(item.league?.round) || localMatch.stage;
+      localMatch.roundName = buildRoundName(item.league?.round) || localMatch.roundName;
+      localMatch.startTimeUtc = kickoff;
+      localMatch.startTimeBeijing = formatBeijingTime(kickoff);
       localMatch.status = toMatchStatus(item.fixture.status?.short);
       localMatch.venueName = item.fixture.venue?.name || localMatch.venueName;
       localMatch.venueCity = item.fixture.venue?.city || localMatch.venueCity;
@@ -219,18 +333,30 @@ export async function syncFixturesForDay(params: {
       localMatch.awayScore = item.goals?.away ?? localMatch.awayScore;
       localMatch.homePenaltyScore = item.score?.penalty?.home ?? localMatch.homePenaltyScore;
       localMatch.awayPenaltyScore = item.score?.penalty?.away ?? localMatch.awayPenaltyScore;
+      if (
+        (previousHomeScore !== localMatch.homeScore ||
+          previousAwayScore !== localMatch.awayScore ||
+          previousStatus !== localMatch.status) &&
+        localMatch.status !== MatchStatus.NS &&
+        typeof localMatch.homeScore === 'number' &&
+        typeof localMatch.awayScore === 'number'
+      ) {
+        broadcastScoreUpdate(localMatch.id, localMatch.homeScore, localMatch.awayScore, localMatch.status);
+      }
       updatedMatches.push(localMatch);
     }
 
+    const fixtureCount = payload.response?.length || 0;
     return {
       updatedMatches,
+      createdMatches,
       log: buildLog({
         source: 'API-Football',
         action: 'Sync fixtures by date',
         syncType: 'fixtures',
-        status: updatedMatches.length > 0 ? 'SUCCESS' : 'PARTIAL',
+        status: updatedMatches.length > 0 || createdMatches.length > 0 ? 'SUCCESS' : 'PARTIAL',
         requestSummary: `GET /fixtures?date=${date}`,
-        responseSummary: `Matched and updated ${updatedMatches.length} local matches for ${date}.`,
+        responseSummary: `Fixtures ${fixtureCount}, updated ${updatedMatches.length}, created ${createdMatches.length}, unmatched teams ${unmatchedTeams}.`,
         targetDate: date,
         startedAt,
       }),
@@ -238,6 +364,7 @@ export async function syncFixturesForDay(params: {
   } catch (error) {
     return {
       updatedMatches: [],
+      createdMatches: [],
       log: buildLog({
         source: 'API-Football',
         action: 'Sync fixtures by date',
@@ -251,6 +378,54 @@ export async function syncFixturesForDay(params: {
       }),
     };
   }
+}
+
+export async function syncFixturesForDateWindow(params: {
+  apiKey: string;
+  db: DatabaseSchema;
+  anchorDate?: string;
+  pastDays?: number;
+  futureDays?: number;
+}): Promise<{ updatedMatches: Match[]; createdMatches: Match[]; dates: string[]; log: SyncLog }> {
+  const { apiKey, db, anchorDate, pastDays = 1, futureDays = 10 } = params;
+  const startedAt = new Date().toISOString();
+  const anchor = anchorDate ? new Date(`${anchorDate}T00:00:00.000Z`) : new Date();
+  const dates = buildWindowDates(anchor, pastDays, futureDays);
+  const updatedMatches: Match[] = [];
+  const createdMatches: Match[] = [];
+  const statuses: SyncStatus[] = [];
+  const summaries: string[] = [];
+
+  for (const date of dates) {
+    const result = await syncFixturesForDay({ apiKey, date, db });
+    statuses.push(result.log.status);
+    summaries.push(`${date}: ${result.log.responseSummary}`);
+    updatedMatches.push(...result.updatedMatches);
+    createdMatches.push(...result.createdMatches);
+  }
+
+  const uniqueUpdated = Array.from(new Map(updatedMatches.map((match) => [match.id, match])).values());
+  const uniqueCreated = Array.from(new Map(createdMatches.map((match) => [match.id, match])).values());
+  const hasFailure = statuses.includes('FAILED');
+  const hasSuccess = statuses.includes('SUCCESS');
+  const status: SyncStatus = hasFailure ? (hasSuccess ? 'PARTIAL' : 'FAILED') : hasSuccess ? 'SUCCESS' : 'PARTIAL';
+
+  return {
+    updatedMatches: uniqueUpdated,
+    createdMatches: uniqueCreated,
+    dates,
+    log: buildLog({
+      source: 'API-Football',
+      action: 'Sync fixtures by date window',
+      syncType: 'fixtures',
+      status,
+      requestSummary: `GET /fixtures?date=<window ${dates[0]}..${dates[dates.length - 1]}>`,
+      responseSummary: `Window ${dates.length} days, updated ${uniqueUpdated.length}, created ${uniqueCreated.length}. ${summaries.join(' | ')}`,
+      targetDate: dates[0],
+      startedAt,
+      errorMessage: status === 'FAILED' ? 'All fixture sync attempts failed in the current window.' : undefined,
+    }),
+  };
 }
 
 export async function syncOddsForMatches(params: {
@@ -302,9 +477,12 @@ export async function syncOddsForMatches(params: {
     }>;
 
     const updatedMatchIds: string[] = [];
+    let unmatchedEvents = 0;
+    let incompleteMarkets = 0;
     for (const item of payload || []) {
       const match = matchByTeams(db, item.home_team, item.away_team);
       if (!match) {
+        unmatchedEvents += 1;
         continue;
       }
       if (targetMatchId && match.id !== targetMatchId) {
@@ -323,6 +501,7 @@ export async function syncOddsForMatches(params: {
       const under25 = totalsMarket?.outcomes?.find((outcome) => outcome.name.toLowerCase().includes('under'))?.price;
 
       if (!homeWin || !draw || !awayWin) {
+        incompleteMarkets += 1;
         continue;
       }
 
@@ -334,11 +513,13 @@ export async function syncOddsForMatches(params: {
           under25: under25 || db.matchOdds[match.id]?.totalGoals.under25 || 1.9,
         },
         correctScore:
-          scoreMarket?.outcomes
-            .map((outcome) => ({
-              score: outcome.name,
-              odds: outcome.price,
-            })) || db.matchOdds[match.id]?.correctScore || [],
+          mergeCorrectScoreOdds(
+            scoreMarket?.outcomes
+              ?.map((outcome) => ({
+                score: outcome.name,
+                odds: outcome.price,
+              })) || db.matchOdds[match.id]?.correctScore || [],
+          ).map(({ score, odds }) => ({ score, odds })),
         qualify: db.matchOdds[match.id]?.qualify,
         lastUpdated: new Date().toISOString(),
         source: 'The Odds API',
@@ -362,7 +543,7 @@ export async function syncOddsForMatches(params: {
         syncType: 'odds',
         status: updatedMatchIds.length > 0 ? 'SUCCESS' : 'PARTIAL',
         requestSummary: 'GET /v4/sports/soccer_fifa_world_cup/odds',
-        responseSummary: `Updated odds for ${updatedMatchIds.length} matches.`,
+        responseSummary: `Odds payload ${payload.length}, updated ${updatedMatchIds.length}, unmatched ${unmatchedEvents}, incomplete markets ${incompleteMarkets}.`,
         targetMatchId,
         startedAt,
       }),

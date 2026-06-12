@@ -6,6 +6,9 @@ coverage/
 *.log
 .env*
 !.env.example
+!.env.production.example
 db.json
 admin_sessions.json
+runtime/
+backups/
 *.png

@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import { Match, MatchOdds, MatchOperationalStatus, Prediction, TournamentBet, TournamentBetOption, TournamentBetType } from '../types';
 import { apiRequest, formatDate } from '../utils/api';
+import { SCORE_GROUP_META, getScoreGroup, getScoreDisplayLabel, isOtherScoreKey } from '../utils/odds';
+import type { ScoreGroup } from '../utils/odds';
 import FlagBadge from './home/FlagBadge';
 import { useToast } from './ToastProvider';
 
@@ -38,6 +40,8 @@ interface BetOption {
   key: string;
   label: string;
   odds: number;
+  group?: ScoreGroup;
+  isOther?: boolean;
 }
 
 interface TournamentMarketConfig {
@@ -65,7 +69,7 @@ function getMatchCategory(match: Match): MatchCategory {
   return 'BETTABLE';
 }
 
-function buildOptions(match: Match, mode: ModeFilter) {
+function buildOptions(match: Match, mode: ModeFilter): BetOption[] {
   const odds: MatchOdds | null | undefined = match.odds;
   if (!odds) return [];
 
@@ -84,11 +88,17 @@ function buildOptions(match: Match, mode: ModeFilter) {
     ];
   }
 
-  return odds.correctScore.slice(0, 8).map((score) => ({
-    key: `correctScore_${score.score.replace('-', '_')}`,
-    label: score.score,
-    odds: score.odds,
-  }));
+  return odds.correctScore.map((score) => {
+    const group = getScoreGroup(score.score);
+    const isOther = isOtherScoreKey(score.score);
+    return {
+      key: `correctScore_${score.score.replace('-', '_')}`,
+      label: getScoreDisplayLabel(score.score),
+      odds: score.odds,
+      group,
+      isOther,
+    };
+  });
 }
 
 function getStatusText(status: MatchOperationalStatus | undefined) {
@@ -130,6 +140,8 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [cardInventory, setCardInventory] = useState<any>(null);
+  const [selectedCard, setSelectedCard] = useState<string | null>(null);
   const [showAllMatches, setShowAllMatches] = useState(false);
   const VISIBLE_MATCH_LIMIT = 5;
   const toast = useToast();
@@ -216,6 +228,9 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
     setSelectedOption(option);
     setSelectedTournamentMarket(null);
     setSelectedTournamentOption(null);
+    setSelectedCard(null);
+    // 拉取卡牌库存
+    apiRequest('/api/cards/inventory').then(setCardInventory).catch(() => setCardInventory(null));
     const defaultStake = Math.min(500, Math.max(100, Math.floor((wallet?.balance || 10000) * 0.1)));
     setStake(defaultStake);
     setMessage(null);
@@ -249,15 +264,19 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
     setSubmitting(true);
     setMessage(null);
     try {
+      const body: any = {
+        matchId: selectedMatch.id,
+        market: activeMode,
+        optionKey: selectedOption.key,
+        optionLabel: selectedOption.label,
+        stakePoints: stake,
+      };
+      if (selectedCard) {
+        body.card = selectedCard;
+      }
       const res = await apiRequest('/api/predictions', {
         method: 'POST',
-        body: JSON.stringify({
-          matchId: selectedMatch.id,
-          market: activeMode,
-          optionKey: selectedOption.key,
-          optionLabel: selectedOption.label,
-          stakePoints: stake,
-        }),
+        body: JSON.stringify(body),
       });
 
       setMessage({
@@ -545,18 +564,53 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
 
                 {activeCategory === 'BETTABLE' ? (
                   <>
-                    <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                      {options.map((option) => (
-                        <button
-                          key={option.key}
-                          onClick={() => handleOpenBetModal(match, option)}
-                          className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-left transition hover:border-emerald-200 hover:bg-emerald-50"
-                        >
-                          <div className="text-xs font-bold text-slate-700">{option.label}</div>
-                          <div className="mt-2 text-base font-black text-slate-900">{option.odds.toFixed(2)}</div>
-                        </button>
-                      ))}
-                    </div>
+                    {activeMode === 'CORRECT_SCORE' ? (
+                      <div className="mt-4 space-y-3">
+                        {(['HOME_WIN', 'DRAW', 'AWAY_WIN'] as ScoreGroup[]).map((group) => {
+                          const meta = SCORE_GROUP_META[group];
+                          const groupOptions = options.filter((o) => o.group === group);
+                          if (groupOptions.length === 0) return null;
+                          return (
+                            <div key={group}>
+                              <div className={`mb-2 text-[10px] font-black ${meta.color}`}>{meta.label}</div>
+                              <div className="grid grid-cols-3 gap-1.5">
+                                {groupOptions.map((option) => (
+                                  <button
+                                    key={option.key}
+                                    onClick={() => handleOpenBetModal(match, option)}
+                                    className={`rounded-xl border px-2 py-2 text-left transition ${
+                                      option.isOther
+                                        ? `border-dashed ${meta.borderColor} ${meta.bgColor} hover:opacity-80`
+                                        : 'border-slate-200 bg-slate-50 hover:border-emerald-200 hover:bg-emerald-50'
+                                    }`}
+                                  >
+                                    <div className={`text-xs font-bold ${option.isOther ? meta.color : 'text-slate-700'}`}>
+                                      {option.label}
+                                    </div>
+                                    <div className={`mt-1 text-sm font-black ${option.isOther ? 'text-slate-600' : 'text-slate-900'}`}>
+                                      {option.odds.toFixed(2)}
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                        {options.map((option) => (
+                          <button
+                            key={option.key}
+                            onClick={() => handleOpenBetModal(match, option)}
+                            className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-left transition hover:border-emerald-200 hover:bg-emerald-50"
+                          >
+                            <div className="text-xs font-bold text-slate-700">{option.label}</div>
+                            <div className="mt-2 text-base font-black text-slate-900">{option.odds.toFixed(2)}</div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
 
                     <div className="mt-3 flex items-start gap-2 rounded-2xl bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
                       <AlertTriangle className="mt-0.5 h-3.5 w-3.5 text-amber-500" />
@@ -771,6 +825,59 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
                   <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-500">
                     提交后系统会记录这次的指数快照，并在锁盘后保持不变。单场总投入仍会按风险规则限制。
                   </div>
+
+                  {/* 卡牌选择 */}
+                  {cardInventory && (
+                    <div className="mt-4">
+                      <div className="mb-2 flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-600">🃏 道具卡（可选）</span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedCard(null)}
+                          className={`text-[10px] font-bold ${selectedCard ? 'text-rose-500' : 'text-slate-300'}`}
+                          disabled={!selectedCard}
+                        >
+                          不使用
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        {['NO_LOSS', 'DOUBLE', 'FLOOR'].map((cardId) => {
+                          const def = cardInventory.definitions?.find((d: any) => d.id === cardId);
+                          if (!def) return null;
+                          const count = cardInventory.cards?.[cardId] || 0;
+                          const isSelected = selectedCard === cardId;
+                          const isDisabled = count <= 0;
+                          return (
+                            <button
+                              key={cardId}
+                              type="button"
+                              disabled={isDisabled}
+                              onClick={() => setSelectedCard(isSelected ? null : cardId)}
+                              className={`relative rounded-2xl border-2 p-2 text-left transition ${
+                                isSelected
+                                  ? 'border-amber-400 bg-amber-50 ring-2 ring-amber-200'
+                                  : isDisabled
+                                    ? 'cursor-not-allowed border-slate-100 bg-slate-50 opacity-50'
+                                    : 'border-slate-200 bg-white hover:border-slate-300'
+                              }`}
+                            >
+                              <div className="text-lg">{def.icon}</div>
+                              <div className="mt-0.5 text-[10px] font-black text-slate-900">{def.shortLabel}</div>
+                              <div className="mt-0.5 text-[9px] leading-3 text-slate-500">{def.description}</div>
+                              <div className="absolute right-1 top-1 rounded-full bg-slate-900 px-1.5 py-0.5 text-[9px] font-black text-white">
+                                ×{count}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {selectedCard && (
+                        <div className="mt-2 rounded-xl bg-amber-50 px-3 py-1.5 text-[10px] text-amber-700 ring-1 ring-amber-100">
+                          已选卡牌，结算时自动触发效果
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <button
                     onClick={handleSubmitPrediction}

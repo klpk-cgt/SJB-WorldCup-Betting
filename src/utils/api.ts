@@ -22,14 +22,43 @@ export async function apiRequest(path: string, options: RequestInit = {}) {
     headers.set('Content-Type', 'application/json');
   }
 
-  const response = await fetch(path, {
-    ...options,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      ...options,
+      headers,
+    });
+  } catch (err) {
+    // 网络层错误（断网、DNS 失败、CORS 等）
+    if (err instanceof TypeError) {
+      throw new Error('网络请求失败，请检查您的网络连接。');
+    }
+    throw new Error('请求异常，请稍后再试。');
+  }
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || `请求失败 (${response.status})`);
+    const message = errorData.error || errorData.message;
+    if (message) {
+      throw new Error(message);
+    }
+    // 不同状态码给中文提示
+    if (response.status === 401) {
+      throw new Error('登录已失效，请重新登录。');
+    }
+    if (response.status === 403) {
+      throw new Error('没有权限执行此操作。');
+    }
+    if (response.status === 404) {
+      throw new Error('请求的资源不存在。');
+    }
+    if (response.status === 429) {
+      throw new Error('操作过于频繁，请稍后再试。');
+    }
+    if (response.status >= 500) {
+      throw new Error('服务器开小差了，请稍后再试或联系管理员。');
+    }
+    throw new Error(`请求失败（${response.status}）`);
   }
 
   return response.json();

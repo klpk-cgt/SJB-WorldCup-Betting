@@ -1,0 +1,386 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Room {
+  id          String  @id @db.VarChar(191)
+  name        String  @db.VarChar(191)
+  slug        String  @unique @db.VarChar(191)
+  inviteCode  String  @db.VarChar(64)
+  description String  @db.Text
+  isActive    Boolean
+  createdAt   String  @db.VarChar(64)
+
+  @@map("rooms")
+}
+
+model User {
+  id          String  @id @db.VarChar(191)
+  groupId     String  @db.VarChar(191)
+  displayName String  @db.VarChar(191)
+  avatarUrl   String  @db.LongText
+  loginCode   String  @unique @db.VarChar(64)
+  pinHash     String  @db.VarChar(191)
+  status      String  @db.VarChar(64)
+  claimedAt   String? @db.VarChar(64)
+  lastLoginAt String? @db.VarChar(64)
+  createdAt   String  @db.VarChar(64)
+
+  @@index([groupId])
+  @@map("users")
+}
+
+model Wallet {
+  userId         String @id @db.VarChar(191)
+  balance        Int
+  initialPoints  Int
+
+  @@map("wallets")
+}
+
+model Transaction {
+  id                  String  @id @db.VarChar(191)
+  userId              String  @db.VarChar(191)
+  type                String  @db.VarChar(64)
+  amount              Int
+  balanceBefore       Int
+  balanceAfter        Int
+  relatedPredictionId String? @db.VarChar(191)
+  relatedMatchId      String? @db.VarChar(191)
+  note                String  @db.Text
+  createdAt           String  @db.VarChar(64)
+
+  @@index([userId, createdAt])
+  @@index([type])
+  @@map("transactions")
+}
+
+model Team {
+  id                     String  @id @db.VarChar(191)
+  name                   String  @db.VarChar(191)
+  nameZh                 String  @db.VarChar(191)
+  code                   String  @db.VarChar(32)
+  logoUrl                String  @db.LongText
+  groupName              String  @db.VarChar(64)
+  fifaRank               Int?
+  confederation          String? @db.VarChar(64)
+  coachName              String? @db.VarChar(191)
+  coachNationality       String? @db.VarChar(191)
+  formation              String? @db.VarChar(64)
+  worldCupAppearances    Int?
+  bestResult             String? @db.VarChar(191)
+  bestResultYear         Int?
+  qualificationStatus    String? @db.VarChar(191)
+  qualificationMethod    String? @db.VarChar(191)
+  qualificationGroup     String? @db.VarChar(191)
+  qualificationRecord    String? @db.Text
+  qualificationKeyPlayers String? @db.Text
+  profileSummary         String? @db.LongText
+  heroPlayerNames        Json?
+  primaryColor           String? @db.VarChar(32)
+  secondaryColor         String? @db.VarChar(32)
+  marketValueMillion     Float?
+
+  @@map("teams")
+}
+
+model Match {
+  id                   String  @id @db.VarChar(191)
+  homeTeamId           String  @db.VarChar(191)
+  awayTeamId           String  @db.VarChar(191)
+  stage                String  @db.VarChar(64)
+  roundName            String  @db.VarChar(191)
+  venueName            String  @db.VarChar(191)
+  venueCity            String  @db.VarChar(191)
+  startTimeUtc         String  @db.VarChar(64)
+  startTimeBeijing     String  @db.VarChar(64)
+  status               String  @db.VarChar(64)
+  homeScore            Int?
+  awayScore            Int?
+  homePenaltyScore     Int?
+  awayPenaltyScore     Int?
+  winnerTeamId         String? @db.VarChar(191)
+  isOddsFrozen         Boolean
+  oddsFrozenAt         String? @db.VarChar(64)
+  isPredictionLocked   Boolean
+  predictionLockedAt   String? @db.VarChar(64)
+  isSettled            Boolean
+  settledAt            String? @db.VarChar(64)
+  statistics           Json?
+  lineups              Json?
+  events               Json?
+  providerMeta         Json?
+  operationalStatus    String? @db.VarChar(64)
+  settlementStatus     String? @db.VarChar(64)
+  autoLockAt           String? @db.VarChar(64)
+  lastStatusComputedAt String? @db.VarChar(64)
+
+  @@index([startTimeUtc, status])
+  @@index([stage, startTimeUtc])
+  @@map("matches")
+}
+
+model MatchOdds {
+  matchId         String  @id @db.VarChar(191)
+  h2hHomeWin      Float?
+  h2hDraw         Float?
+  h2hAwayWin      Float?
+  correctScore    Json?
+  totalGoalsOver25 Float?
+  totalGoalsUnder25 Float?
+  qualifyHome     Float?
+  qualifyAway     Float?
+  lastUpdated     String  @db.VarChar(64)
+  source          String? @db.VarChar(64)
+  syncStatus      String? @db.VarChar(64)
+  lastSyncedAt    String? @db.VarChar(64)
+
+  @@map("match_odds")
+}
+
+model Prediction {
+  id              String  @id @db.VarChar(191)
+  userId          String  @db.VarChar(191)
+  groupId         String  @db.VarChar(191)
+  matchId         String  @db.VarChar(191)
+  market          String  @db.VarChar(64)
+  optionKey       String  @db.VarChar(191)
+  optionLabel     String  @db.VarChar(191)
+  stakePoints     Int
+  oddsDecimal     Float
+  potentialReturn Int
+  status          String  @db.VarChar(64)
+  settledReturn   Int?
+  settledProfit   Int?
+  placedAt        String  @db.VarChar(64)
+  settledAt       String? @db.VarChar(64)
+  oddsSnapshot    Json?
+  usedCard        String? @db.VarChar(64)
+  cardEffectNotes String? @db.Text
+
+  @@index([userId, placedAt])
+  @@index([matchId, status])
+  @@index([groupId, matchId])
+  @@map("predictions")
+}
+
+model TournamentBet {
+  id              String  @id @db.VarChar(191)
+  userId          String  @db.VarChar(191)
+  roomId          String  @db.VarChar(191)
+  type            String  @db.VarChar(64)
+  targetId        String  @db.VarChar(191)
+  targetLabel     String  @db.VarChar(191)
+  targetSubLabel  String? @db.VarChar(191)
+  stakePoints     Int
+  oddsDecimal     Float
+  potentialReturn Int
+  status          String  @db.VarChar(64)
+  openedAt        String  @db.VarChar(64)
+  lockedAt        String? @db.VarChar(64)
+  placedAt        String  @db.VarChar(64)
+  settledAt       String? @db.VarChar(64)
+  settledReturn   Int?
+  settledProfit   Int?
+
+  @@index([userId, type])
+  @@map("tournament_bets")
+}
+
+model AiContent {
+  id                 String  @id @db.VarChar(191)
+  type               String  @db.VarChar(64)
+  matchId            String? @db.VarChar(191)
+  predictionId       String? @db.VarChar(191)
+  title              String  @db.VarChar(191)
+  content            String  @db.LongText
+  model              String  @db.VarChar(191)
+  createdAt          String  @db.VarChar(64)
+  provider           String? @db.VarChar(64)
+  summary            String? @db.LongText
+  bullets            Json?
+  riskWarning        String? @db.Text
+  fallbackUsed       Boolean?
+  contentType        String? @db.VarChar(64)
+  scopeType          String? @db.VarChar(64)
+  scopeId            String? @db.VarChar(191)
+  promptVersion      String? @db.VarChar(191)
+  dataVersion        String? @db.VarChar(191)
+  enhancementMode    String? @db.VarChar(64)
+  predictionJson     Json?
+  outputJson         Json?
+  inputSnapshotJson  Json?
+  searchEnhanced     Boolean?
+  multimodalEnhanced Boolean?
+  status             String? @db.VarChar(64)
+  expiresAt          String? @db.VarChar(64)
+  cacheKey           String? @db.VarChar(191)
+  headline           String? @db.VarChar(191)
+  highlights         Json?
+  funTags            Json?
+  roomId             String? @db.VarChar(191)
+
+  @@index([matchId, type, createdAt])
+  @@map("ai_contents")
+}
+
+model ShareCard {
+  id             String  @id @db.VarChar(191)
+  userId         String  @db.VarChar(191)
+  predictionId   String  @db.VarChar(191)
+  matchId        String  @db.VarChar(191)
+  mode           String  @db.VarChar(32)
+  text           String  @db.LongText
+  imageDataUrl   String? @db.LongText
+  provider       String  @db.VarChar(64)
+  model          String  @db.VarChar(191)
+  fallbackUsed   Boolean
+  createdAt      String  @db.VarChar(64)
+  debugMeta      Json?
+
+  @@map("share_cards")
+}
+
+model SyncLog {
+  id              String  @id @db.VarChar(191)
+  source          String  @db.VarChar(64)
+  action          String  @db.VarChar(191)
+  status          String  @db.VarChar(64)
+  requestSummary  String  @db.Text
+  responseSummary String  @db.Text
+  errorMessage    String? @db.Text
+  createdAt       String  @db.VarChar(64)
+  syncType        String? @db.VarChar(64)
+  targetMatchId   String? @db.VarChar(191)
+  targetDate      String? @db.VarChar(64)
+  startedAt       String? @db.VarChar(64)
+  finishedAt      String? @db.VarChar(64)
+
+  @@index([syncType, createdAt])
+  @@map("sync_logs")
+}
+
+model AdminOverride {
+  id         String @id @db.VarChar(191)
+  adminUser  String @db.VarChar(191)
+  targetType String @db.VarChar(64)
+  targetId   String @db.VarChar(191)
+  action     String @db.VarChar(191)
+  beforeJson String @db.LongText
+  afterJson  String @db.LongText
+  reason     String @db.Text
+  createdAt  String @db.VarChar(64)
+
+  @@map("admin_overrides")
+}
+
+model Player {
+  id            String  @id @db.VarChar(191)
+  teamId        String  @db.VarChar(191)
+  name          String  @db.VarChar(191)
+  nameZh        String? @db.VarChar(191)
+  shirtNumber   Int?
+  position      String  @db.VarChar(32)
+  club          String? @db.VarChar(191)
+  age           Int?
+  heightCm      Int?
+  weightKg      Int?
+  preferredFoot String? @db.VarChar(32)
+  marketValue   Float?
+  avatarUrl     String? @db.LongText
+  isCaptain     Boolean?
+  bioSummary    String? @db.LongText
+
+  @@index([teamId])
+  @@map("players")
+}
+
+model TeamHistory {
+  id            String  @id @db.VarChar(191)
+  teamId        String  @db.VarChar(191)
+  year          Int
+  host          String  @db.VarChar(191)
+  result        String  @db.VarChar(191)
+  matchesPlayed Int
+  wins          Int
+  draws         Int
+  losses        Int
+  goalsFor      Int
+  goalsAgainst  Int
+  note          String? @db.Text
+
+  @@index([teamId, year])
+  @@map("team_history")
+}
+
+model Activity {
+  id                     String  @id @db.VarChar(191)
+  type                   String  @db.VarChar(64)
+  userId                 String  @db.VarChar(191)
+  displayName            String  @db.VarChar(191)
+  avatarUrl              String? @db.LongText
+  message                String  @db.Text
+  relatedMatchId         String? @db.VarChar(191)
+  relatedPredictionId    String? @db.VarChar(191)
+  relatedTournamentBetId String? @db.VarChar(191)
+  deltaPoints            Float?
+  badgeId                String? @db.VarChar(64)
+  badgeLabel             String? @db.VarChar(191)
+  groupId                String? @db.VarChar(191)
+  createdAt              String  @db.VarChar(64)
+
+  @@index([groupId, createdAt])
+  @@map("activities")
+}
+
+model UserBadge {
+  userId     String  @db.VarChar(191)
+  badgeId    String  @db.VarChar(64)
+  unlocked   Boolean
+  progress   Float
+  target     Float
+  unlockedAt String? @db.VarChar(64)
+  updatedAt  String  @db.VarChar(64)
+
+  @@id([userId, badgeId])
+  @@map("user_badges")
+}
+
+model UserTitle {
+  userId    String @id @db.VarChar(191)
+  title     String @db.VarChar(191)
+  updatedAt String @db.VarChar(64)
+
+  @@map("user_titles")
+}
+
+model CardInventory {
+  userId    String @id @db.VarChar(191)
+  cards     Json
+  updatedAt String @db.VarChar(64)
+
+  @@map("card_inventories")
+}
+
+model AdminSession {
+  token     String @id @db.VarChar(191)
+  expiresAt String @db.VarChar(64)
+
+  @@map("admin_sessions")
+}
+
+model CheckinLog {
+  id        String @id @db.VarChar(191)
+  userId    String @db.VarChar(191)
+  date      String @db.VarChar(64)
+  createdAt String @db.VarChar(64)
+
+  @@unique([userId, date])
+  @@index([userId, date])
+  @@map("checkin_logs")
+}

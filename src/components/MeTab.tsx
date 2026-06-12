@@ -41,7 +41,8 @@ const TONE_CLASS: Record<AchievementBadgeSummary['tone'], string> = {
   slate: 'bg-slate-100 text-slate-600 ring-1 ring-slate-200',
 };
 
-function formatSigned(value: number) {
+function formatSigned(value?: number | null) {
+  if (value == null) return '0';
   if (value > 0) return `+${value.toLocaleString()}`;
   return value.toLocaleString();
 }
@@ -96,21 +97,24 @@ export default function MeTab({ user, wallet, onLogout, onAdminLogin }: MeTabPro
   const [tournamentMarkets, setTournamentMarkets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [cardInventory, setCardInventory] = useState<any>(null);
 
   const loadProfileCenter = async (showRefreshing = false) => {
     if (showRefreshing) setRefreshing(true);
 
     try {
-      const [txsData, predictionsData, tournamentPayload] = await Promise.all([
+      const [txsData, predictionsData, tournamentPayload, cardData] = await Promise.all([
         withTimeout(apiRequest('/api/me/transactions'), [] as Transaction[]),
         withTimeout(apiRequest('/api/predictions/me'), [] as PredictionWithMatch[]),
         withTimeout(apiRequest('/api/tournament-bets'), { bets: [] as TournamentBet[] }),
+        withTimeout(apiRequest('/api/cards/inventory'), null).catch(() => null),
       ]);
 
       setTransactions(txsData || []);
       setPredictions(predictionsData || []);
       setTournamentBets(tournamentPayload?.bets || []);
       setTournamentMarkets(tournamentPayload?.markets || []);
+      setCardInventory(cardData);
     } catch (error) {
       console.error('Failed to load me center data', error);
     } finally {
@@ -286,9 +290,34 @@ export default function MeTab({ user, wallet, onLogout, onAdminLogin }: MeTabPro
               最长连中
             </div>
             <p className="mt-3 text-3xl font-black tracking-tight">{stats.maxStreak}</p>
-            <p className="mt-1 text-[11px] text-slate-300">单场高光 {stats.biggestWin.toLocaleString()} PTS</p>
+            <p className="mt-1 text-[11px] text-slate-300">单场高光 {stats.biggestWin?.toLocaleString() ?? 0} PTS</p>
           </div>
         </div>
+
+        {/* 卡牌库存 */}
+        {cardInventory && cardInventory.definitions && (
+          <div className="mt-3 rounded-3xl bg-white/8 p-4 ring-1 ring-white/10">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs font-bold text-amber-200">
+                <Sparkles className="h-4 w-4" />
+                我的道具卡
+              </div>
+              <span className="text-[10px] text-slate-300">下注时可用</span>
+            </div>
+            <div className="mt-3 grid grid-cols-4 gap-2">
+              {cardInventory.definitions.map((def: any) => {
+                const count = cardInventory.cards?.[def.id] || 0;
+                return (
+                  <div key={def.id} className="rounded-2xl bg-white/10 p-2 text-center ring-1 ring-white/10">
+                    <div className="text-lg">{def.icon}</div>
+                    <div className="mt-0.5 text-[10px] font-bold text-white">{def.shortLabel}</div>
+                    <div className={`mt-1 text-base font-black ${count > 0 ? 'text-amber-200' : 'text-slate-400'}`}>×{count}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </section>
 
       <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
@@ -469,7 +498,7 @@ export default function MeTab({ user, wallet, onLogout, onAdminLogin }: MeTabPro
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-black text-slate-900">{bet.potentialReturn.toLocaleString()} PTS</p>
+                    <p className="text-sm font-black text-slate-900">{bet.potentialReturn?.toLocaleString() ?? 0} PTS</p>
                     <p className="mt-0.5 text-[11px] text-slate-500">{bet.stakePoints} PTS 投入</p>
                   </div>
                 </div>
@@ -542,7 +571,7 @@ export default function MeTab({ user, wallet, onLogout, onAdminLogin }: MeTabPro
                 <p className={`text-sm font-black ${tx.amount >= 0 ? 'text-emerald-700' : 'text-slate-700'}`}>
                   {formatSigned(tx.amount)}
                 </p>
-                <p className="mt-1 text-[11px] text-slate-500">余额 {tx.balanceAfter.toLocaleString()}</p>
+                <p className="mt-1 text-[11px] text-slate-500">余额 {tx.balanceAfter?.toLocaleString() ?? '-'}</p>
               </div>
             </div>
           ))}

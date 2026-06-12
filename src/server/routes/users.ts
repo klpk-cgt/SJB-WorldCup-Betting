@@ -7,6 +7,7 @@ import { Router, Request, Response } from 'express';
 import { dbService } from '../../db/db_service';
 import { buildUserProfileSummary } from '../../utils/achievements';
 import { getAuthenticatedUser, serializeUserForClient } from '../helpers';
+import { getUserTitle } from '../badge_service';
 
 const router = Router();
 
@@ -25,10 +26,12 @@ router.get('/api/me', (req: Request, res: Response) => {
   }
   const wallet = dbService.getWallets().find((item) => item.userId === user.id);
   const profileSummary = buildUserProfileSummary({
+    userId: user.id,
     predictions: dbService.getPredictions().filter((item) => item.userId === user.id),
     tournamentBets: dbService.getTournamentBets().filter((item) => item.userId === user.id),
     transactions: dbService.getTransactions().filter((item) => item.userId === user.id),
     wallet: wallet || { userId: user.id, balance: 0, initialPoints: 10000 },
+    persistedTitle: getUserTitle(user.id),
   });
   res.json({
     user: serializeUserForClient(user),
@@ -45,10 +48,12 @@ router.get('/api/me/profile-summary', (req: Request, res: Response) => {
   const wallet = dbService.getWallets().find((item) => item.userId === user.id);
   res.json(
     buildUserProfileSummary({
+      userId: user.id,
       predictions: dbService.getPredictions().filter((item) => item.userId === user.id),
       tournamentBets: dbService.getTournamentBets().filter((item) => item.userId === user.id),
       transactions: dbService.getTransactions().filter((item) => item.userId === user.id),
       wallet: wallet || { userId: user.id, balance: 0, initialPoints: 10000 },
+      persistedTitle: getUserTitle(user.id),
     }),
   );
 });

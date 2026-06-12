@@ -16,7 +16,10 @@ import MatchesTab from './components/MatchesTab';
 import MeTab from './components/MeTab';
 import PredictionTab from './components/PredictionTab';
 import StatsPage from './components/StatsPage';
+import SearchBar from './components/SearchBar';
+import AIRecommendations from './components/AIRecommendations';
 import { ADMIN_KEY_STORAGE, apiRequest, ROOM_SLUG_STORAGE, USER_CODE_STORAGE } from './utils/api';
+import { useWebSocket } from './hooks/useWebSocket';
 import type { User, Wallet } from './types';
 
 type RootTab = 'home' | 'matches' | 'prediction' | 'leaderboard' | 'me' | 'admin';
@@ -46,12 +49,28 @@ export default function App() {
   const [loginPin, setLoginPin] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [navDrawerOpen, setNavDrawerOpen] = useState(false);
-  const [showAdminLogin, setShowAdminLogin] = useState(false);
-  const [adminUsername, setAdminUsername] = useState('');
-  const [adminPassword, setAdminPassword] = useState('');
-  const [adminLoginError, setAdminLoginError] = useState('');
 
   const isAdmin = !!localStorage.getItem(ADMIN_KEY_STORAGE);
+
+  // WebSocket 实时推送
+  const { connected: wsConnected } = useWebSocket({
+    userId: user?.id,
+    enabled: true,
+    onScoreUpdate: (data) => {
+      // 比分更新时，如果正在查看该比赛，自动刷新
+      if (selectedMatchId === data.matchId) {
+        fetchUserProfileAndWallet();
+      }
+    },
+    onPredictionResult: (data) => {
+      // 竞猜结果推送后刷新钱包
+      fetchUserProfileAndWallet();
+    },
+    onMatchSettled: () => {
+      // 比赛结算后刷新数据
+      fetchUserProfileAndWallet();
+    },
+  });
 
   const fetchUserProfileAndWallet = async () => {
     try {
@@ -107,34 +126,6 @@ export default function App() {
     setActiveTab('home');
   };
 
-  const handleAdminLogin = async () => {
-    setAdminLoginError('');
-    if (!adminUsername.trim() || !adminPassword.trim()) {
-      setAdminLoginError('请输入管理员账号和密码。');
-      return;
-    }
-    try {
-      const resp = await apiRequest('/api/admin/login', {
-        method: 'POST',
-        body: JSON.stringify({ username: adminUsername, password: adminPassword }),
-      });
-      if (resp.success) {
-        localStorage.setItem(ADMIN_KEY_STORAGE, resp.token);
-        setShowAdminLogin(false);
-        setAdminUsername('');
-        setAdminPassword('');
-        setActiveTab('admin');
-      }
-    } catch (err: any) {
-      setAdminLoginError(err.message || '管理员账号或密码不正确。');
-    }
-  };
-
-  const handleAdminLogout = () => {
-    localStorage.removeItem(ADMIN_KEY_STORAGE);
-    setActiveTab('home');
-  };
-
   const navigateTo = (targetTab: string, matchId?: string, detailTab?: string) => {
     if (targetTab === 'home') {
       setSelectedMatchId(undefined);
@@ -172,16 +163,13 @@ export default function App() {
       { id: 'history-hall' as PageTab, label: '历史长廊', desc: '浏览历届世界杯经典内容', icon: <History className="h-5 w-5" /> },
       { id: 'bracket' as PageTab, label: '淘汰赛对阵图', desc: '查看晋级路径与实时比分', icon: <GitBranch className="h-5 w-5" /> },
       { id: 'stats' as PageTab, label: '统计页', desc: '查看群聊投注热度与分布', icon: <BarChart3 className="h-5 w-5" /> },
-      ...(isAdmin
-        ? [
-            {
-              id: 'admin' as PageTab,
-              label: '管理后台',
-              desc: '同步、赔率、用户和运营控制台',
-              icon: <Settings className="h-5 w-5" />,
-            },
-          ]
-        : []),
+      { id: 'ai-recommend' as PageTab, label: 'AI推荐', desc: 'AI分析推荐投注方案', icon: <Sparkles className="h-5 w-5 text-amber-500" /> },
+      {
+        id: 'admin' as PageTab,
+        label: '管理后台',
+        desc: isAdmin ? '同步、赔率、用户和运营控制台' : '进入后台登录并检查系统状态',
+        icon: <Settings className="h-5 w-5" />,
+      },
     ],
     [isAdmin],
   );
@@ -202,7 +190,7 @@ export default function App() {
     return (
       <div className="min-h-screen bg-slate-100 px-4 py-6 md:px-8">
         <div className="mx-auto max-w-4xl">
-          <AdminPanel onBackToApp={handleAdminLogout} />
+          <AdminPanel onBackToApp={() => setActiveTab(user ? 'me' : 'home')} />
         </div>
       </div>
     );
@@ -212,28 +200,26 @@ export default function App() {
     <div className="min-h-screen bg-slate-100 sm:px-4">
       <div className="relative mx-auto flex min-h-screen max-w-md flex-col border-x border-slate-200 bg-[linear-gradient(180deg,#f8fafc_0%,#f1f5f9_100%)] shadow-[0_0_50px_rgba(100,116,139,0.10)]">
         <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/88 px-4 py-3.5 shadow-[0_2px_12px_rgba(148,163,184,0.04)] backdrop-blur-md">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="flex items-center gap-2 text-[14px] font-black leading-none text-slate-900">
-                <span className="text-base">2026</span>
-                <span>世界杯竞猜局</span>
-                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[8px] font-extrabold uppercase tracking-[0.18em] text-emerald-700 ring-1 ring-emerald-100">
-                  Live
-                </span>
-              </h2>
-              <p className="mt-1 text-[11px] font-medium text-slate-500">
-                {user ? '群聊入口已登录，可直接查看赛程、竞猜和榜单。' : '当前为游客模式，可先浏览焦点战、赛程和历史内容。'}
-              </p>
-            </div>
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setNavDrawerOpen(true)}
-              className="rounded-xl border border-slate-200 bg-slate-50 p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+              className="shrink-0 rounded-xl border border-slate-200 bg-slate-50 p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
               title="打开导航"
               aria-label="打开导航"
             >
               <Menu className="h-4 w-4" />
             </button>
+            <div className="flex-1">
+              <SearchBar onNavigate={navigateTo} compact />
+            </div>
+            {/* WebSocket 状态指示 */}
+            <div className={`shrink-0 flex items-center gap-1 rounded-full px-2 py-1 text-[9px] font-bold ${
+              wsConnected ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'
+            }`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${wsConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
+              {wsConnected ? '实时' : '离线'}
+            </div>
           </div>
         </header>
 
@@ -260,9 +246,10 @@ export default function App() {
           {activeTab === 'history-hall' && <HistoryHallPage />}
           {activeTab === 'bracket' && <BracketPage onOpenMatch={(matchId) => navigateTo('match-detail', matchId, 'overview')} />}
           {activeTab === 'stats' && <StatsPage />}
+          {activeTab === 'ai-recommend' && <AIRecommendations onNavigate={navigateTo} />}
           {activeTab === 'me' &&
             (user ? (
-              <MeTab user={user} wallet={wallet} onLogout={handleLogout} onAdminLogin={isAdmin ? undefined : () => setShowAdminLogin(true)} />
+              <MeTab user={user} wallet={wallet} onLogout={handleLogout} onAdminLogin={() => setActiveTab('admin')} />
             ) : (
               <div className="space-y-6 pb-8 text-left">
                 <div className="relative overflow-hidden rounded-3xl border border-slate-800 bg-gradient-to-tr from-slate-950 to-slate-800 p-6 shadow-2xl">
@@ -323,6 +310,16 @@ export default function App() {
                   </form>
 
                   {errorMsg && <div className="rounded-xl border border-red-100 bg-red-50 p-3 text-xs text-red-600">{errorMsg}</div>}
+
+                  <div className="pt-2 text-center">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('admin')}
+                      className="text-[10px] font-medium text-slate-400 underline decoration-slate-300 underline-offset-2 transition hover:text-slate-600"
+                    >
+                      进入管理员后台
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -422,63 +419,6 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* 管理员登录弹窗 */}
-      <AnimatePresence>
-        {showAdminLogin && (
-          <>
-            <motion.div
-              className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => { setShowAdminLogin(false); setAdminLoginError(''); }}
-            />
-            <motion.div
-              className="fixed left-1/2 top-1/2 z-50 w-[90vw] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-            >
-              <h3 className="text-lg font-black text-slate-900">管理员登录</h3>
-              <p className="mt-1 text-xs text-slate-500">输入管理员账号和密码以进入管理后台。</p>
-              <div className="mt-4 space-y-3">
-                <input
-                  type="text"
-                  placeholder="管理员账号"
-                  value={adminUsername}
-                  onChange={(e) => { setAdminUsername(e.target.value); setAdminLoginError(''); }}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-800 focus:border-emerald-500/50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500/20"
-                />
-                <input
-                  type="password"
-                  placeholder="管理员密码"
-                  value={adminPassword}
-                  onChange={(e) => { setAdminPassword(e.target.value); setAdminLoginError(''); }}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleAdminLogin(); }}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-800 focus:border-emerald-500/50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500/20"
-                />
-              </div>
-              {adminLoginError && (
-                <div className="mt-3 rounded-xl border border-red-100 bg-red-50 p-3 text-xs text-red-600">{adminLoginError}</div>
-              )}
-              <div className="mt-4 flex gap-3">
-                <button
-                  onClick={() => { setShowAdminLogin(false); setAdminLoginError(''); }}
-                  className="flex-1 rounded-xl border border-slate-200 bg-slate-50 py-3 text-xs font-black text-slate-600 transition hover:bg-slate-100"
-                >
-                  取消
-                </button>
-                <button
-                  onClick={handleAdminLogin}
-                  className="flex-1 rounded-xl bg-emerald-500 py-3 text-xs font-black text-slate-950 shadow-md transition hover:bg-emerald-600"
-                >
-                  登录
-                </button>
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

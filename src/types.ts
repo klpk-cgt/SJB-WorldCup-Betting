@@ -213,11 +213,11 @@ export interface User {
 }
 
 export type PlayerTitle =
+  | '群聊新星'
   | '稳健分析师'
   | '连红猎手'
   | '冷门先知'
   | '金杯投资人'
-  | '群聊新星'
   | '世界杯老炮';
 
 export type AchievementBadgeId =
@@ -258,7 +258,9 @@ export type TransactionType =
   | 'PREDICTION_WIN'
   | 'PREDICTION_LOSE'
   | 'ADMIN_ADJUST'
-  | 'REFUND';
+  | 'REFUND'
+  | 'CARD_EFFECT'
+  | 'CARD_REFUND';
 
 export interface Transaction {
   id: string;
@@ -303,6 +305,44 @@ export interface Prediction {
   placedAt: string;
   settledAt?: string;
   oddsSnapshot?: OddsSnapshotRecord;
+  // 使用的竞猜卡（V1.3）
+  usedCard?: PredictionCardId;
+  cardEffectNotes?: string;
+}
+
+export type PredictionCardId = 'NO_LOSS' | 'DOUBLE' | 'REGRET' | 'FLOOR';
+
+export interface PredictionCardDefinition {
+  id: PredictionCardId;
+  label: string;
+  description: string;
+  icon: string;
+  tone: 'emerald' | 'rose' | 'amber' | 'violet' | 'cyan' | 'slate';
+  rule: string;
+}
+
+export interface UserCardInventory {
+  userId: string;
+  cards: Partial<Record<PredictionCardId, number>>;
+  updatedAt: string;
+}
+
+export interface UserTitleRecord {
+  userId: string;
+  title: PlayerTitle;
+  updatedAt: string;
+}
+
+export interface AdminSessionRecord {
+  token: string;
+  expiresAt: number;
+}
+
+export interface CheckinLogRecord {
+  id: string;
+  userId: string;
+  date: string;
+  createdAt: string;
 }
 
 export type TournamentBetType = 'champion' | 'golden_boot' | 'golden_ball';

@@ -5,6 +5,9 @@ type AchievementInput = {
   tournamentBets: TournamentBet[];
   transactions: Transaction[];
   wallet?: Wallet | null;
+  userId?: string;
+  // 服务端调用时可注入持久化的 title（来自 badge_service.getUserTitle）
+  persistedTitle?: PlayerTitle;
 };
 
 const BADGE_META: Array<{
@@ -102,7 +105,9 @@ function buildAchievementStats({ predictions, tournamentBets, transactions, wall
   };
 }
 
-function pickTitle(stats: ReturnType<typeof buildAchievementStats>): PlayerTitle {
+function pickTitle(stats: ReturnType<typeof buildAchievementStats>, input: AchievementInput): PlayerTitle {
+  // 服务端注入了持久化 title（来自 badge_service.getUserTitle），优先使用
+  if (input.persistedTitle) return input.persistedTitle;
   if (stats.maxStreak >= 4) return '连红猎手';
   if (stats.biggestWin >= 3000) return '冷门先知';
   if (stats.netProfit >= 5000) return '金杯投资人';
@@ -133,7 +138,7 @@ export function buildUserProfileSummary(input: AchievementInput) {
     .sort((a, b) => b.current / b.target - a.current / a.target);
 
   return {
-    currentTitle: pickTitle(stats),
+    currentTitle: pickTitle(stats, input),
     featuredBadge: unlocked[0] || null,
     achievementBadges: unlocked,
     achievementProgress: progress,

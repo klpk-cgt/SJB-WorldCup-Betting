@@ -1,0 +1,16 @@
+.git
+.gitignore
+node_modules
+dist
+coverage
+runtime
+backups
+preview-screenshots
+*.log
+.env
+.env.production
+db.json
+admin_sessions.json
+*.png
+*.jpg
+*.jpeg

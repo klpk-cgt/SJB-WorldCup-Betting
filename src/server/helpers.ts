@@ -8,6 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import { Request, Response } from 'express';
 import { dbService } from '../db/db_service';
+import { THE_TEAMS } from '../db/initial_data';
 import {
   AIContent,
   BracketState,
@@ -32,27 +33,43 @@ import {
 
 export { deriveOperationalStatus, deriveSettlementStatus };
 import { invalidateAIContent } from './ai';
+import { createBackup } from './backup';
+import logger from './logger';
+import { emitBigWin, emitPredictionLost, emitPredictionWon, emitStreakHit } from './activity_service';
+import { evaluateUserBadges, syncUserTitle } from './badge_service';
+import { applyCardToSettlement, getCardDefinition } from './prediction_card_service';
+import { mergeCorrectScoreOdds } from '../utils/odds';
 
 const config = getRuntimeConfig();
+const seedTeamMap = new Map(THE_TEAMS.map((team) => [team.id, team]));
 
 // ─── Admin Session Management ───
 
 type AdminSession = { token: string; expiresAt: number };
-const ADMIN_SESSIONS_FILE = path.join(process.cwd(), 'admin_sessions.json');
+const ADMIN_DATA_DIR = process.env.APP_DATA_DIR
+  ? path.resolve(process.cwd(), process.env.APP_DATA_DIR)
+  : process.cwd();
+const ADMIN_SESSIONS_FILE = path.join(ADMIN_DATA_DIR, 'admin_sessions.json');
 const adminSessions = new Map<string, AdminSession>();
 
 export function loadAdminSessions() {
   try {
-    if (fs.existsSync(ADMIN_SESSIONS_FILE)) {
-      const content = fs.readFileSync(ADMIN_SESSIONS_FILE, 'utf-8');
-      const sessions = JSON.parse(content) as AdminSession[];
+    const db = dbService.getData();
+    const persistedSessions =
+      dbService.getStorageInfo().mode === 'mysql'
+        ? ((db.adminSessions || []) as AdminSession[])
+        : (fs.existsSync(ADMIN_SESSIONS_FILE)
+            ? (JSON.parse(fs.readFileSync(ADMIN_SESSIONS_FILE, 'utf-8')) as AdminSession[])
+            : []);
+
+    if (persistedSessions.length > 0) {
       const now = Date.now();
-      for (const session of sessions) {
+      for (const session of persistedSessions) {
         if (now < session.expiresAt) {
           adminSessions.set(session.token, session);
         }
       }
-      console.log(`[Admin] Loaded ${adminSessions.size} valid sessions from disk.`);
+      console.log(`[Admin] Loaded ${adminSessions.size} valid sessions from ${dbService.getStorageInfo().mode}.`);
     }
   } catch (error) {
     console.error('[Admin] Failed to load admin sessions, starting fresh.', error);
@@ -62,6 +79,15 @@ export function loadAdminSessions() {
 export function saveAdminSessions() {
   try {
     const sessions = Array.from(adminSessions.values());
+    if (!fs.existsSync(ADMIN_DATA_DIR)) {
+      fs.mkdirSync(ADMIN_DATA_DIR, { recursive: true });
+    }
+    if (dbService.getStorageInfo().mode === 'mysql') {
+      const db = dbService.getData();
+      db.adminSessions = sessions;
+      dbService.save();
+      return;
+    }
     fs.writeFileSync(ADMIN_SESSIONS_FILE, JSON.stringify(sessions, null, 2), 'utf-8');
   } catch (error) {
     console.error('[Admin] Failed to save admin sessions.', error);
@@ -125,6 +151,27 @@ export function getAuthenticatedUser(req: Request) {
     .find((candidate) => candidate.loginCode === cleanCode || candidate.id === cleanCode);
   if (!user || user.status === 'LOCKED' || user.status === 'DISABLED') return null;
   return user;
+}
+
+const BEIJING_OFFSET_MS = 8 * 60 * 60 * 1000;
+
+function resolveTimeValue(input: string | number | Date) {
+  if (input instanceof Date) return input.getTime();
+  if (typeof input === 'number') return input;
+  const parsed = new Date(input).getTime();
+  return Number.isFinite(parsed) ? parsed : Date.now();
+}
+
+export function roundPoints(value: number) {
+  return Number.isFinite(value) ? Math.round(value) : 0;
+}
+
+export function toBeijingDateKey(input: string | number | Date = Date.now()) {
+  return new Date(resolveTimeValue(input) + BEIJING_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+export function isMatchOnBeijingDate(match: Pick<Match, 'startTimeUtc'>, dateKey: string) {
+  return toBeijingDateKey(match.startTimeUtc) === dateKey;
 }
 
 // ─── ID Generation ───
@@ -385,13 +432,24 @@ export function serializeUserForClient(user: User) {
 
 export function serializeMatch(match: Match) {
   const db = dbService.getData();
-  const homeTeam = db.teams.find((team) => team.id === match.homeTeamId);
-  const awayTeam = db.teams.find((team) => team.id === match.awayTeamId);
+  const homeTeam = db.teams.find((team) => team.id === match.homeTeamId) || seedTeamMap.get(match.homeTeamId);
+  const awayTeam = db.teams.find((team) => team.id === match.awayTeamId) || seedTeamMap.get(match.awayTeamId);
+  const rawOdds = db.matchOdds[match.id] || null;
+  // 合并完整比分选项，确保前端拿到所有32个选项
+  const odds = rawOdds
+    ? { ...rawOdds, correctScore: mergeCorrectScoreOdds(rawOdds.correctScore).map(({ score, odds }) => ({ score, odds })) }
+    : null;
   return {
     ...enrichMatchLifecycle(match, config.predictionLockMinutes),
+    startTimeUtc: match.startTimeUtc || match.startTimeBeijing || new Date().toISOString(),
+    competitionName: '2026 World Cup',
+    venueName: match.venueName || '',
+    venueCity: match.venueCity || '',
+    homeScore: typeof match.homeScore === 'number' ? match.homeScore : null,
+    awayScore: typeof match.awayScore === 'number' ? match.awayScore : null,
     homeTeam,
     awayTeam,
-    odds: db.matchOdds[match.id] || null,
+    odds,
   };
 }
 
@@ -537,8 +595,11 @@ export function resolveOddsSnapshot(matchId: string, market: Prediction['market'
 
 // ─── Match Settlement ───
 
-export function settleMatch(match: Match) {
+export function settleMatch(match: Match, options: { forceResettle?: boolean } = {}) {
   const db = dbService.getData();
+  if (match.isSettled && !options.forceResettle) {
+    throw new Error('该比赛已完成正式结算；如需重结算，请显式传入 forceResettle。');
+  }
   if (!FINISHED_MATCH_STATUSES.has(match.status)) {
     throw new Error('比赛尚未正式结束，暂时不能结算。');
   }
@@ -546,8 +607,19 @@ export function settleMatch(match: Match) {
     throw new Error('比分还不完整，不能开始结算。');
   }
 
+  // 结算前自动备份（失败仅记录日志，不阻塞结算）
+  try {
+    const backupResult = createBackup(`auto-before-settle-${match.id}`);
+    if (!backupResult.ok) {
+      logger.warn('结算前自动备份失败', { matchId: match.id, error: backupResult.error });
+    }
+  } catch (e) {
+    logger.error('结算前自动备份异常', { error: e instanceof Error ? e.message : String(e) });
+  }
+
   const matchPredictions = db.predictions.filter((prediction) => prediction.matchId === match.id);
-  for (const prediction of matchPredictions) {
+  if (match.isSettled) {
+    for (const prediction of matchPredictions) {
     if (prediction.status === 'WON' && prediction.settledReturn) {
       const wallet = db.wallets.find((item) => item.userId === prediction.userId);
       if (wallet) {
@@ -572,6 +644,7 @@ export function settleMatch(match: Match) {
     prediction.settledReturn = 0;
     prediction.settledProfit = 0;
     prediction.settledAt = undefined;
+    }
   }
 
   const hScore = match.homeScore;
@@ -595,10 +668,27 @@ export function settleMatch(match: Match) {
     } else if (prediction.market === 'CORRECT_SCORE') {
       const normalizedKey = prediction.optionKey.replace('correctScore_', '').replace('_', '-');
       const actualScore = `${hScore}-${aScore}`;
-      won = normalizedKey === actualScore;
-      if (!won && normalizedKey === 'Other') {
-        const commonScores = ['1-0', '2-0', '2-1', '3-0', '0-0', '1-1', '0-1', '0-2', '1-2'];
-        won = !commonScores.includes(actualScore);
+
+      if (normalizedKey === 'HOME_OTHER') {
+        // 主胜其他：主队赢且实际比分不在预设列表中
+        const presetHomeScores = ['1-0','2-0','2-1','3-0','3-1','3-2','4-0','4-1','4-2','5-0','5-1','5-2'];
+        won = hScore > aScore && !presetHomeScores.includes(actualScore);
+      } else if (normalizedKey === 'DRAW_OTHER') {
+        // 平局其他：平局且实际比分不在预设列表中
+        const presetDrawScores = ['0-0','1-1','2-2','3-3','4-4'];
+        won = hScore === aScore && !presetDrawScores.includes(actualScore);
+      } else if (normalizedKey === 'AWAY_OTHER') {
+        // 客胜其他：客队赢且实际比分不在预设列表中
+        const presetAwayScores = ['0-1','0-2','1-2','0-3','1-3','2-3','0-4','1-4','2-4','0-5','1-5','2-5'];
+        won = hScore < aScore && !presetAwayScores.includes(actualScore);
+      } else if (normalizedKey === 'Other') {
+        // 兼容旧数据
+        const allPreset = ['1-0','2-0','2-1','3-0','3-1','3-2','4-0','4-1','4-2','5-0','5-1','5-2',
+          '0-0','1-1','2-2','3-3','4-4',
+          '0-1','0-2','1-2','0-3','1-3','2-3','0-4','1-4','2-4','0-5','1-5','2-5'];
+        won = !allPreset.includes(actualScore);
+      } else {
+        won = normalizedKey === actualScore;
       }
     } else if (prediction.market === 'QUALIFY' && match.winnerTeamId) {
       won =
@@ -607,13 +697,48 @@ export function settleMatch(match: Match) {
     }
 
     if (won) {
-      const pointsWon = Math.round(prediction.stakePoints * prediction.oddsDecimal * 10) / 10;
+      const pointsWon = roundPoints(prediction.stakePoints * prediction.oddsDecimal);
       const oldBalance = wallet.balance;
       wallet.balance += pointsWon;
       prediction.status = 'WON';
       prediction.settledReturn = pointsWon;
       prediction.settledProfit = pointsWon - prediction.stakePoints;
       prediction.settledAt = new Date().toISOString();
+
+      // 应用卡牌效果
+      if (prediction.usedCard) {
+        const cardResult = applyCardToSettlement(
+          prediction,
+          pointsWon,
+          pointsWon - prediction.stakePoints,
+          'WON',
+        );
+        if (cardResult.finalReturn !== pointsWon) {
+          // 调整金额
+          const diff = cardResult.finalReturn - pointsWon;
+          wallet.balance = oldBalance + cardResult.finalReturn;
+          prediction.settledReturn = cardResult.finalReturn;
+          prediction.settledProfit = cardResult.finalProfit;
+          // 写一笔卡牌补偿流水
+          if (diff > 0) {
+            db.transactions.push({
+              id: createId('card-effect'),
+              userId: prediction.userId,
+              type: 'CARD_EFFECT',
+              amount: diff,
+              balanceBefore: oldBalance + pointsWon,
+              balanceAfter: wallet.balance,
+              relatedPredictionId: prediction.id,
+              relatedMatchId: match.id,
+              note: `卡牌效果：${cardResult.cardNote || prediction.usedCard}`,
+              createdAt: new Date().toISOString(),
+            });
+          }
+        }
+        if (cardResult.cardNote) {
+          prediction.cardEffectNotes = cardResult.cardNote;
+        }
+      }
 
       db.transactions.push({
         id: createId('win'),
@@ -627,11 +752,93 @@ export function settleMatch(match: Match) {
         note: `竞猜命中：${match.roundName} ${prediction.optionLabel}`,
         createdAt: new Date().toISOString(),
       });
+
+      // 触发群内动态
+      const user = db.users.find((u) => u.id === prediction.userId);
+      if (user) {
+        try {
+          emitPredictionWon({
+            userId: user.id,
+            displayName: user.displayName,
+            avatarUrl: user.avatarUrl,
+            matchId: match.id,
+            predictionId: prediction.id,
+            optionLabel: prediction.optionLabel,
+            stakePoints: prediction.stakePoints,
+            settledReturn: pointsWon,
+            settledProfit: pointsWon - prediction.stakePoints,
+          });
+          if (pointsWon - prediction.stakePoints >= 5000) {
+            emitBigWin({
+              userId: user.id,
+              displayName: user.displayName,
+              avatarUrl: user.avatarUrl,
+              matchId: match.id,
+              predictionId: prediction.id,
+              optionLabel: prediction.optionLabel,
+              settledProfit: pointsWon - prediction.stakePoints,
+            });
+          }
+          // 评估连胜（连续 WON）
+          const sortedUserPreds = db.predictions
+            .filter((p) => p.userId === user.id && p.settledAt)
+            .sort((a, b) => new Date(a.settledAt!).getTime() - new Date(b.settledAt!).getTime());
+          let streak = 0;
+          for (let i = sortedUserPreds.length - 1; i >= 0; i--) {
+            if (sortedUserPreds[i].status === 'WON') {
+              streak += 1;
+            } else {
+              break;
+            }
+          }
+          if (streak === 3 || streak === 5 || streak === 10) {
+            emitStreakHit({
+              userId: user.id,
+              displayName: user.displayName,
+              avatarUrl: user.avatarUrl,
+              streak,
+              matchId: match.id,
+              predictionId: prediction.id,
+            });
+          }
+          // 评估徽章与称号
+          evaluateUserBadges(user.id, user.displayName, user.avatarUrl);
+          syncUserTitle(user.id, user.displayName, user.avatarUrl);
+        } catch (e) {
+          logger.error('结算触发动态失败', { error: e instanceof Error ? e.message : String(e) });
+        }
+      }
     } else {
       prediction.status = 'LOST';
       prediction.settledReturn = 0;
       prediction.settledProfit = -prediction.stakePoints;
       prediction.settledAt = new Date().toISOString();
+
+      // 应用卡牌效果（免亏/保底卡）
+      if (prediction.usedCard) {
+        const cardResult = applyCardToSettlement(prediction, 0, -prediction.stakePoints, 'LOST');
+        if (cardResult.finalReturn > 0) {
+          wallet.balance += cardResult.finalReturn;
+          prediction.settledReturn = cardResult.finalReturn;
+          prediction.settledProfit = cardResult.finalProfit;
+          prediction.status = 'WON';
+          db.transactions.push({
+            id: createId('card-effect'),
+            userId: prediction.userId,
+            type: 'CARD_EFFECT',
+            amount: cardResult.finalReturn,
+            balanceBefore: wallet.balance - cardResult.finalReturn,
+            balanceAfter: wallet.balance,
+            relatedPredictionId: prediction.id,
+            relatedMatchId: match.id,
+            note: `卡牌效果：${cardResult.cardNote || prediction.usedCard}`,
+            createdAt: new Date().toISOString(),
+          });
+        }
+        if (cardResult.cardNote) {
+          prediction.cardEffectNotes = cardResult.cardNote;
+        }
+      }
 
       db.transactions.push({
         id: createId('lose'),
@@ -645,6 +852,26 @@ export function settleMatch(match: Match) {
         note: `竞猜未命中：${match.roundName} ${prediction.optionLabel}`,
         createdAt: new Date().toISOString(),
       });
+
+      // 触发未中动态
+      const user = db.users.find((u) => u.id === prediction.userId);
+      if (user) {
+        try {
+          emitPredictionLost({
+            userId: user.id,
+            displayName: user.displayName,
+            avatarUrl: user.avatarUrl,
+            matchId: match.id,
+            predictionId: prediction.id,
+            optionLabel: prediction.optionLabel,
+            stakePoints: prediction.stakePoints,
+          });
+          evaluateUserBadges(user.id, user.displayName, user.avatarUrl);
+          syncUserTitle(user.id, user.displayName, user.avatarUrl);
+        } catch (e) {
+          logger.error('结算触发动态失败', { error: e instanceof Error ? e.message : String(e) });
+        }
+      }
     }
   }
 
@@ -672,14 +899,62 @@ export function settleMatch(match: Match) {
 
   dbService.refreshBracketState();
   markMatchAiStale(match.id);
-  markRoomLeaderboardAiStale('room-1');
+  markRoomLeaderboardAiStale(dbService.getPrimaryRoomId());
+
+  // WebSocket 推送：比赛结算
+  try {
+    const ws = require('./websocket');
+    ws.broadcastMatchSettled(match.id, hScore, aScore, match.winnerTeamId);
+    for (const pred of matchPredictions) {
+      const settledReturn = pred.settledReturn ?? 0;
+      const settledProfit = roundPoints(settledReturn - pred.stakePoints);
+      ws.sendPredictionResult(pred.userId, pred.id, match.id, pred.status, settledReturn, settledProfit);
+    }
+  } catch (e) {
+    // WS 推送失败不影响结算流程
+  }
 
   return matchPredictions.length;
+}
+
+/**
+ * 自动结算所有已结束但未结算的比赛
+ * 由定时任务调度器调用
+ * @returns 结算的比赛数量
+ */
+export function autoSettleFinishedMatches(db: ReturnType<typeof dbService.getData>): number {
+  let settledCount = 0;
+  for (const match of db.matches) {
+    if (
+      match.isSettled ||
+      !FINISHED_MATCH_STATUSES.has(match.status) ||
+      match.homeScore === undefined ||
+      match.awayScore === undefined
+    ) {
+      continue;
+    }
+    // 检查是否过了锁定时间（确保不是进行中的比赛）
+    const now = Date.now();
+    const lockTime = match.predictionLockedAt ? new Date(match.predictionLockedAt).getTime() : 0;
+    if (lockTime > 0 && now - lockTime < 5 * 60 * 1000) {
+      // 锁定不到5分钟，跳过（等比分完全确认）
+      continue;
+    }
+    try {
+      settleMatch(match);
+      settledCount++;
+      logger.settlement(`Auto-settled: ${match.homeTeamId} ${match.homeScore}:${match.awayScore} ${match.awayTeamId}`, { matchId: match.id });
+    } catch (error) {
+      logger.error(`Auto-settle failed for ${match.id}`, { error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+  return settledCount;
 }
 
 // ─── Scheduled Maintenance ───
 
 let lastScheduledSyncAt = 0;
+let lastLiveMatchSyncAt = 0;
 let scheduledSyncRunning = false;
 
 export function ensureLifecycleForAllMatches() {
@@ -693,6 +968,7 @@ export async function runScheduledMaintenance(forceSync = false) {
   ensureLifecycleForAllMatches();
   const db = dbService.getData();
   let changed = false;
+  const now = Date.now();
 
   for (const match of db.matches) {
     if (
@@ -710,15 +986,13 @@ export async function runScheduledMaintenance(forceSync = false) {
   }
 
   const shouldRunSync =
-    forceSync || Date.now() - lastScheduledSyncAt >= config.syncIntervalMinutes * 60 * 1000;
+    forceSync || now - lastScheduledSyncAt >= config.syncIntervalMinutes * 60 * 1000;
   if (shouldRunSync && !scheduledSyncRunning) {
     scheduledSyncRunning = true;
     try {
-      const { syncFixturesForDay, syncOddsForMatches } = await import('./sync');
-      const date = new Date().toISOString().slice(0, 10);
-      const fixturesResult = await syncFixturesForDay({
+      const { syncFixturesForDateWindow, syncOddsForMatches } = await import('./sync');
+      const fixturesResult = await syncFixturesForDateWindow({
         apiKey: config.apiFootballKey,
-        date,
         db,
       });
       appendSyncLog(fixturesResult.log);
@@ -729,12 +1003,54 @@ export async function runScheduledMaintenance(forceSync = false) {
       });
       appendSyncLog(oddsResult.log);
 
-      fixturesResult.updatedMatches?.forEach((item) => markMatchAiStale(item.id));
+      [...fixturesResult.updatedMatches, ...fixturesResult.createdMatches].forEach((item) => markMatchAiStale(item.id));
       oddsResult.updatedMatchIds?.forEach((item) => markMatchAiStale(item));
       dbService.refreshBracketState();
 
       lastScheduledSyncAt = Date.now();
+      lastLiveMatchSyncAt = lastScheduledSyncAt;
       changed = true;
+    } finally {
+      scheduledSyncRunning = false;
+    }
+  }
+
+  const liveMatchDates = Array.from(
+    new Set(
+      db.matches
+        .filter((match) => match.status === MatchStatus.LIVE || match.status === MatchStatus.HT)
+        .map((match) => match.startTimeUtc.slice(0, 10)),
+    ),
+  );
+  const shouldRunLiveSync =
+    liveMatchDates.length > 0 &&
+    !scheduledSyncRunning &&
+    (forceSync || now - lastLiveMatchSyncAt >= 60 * 1000);
+
+  if (shouldRunLiveSync) {
+    scheduledSyncRunning = true;
+    try {
+      const { syncFixturesForDay } = await import('./sync');
+      for (const date of liveMatchDates) {
+        const fixturesResult = await syncFixturesForDay({
+          apiKey: config.apiFootballKey,
+          date,
+          db,
+        });
+        appendSyncLog({
+          ...fixturesResult.log,
+          action: 'Sync live fixtures by date',
+          requestSummary: `${fixturesResult.log.requestSummary} [live-1m]`,
+        });
+        [...fixturesResult.updatedMatches, ...fixturesResult.createdMatches].forEach((item) => markMatchAiStale(item.id));
+        if (fixturesResult.updatedMatches.length > 0 || fixturesResult.createdMatches.length > 0) {
+          changed = true;
+        }
+      }
+      if (changed) {
+        dbService.refreshBracketState();
+      }
+      lastLiveMatchSyncAt = Date.now();
     } finally {
       scheduledSyncRunning = false;
     }
@@ -802,6 +1118,64 @@ export function getIntegrationStatusPayload() {
             : null,
       },
     },
+  };
+}
+
+export function getSystemStatusPayload() {
+  const db = dbService.getData();
+  const teamIds = new Set(db.teams.map((team) => team.id));
+  const matchStatusCounts = db.matches.reduce<Record<string, number>>((acc, match) => {
+    acc[match.status] = (acc[match.status] || 0) + 1;
+    return acc;
+  }, {});
+  const unmatchedTeamRefs = db.matches.filter(
+    (match) => !teamIds.has(match.homeTeamId) || !teamIds.has(match.awayTeamId),
+  );
+  const joinedTeamMatches = db.matches.filter(
+    (match) => teamIds.has(match.homeTeamId) && teamIds.has(match.awayTeamId),
+  ).length;
+  const latestSyncLog = db.syncLogs[0] || null;
+
+  return {
+    storage: {
+      mode: dbService.getStorageInfo().mode,
+      databaseConnected: true,
+    },
+    counts: {
+      rooms: db.rooms.length,
+      users: db.users.length,
+      teams: db.teams.length,
+      matches: db.matches.length,
+      players: db.players.length,
+      teamHistory: db.teamHistory.length,
+      predictions: db.predictions.length,
+      wallets: db.wallets.length,
+      transactions: db.transactions.length,
+      syncLogs: db.syncLogs.length,
+    },
+    matches: {
+      byStatus: matchStatusCounts,
+      withScores: db.matches.filter(
+        (match) => typeof match.homeScore === 'number' || typeof match.awayScore === 'number',
+      ).length,
+      joinedTeamMatches,
+      orphanTeamRefs: unmatchedTeamRefs.length,
+      orphanMatchIds: unmatchedTeamRefs.slice(0, 20).map((match) => match.id),
+      dateRange:
+        db.matches.length > 0
+          ? {
+              first: [...db.matches].sort((a, b) => a.startTimeUtc.localeCompare(b.startTimeUtc))[0]?.startTimeUtc || null,
+              last: [...db.matches].sort((a, b) => b.startTimeUtc.localeCompare(a.startTimeUtc))[0]?.startTimeUtc || null,
+            }
+          : null,
+    },
+    sync: {
+      latest: latestSyncLog,
+      latestFixtures: getLatestSyncLog('fixtures', 'API-Football') || null,
+      latestOdds: getLatestSyncLog('odds', 'The Odds API') || null,
+    },
+    providers: summarizeProviderConfig(config),
+    generatedAt: new Date().toISOString(),
   };
 }
 

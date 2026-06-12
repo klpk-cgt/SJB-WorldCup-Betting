@@ -77,6 +77,11 @@ type BetShareParams = {
   };
 };
 
+function resolveRoomId(db: DatabaseSchema, roomId?: string) {
+  if (roomId) return roomId;
+  return db.rooms.find((item) => item.isActive)?.id || db.rooms[0]?.id || 'room-1';
+}
+
 export function getCachedAIContent(db: DatabaseSchema, cacheKey: string, now = Date.now()) {
   return db.aiContents.find((item) => {
     if (item.cacheKey !== cacheKey) return false;
@@ -164,6 +169,7 @@ export async function generateStructuredAiContent(params:
           aiFallbackProvider: 'gemini',
           aiEnableWebSearch: false,
           aiEnableMultimodal: false,
+          aiCacheTtlMinutes: 30,
           apiFootballKey: '',
           theOddsApiKey: '',
           deepSeekModel: 'deepseek-chat',
@@ -174,6 +180,8 @@ export async function generateStructuredAiContent(params:
           adminSessionTtlMs: 0,
           predictionLockMinutes: 5,
           syncIntervalMinutes: 5,
+          activityMaxEntries: 1000,
+          activityArchiveFile: 'db.activities.archive.json',
         } satisfies RuntimeConfig);
 
   try {
@@ -453,7 +461,7 @@ function buildMatchAnalysisPrompt(contentType: 'PRE_MATCH_ANALYSIS' | 'SEARCH_EN
 }
 
 function buildLeaderboardPrompt(context: ContentBuildContext) {
-  const roomId = context.roomId || 'room-1';
+  const roomId = resolveRoomId(context.db, context.roomId);
   const snapshot = buildLeaderboardSnapshot(context.db, roomId);
   return {
     systemPrompt:
@@ -688,7 +696,7 @@ function buildLocalFallback(contentType: GenerateAiResultParams['contentType'], 
   }
 
   if (contentType === 'LEADERBOARD_COMMENTARY') {
-    const snapshot = buildLeaderboardSnapshot(context.db, context.roomId || 'room-1');
+    const snapshot = buildLeaderboardSnapshot(context.db, resolveRoomId(context.db, context.roomId));
     return {
       headline: '今晚榜单还在持续升温',
       summary: `${snapshot.leader?.displayName || '榜首选手'} 目前守在前排，但后续几场仍有翻盘空间。`,
@@ -792,7 +800,7 @@ function buildAiContentRecord(params: {
 
 function buildTitle(contentType: GenerateAiResultParams['contentType'], match?: Match, roomId?: string) {
   if (contentType === 'LEADERBOARD_COMMENTARY') {
-    return `AI 榜单点评 · ${roomId || 'room-1'}`;
+    return `AI 榜单点评 · ${roomId || 'default-room'}`;
   }
   if (!match) {
     return 'AI 内容';
@@ -829,7 +837,7 @@ function buildContentText(output: StructuredOutput) {
 
 function buildInputSnapshot(contentType: GenerateAiResultParams['contentType'], context: ContentBuildContext) {
   if (contentType === 'LEADERBOARD_COMMENTARY') {
-    return buildLeaderboardSnapshot(context.db, context.roomId || 'room-1');
+    return buildLeaderboardSnapshot(context.db, resolveRoomId(context.db, context.roomId));
   }
   return buildMatchSnapshot(context.db, assertMatch(context.match));
 }
@@ -933,7 +941,7 @@ function buildDataVersion(params: {
   now: number;
 }) {
   if (params.contentType === 'LEADERBOARD_COMMENTARY') {
-    const snapshot = buildLeaderboardSnapshot(params.db, params.roomId || 'room-1');
+    const snapshot = buildLeaderboardSnapshot(params.db, resolveRoomId(params.db, params.roomId));
     return [
       params.contentType,
       snapshot.leader?.userId || 'none',

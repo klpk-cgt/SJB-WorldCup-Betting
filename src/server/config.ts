@@ -15,11 +15,14 @@ export interface RuntimeConfig {
   aiFallbackProvider: 'mimo' | 'gemini' | 'local';
   aiEnableWebSearch: boolean;
   aiEnableMultimodal: boolean;
+  aiCacheTtlMinutes: number;
   adminUsername: string;
   adminPassword: string;
   adminSessionTtlMs: number;
   predictionLockMinutes: number;
   syncIntervalMinutes: number;
+  activityMaxEntries: number;
+  activityArchiveFile: string;
 }
 
 function readEnv(name: string, fallback = '') {
@@ -44,11 +47,14 @@ export function getRuntimeConfig(): RuntimeConfig {
     aiFallbackProvider: (readEnv('AI_FALLBACK_PROVIDER', 'mimo').toLowerCase() as RuntimeConfig['aiFallbackProvider']),
     aiEnableWebSearch: readEnv('AI_ENABLE_WEB_SEARCH', 'true') !== 'false',
     aiEnableMultimodal: readEnv('AI_ENABLE_MULTIMODAL', 'true') !== 'false',
+    aiCacheTtlMinutes: Math.max(1, Number(process.env.AI_CACHE_TTL_MINUTES || 30)),
     adminUsername: readEnv('ADMIN_USERNAME', 'admin'),
     adminPassword: readEnv('ADMIN_PASSWORD', 'admin_worldcup2026'),
     adminSessionTtlMs: Number(process.env.ADMIN_SESSION_TTL_MS || 12 * 60 * 60 * 1000),
     predictionLockMinutes: Number(process.env.PREDICTION_LOCK_MINUTES || 5),
     syncIntervalMinutes: Number(process.env.SYNC_INTERVAL_MINUTES || 5),
+    activityMaxEntries: Math.max(100, Number(process.env.ACTIVITY_MAX_ENTRIES || 1000)),
+    activityArchiveFile: readEnv('ACTIVITY_ARCHIVE_FILE', 'db.activities.archive.json'),
   };
 }
 

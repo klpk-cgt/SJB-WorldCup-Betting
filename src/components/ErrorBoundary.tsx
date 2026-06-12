@@ -1,12 +1,14 @@
 /**
- * @license
- * SPDX-License-Identifier: Apache-2.0
+ * React Error Boundary 错误边界
+ * 捕获子组件渲染错误并展示友好降级页
  */
 
-import { Component, type ReactNode, type ErrorInfo } from 'react';
+import { Component, type ErrorInfo, type ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
+  fallback?: ReactNode;
+  onError?: (error: Error, errorInfo: ErrorInfo) => void;
 }
 
 interface ErrorBoundaryState {
@@ -30,7 +32,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    // 输出到控制台，同时调用自定义 onError
     console.error('[ErrorBoundary] Caught error:', error, errorInfo);
+    this.props.onError?.(error, errorInfo);
   }
 
   handleReset() {
@@ -39,27 +43,32 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   render() {
     if (this.state.hasError) {
+      if (this.props.fallback) {
+        return this.props.fallback;
+      }
+
       return (
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: '100vh',
-          padding: '2rem',
-          background: '#0f172a',
-          color: '#e2e8f0',
-          textAlign: 'center',
-          fontFamily: 'system-ui, -apple-system, sans-serif',
-        }}>
-          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⚽</div>
-          <h1 style={{ fontSize: '1.5rem', marginBottom: '0.5rem', color: '#f87171' }}>页面出了点问题</h1>
-          <p style={{ color: '#94a3b8', marginBottom: '1.5rem', maxWidth: '400px' }}>
+        <div className="flex min-h-screen flex-col items-center justify-center bg-slate-950 px-6 py-10 text-center text-slate-200">
+          <div className="mb-4 text-6xl">⚽</div>
+          <h1 className="mb-2 text-2xl font-black text-rose-400">页面出了点问题</h1>
+          <p className="mb-6 max-w-md text-sm text-slate-400">
             {this.state.error?.message || '发生了未知错误，请尝试刷新页面。'}
+            <br />
+            如果问题持续出现，请联系管理员查看日志。
           </p>
-          <div style={{ display: 'flex', gap: '0.75rem' }}>
-            <button onClick={this.handleReset} style={{ padding: '0.5rem 1.5rem', borderRadius: '0.5rem', background: '#3b82f6', color: 'white', border: 'none', cursor: 'pointer', fontSize: '0.875rem' }}>重试</button>
-            <button onClick={() => window.location.reload()} style={{ padding: '0.5rem 1.5rem', borderRadius: '0.5rem', background: '#475569', color: 'white', border: 'none', cursor: 'pointer', fontSize: '0.875rem' }}>刷新页面</button>
+          <div className="flex gap-3">
+            <button
+              onClick={this.handleReset}
+              className="rounded-2xl bg-sky-500 px-6 py-2.5 text-sm font-bold text-white transition hover:bg-sky-400"
+            >
+              重试
+            </button>
+            <button
+              onClick={() => window.location.reload()}
+              className="rounded-2xl bg-slate-700 px-6 py-2.5 text-sm font-bold text-white transition hover:bg-slate-600"
+            >
+              刷新页面
+            </button>
           </div>
         </div>
       );
@@ -68,3 +77,5 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     return this.props.children;
   }
 }
+
+export default ErrorBoundary;

@@ -5,6 +5,8 @@
 
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
+import { execFileSync } from 'child_process';
 import {
   GroupRoom,
   User,
@@ -23,6 +25,9 @@ import {
   TournamentBet,
   Player,
   TeamHistoryResult,
+  UserTitleRecord,
+  AdminSessionRecord,
+  CheckinLogRecord,
 } from '../types';
 import { SEED_ROOMS, THE_TEAMS, PRESEEDED_USERS, SEED_MATCHES, SEED_ODDS } from './initial_data';
 import { SEED_PLAYERS, SEED_TEAM_HISTORY } from './team_details_seed';
@@ -45,14 +50,30 @@ export interface DatabaseSchema {
   adminOverrides: AdminOverride[];
   players: Player[];
   teamHistory: TeamHistoryResult[];
+  // 群内动态时间线（V1.2 新增）
+  activities?: import('../server/activity_service').Activity[];
+  // 称号 / 徽章数据（V1.2 新增）
+  userBadges?: import('../server/badge_service').UserBadgeRecord[];
+  // 竞猜卡牌库存（V1.3 新增）
+  cardInventories?: import('../types').UserCardInventory[];
+  userTitles?: UserTitleRecord[];
+  adminSessions?: AdminSessionRecord[];
+  checkinLog?: CheckinLogRecord[];
 }
 
-const DB_FILE_PATH = path.join(process.cwd(), 'db.json');
+const DATA_DIR = process.env.APP_DATA_DIR
+  ? path.resolve(process.cwd(), process.env.APP_DATA_DIR)
+  : process.cwd();
+const DB_FILE_PATH = path.join(DATA_DIR, 'db.json');
+const STORAGE_SCRIPT_PATH = path.join(process.cwd(), 'scripts', 'db-storage.mjs');
+const MYSQL_STORAGE_MODE = 'mysql';
 
 class DatabaseService {
   private cache: DatabaseSchema | null = null;
   private _derived = false;
   private _saveTimer: ReturnType<typeof setTimeout> | null = null;
+  private _writeLock = false;
+  private _lockWaiters: Array<() => void> = [];
 
   constructor() {
     this.init();
@@ -60,6 +81,21 @@ class DatabaseService {
 
   private init() {
     try {
+      this.ensureDataDir();
+      if (this.useMySqlStorage()) {
+        try {
+          const snapshot = this.readMySqlSnapshot();
+          if (snapshot && snapshot.teams.length > 0) {
+            this.cache = snapshot;
+            this.ensureDerivedState();
+            return;
+          }
+          // MySQL tables exist but are empty — seed default data
+          console.log('MySQL snapshot is empty, seeding default data...');
+        } catch (error) {
+          console.warn('Failed to read MySQL snapshot, falling back to local db.json.', error);
+        }
+      }
       if (fs.existsSync(DB_FILE_PATH)) {
         const fileContent = fs.readFileSync(DB_FILE_PATH, 'utf-8');
         this.cache = JSON.parse(fileContent);
@@ -262,6 +298,12 @@ class DatabaseService {
       adminOverrides: [],
       players: SQUAD_PLAYERS,
       teamHistory: SEED_TEAM_HISTORY,
+      activities: [],
+      userBadges: [],
+      cardInventories: [],
+      userTitles: [],
+      adminSessions: [],
+      checkinLog: [],
     };
 
     this.save();
@@ -277,11 +319,62 @@ class DatabaseService {
     return this.cache!;
   }
 
+  public getStorageInfo() {
+    return {
+      mode: this.useMySqlStorage() ? MYSQL_STORAGE_MODE : 'json',
+    };
+  }
+
+  public getPrimaryRoomId() {
+    const rooms = this.getRooms();
+    const room = rooms.find((item) => item.isActive) || rooms[0];
+    return room?.id || 'room-1';
+  }
+
   public save() {
     try {
-      fs.writeFileSync(DB_FILE_PATH, JSON.stringify(this.cache, null, 2), 'utf-8');
+      this.ensureDataDir();
+      const normalized = this.normalizeForPersistence();
+      fs.writeFileSync(DB_FILE_PATH, JSON.stringify(normalized, null, 2), 'utf-8');
+      if (this.useMySqlStorage()) {
+        this.writeMySqlSnapshot(normalized);
+      }
     } catch (e) {
       console.error('Failed to write database to disk!', e);
+    }
+  }
+
+  /**
+   * 写锁机制 - 防止并发写入导致数据不一致
+   * 适用于钱包扣减等需要原子性的操作
+   */
+  public async acquireWriteLock(timeout = 5000): Promise<void> {
+    const start = Date.now();
+    while (this._writeLock) {
+      if (Date.now() - start > timeout) {
+        throw new Error('获取写锁超时');
+      }
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    this._writeLock = true;
+  }
+
+  public releaseWriteLock() {
+    this._writeLock = false;
+    // 唤醒等待者
+    const waiter = this._lockWaiters.shift();
+    if (waiter) waiter();
+  }
+
+  /**
+   * 在写锁保护下执行操作
+   */
+  public async withWriteLock<T>(fn: () => Promise<T> | T): Promise<T> {
+    await this.acquireWriteLock();
+    try {
+      return await fn();
+    } finally {
+      this.releaseWriteLock();
     }
   }
 
@@ -290,10 +383,19 @@ class DatabaseService {
     if (this._saveTimer) return; // 已有待写入的定时器，跳过
     this._saveTimer = setTimeout(() => {
       this._saveTimer = null;
-      const data = JSON.stringify(this.cache, null, 2);
+      this.ensureDataDir();
+      const normalized = this.normalizeForPersistence();
+      const data = JSON.stringify(normalized, null, 2);
       fs.promises.writeFile(DB_FILE_PATH, data, 'utf-8').catch((e) => {
         console.error('Failed to write database to disk!', e);
       });
+      if (this.useMySqlStorage()) {
+        try {
+          this.writeMySqlSnapshot(normalized);
+        } catch (e) {
+          console.error('Failed to persist database to MySQL!', e);
+        }
+      }
     }, 100);
   }
 
@@ -311,6 +413,12 @@ class DatabaseService {
   public getShareCards(): ShareCardRecord[] { return this.getData().shareCards; }
   public getBracketState(): BracketState { return this.getData().bracketState; }
   public getSyncLogs(): SyncLog[] { return this.getData().syncLogs; }
+
+  private ensureDataDir() {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+  }
   public getAdminOverrides(): AdminOverride[] { return this.getData().adminOverrides; }
   public getPlayers(): Player[] { return this.getData().players; }
   public getTeamHistory(): TeamHistoryResult[] { return this.getData().teamHistory; }
@@ -322,8 +430,114 @@ class DatabaseService {
     return db.bracketState;
   }
 
+  private useMySqlStorage() {
+    const mode = String(process.env.APP_STORAGE_MODE || '').trim().toLowerCase();
+    return mode === MYSQL_STORAGE_MODE || (!!process.env.DATABASE_URL && mode !== 'json');
+  }
+
+  private normalizeForPersistence() {
+    const db = this.getData();
+    this.normalizeSingleRoomData(db);
+    this.normalizePointState(db);
+    db.bracketState = buildBracketState(db.matches, db.teams);
+    return db;
+  }
+
+  private normalizeSingleRoomData(db: DatabaseSchema) {
+    if (!Array.isArray(db.rooms) || db.rooms.length === 0) {
+      db.rooms = [SEED_ROOMS[0]];
+    }
+
+    const primaryRoom = db.rooms.find((item) => item.isActive) || db.rooms[0];
+    db.rooms = [primaryRoom];
+
+    for (const user of db.users) {
+      user.groupId = primaryRoom.id;
+    }
+    for (const prediction of db.predictions) {
+      prediction.groupId = primaryRoom.id;
+    }
+    for (const bet of db.tournamentBets) {
+      bet.roomId = primaryRoom.id;
+    }
+    for (const activity of db.activities || []) {
+      activity.groupId = primaryRoom.id;
+    }
+  }
+
+  private roundPoints(value: number | undefined | null) {
+    return Number.isFinite(value) ? Math.round(value as number) : 0;
+  }
+
+  private normalizePointState(db: DatabaseSchema) {
+    db.wallets = db.wallets.map((wallet) => ({
+      ...wallet,
+      balance: this.roundPoints(wallet.balance),
+      initialPoints: this.roundPoints(wallet.initialPoints),
+    }));
+
+    db.transactions = db.transactions.map((transaction) => ({
+      ...transaction,
+      amount: this.roundPoints(transaction.amount),
+      balanceBefore: this.roundPoints(transaction.balanceBefore),
+      balanceAfter: this.roundPoints(transaction.balanceAfter),
+    }));
+
+    db.predictions = db.predictions.map((prediction) => ({
+      ...prediction,
+      stakePoints: this.roundPoints(prediction.stakePoints),
+      potentialReturn: this.roundPoints(prediction.potentialReturn),
+      settledReturn:
+        typeof prediction.settledReturn === 'number' ? this.roundPoints(prediction.settledReturn) : prediction.settledReturn,
+      settledProfit:
+        typeof prediction.settledProfit === 'number' ? this.roundPoints(prediction.settledProfit) : prediction.settledProfit,
+    }));
+
+    db.tournamentBets = db.tournamentBets.map((bet) => ({
+      ...bet,
+      stakePoints: this.roundPoints(bet.stakePoints),
+      potentialReturn: this.roundPoints(bet.potentialReturn),
+      settledReturn: typeof bet.settledReturn === 'number' ? this.roundPoints(bet.settledReturn) : bet.settledReturn,
+      settledProfit: typeof bet.settledProfit === 'number' ? this.roundPoints(bet.settledProfit) : bet.settledProfit,
+    }));
+  }
+
+  private readMySqlSnapshot(): DatabaseSchema | null {
+    if (!fs.existsSync(STORAGE_SCRIPT_PATH)) {
+      throw new Error(`MySQL storage script not found: ${STORAGE_SCRIPT_PATH}`);
+    }
+    const raw = execFileSync(process.execPath, [STORAGE_SCRIPT_PATH, 'load'], {
+      cwd: process.cwd(),
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const parsed = JSON.parse(raw) as DatabaseSchema;
+    return parsed;
+  }
+
+  private writeMySqlSnapshot(snapshot: DatabaseSchema) {
+    if (!fs.existsSync(STORAGE_SCRIPT_PATH)) {
+      throw new Error(`MySQL storage script not found: ${STORAGE_SCRIPT_PATH}`);
+    }
+    const tempFile = path.join(os.tmpdir(), `worldcup-db-${Date.now()}.json`);
+    fs.writeFileSync(tempFile, JSON.stringify(snapshot, null, 2), 'utf-8');
+    try {
+      execFileSync(process.execPath, [STORAGE_SCRIPT_PATH, 'save', tempFile], {
+        cwd: process.cwd(),
+        encoding: 'utf-8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    } finally {
+      if (fs.existsSync(tempFile)) {
+        fs.unlinkSync(tempFile);
+      }
+    }
+  }
+
   private ensureDerivedState() {
     if (!this.cache) return;
+    this.normalizeSingleRoomData(this.cache);
+    this.normalizePointState(this.cache);
     if (!Array.isArray(this.cache.tournamentBets)) {
       this.cache.tournamentBets = [];
     }
@@ -377,11 +591,39 @@ class DatabaseService {
     }
     if (!Array.isArray(this.cache.teamHistory)) {
       this.cache.teamHistory = SEED_TEAM_HISTORY;
+    } else {
+      const existingHistoryIds = new Set(this.cache.teamHistory.map((item) => item.id));
+      const missingHistory = SEED_TEAM_HISTORY.filter((item) => !existingHistoryIds.has(item.id));
+      if (missingHistory.length > 0) {
+        this.cache.teamHistory = [...this.cache.teamHistory, ...missingHistory];
+      }
     }
-    // 合并球队扩展字段（fifaRank、coachName等）
+    if (!Array.isArray((this.cache as any).activities)) {
+      (this.cache as any).activities = [];
+    }
+    if (!Array.isArray((this.cache as any).userBadges)) {
+      (this.cache as any).userBadges = [];
+    }
+    if (!Array.isArray((this.cache as any).cardInventories)) {
+      (this.cache as any).cardInventories = [];
+    }
+    if (!Array.isArray((this.cache as any).userTitles)) {
+      (this.cache as any).userTitles = [];
+    }
+    if (!Array.isArray((this.cache as any).adminSessions)) {
+      (this.cache as any).adminSessions = [];
+    }
+    if (!Array.isArray((this.cache as any).checkinLog)) {
+      (this.cache as any).checkinLog = [];
+    }
+    // 合并球队扩展字段（fifaRank、coachName等），并补齐缺失球队
     if (Array.isArray(this.cache.teams)) {
       const seedTeamMap = new Map(THE_TEAMS.map(t => [t.id, t]));
-      this.cache.teams = this.cache.teams.map(team => {
+      const existingTeamIds = new Set(this.cache.teams.map((team) => team.id));
+      const missingTeams = THE_TEAMS.filter((team) => !existingTeamIds.has(team.id));
+      const mergedTeams = [...this.cache.teams, ...missingTeams];
+
+      this.cache.teams = mergedTeams.map(team => {
         const seed = seedTeamMap.get(team.id);
         const meta = TEAM_META[team.id];
         return {
@@ -397,6 +639,26 @@ class DatabaseService {
           } : {}),
         };
       });
+    }
+    if (Array.isArray(this.cache.matches)) {
+      const existingMatchIds = new Set(this.cache.matches.map((match) => match.id));
+      const hasComparableMatch = (candidate: Match) =>
+        this.cache!.matches.some((match) => {
+          if (existingMatchIds.has(candidate.id) && match.id === candidate.id) {
+            return true;
+          }
+
+          return (
+            match.homeTeamId === candidate.homeTeamId &&
+            match.awayTeamId === candidate.awayTeamId &&
+            match.startTimeUtc.slice(0, 16) === candidate.startTimeUtc.slice(0, 16)
+          );
+        });
+
+      const missingMatches = SEED_MATCHES.filter((match) => !hasComparableMatch(match));
+      if (missingMatches.length > 0) {
+        this.cache.matches = [...this.cache.matches, ...missingMatches];
+      }
     }
     if (!this.cache.bracketState || !Array.isArray(this.cache.bracketState.rounds)) {
       this.cache.bracketState = buildBracketState(this.cache.matches || [], this.cache.teams || []);

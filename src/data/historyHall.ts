@@ -562,3 +562,53 @@ export const WORLD_CUP_RECORDS: WorldCupRecordItem[] = [
     note: '1994年美国世界杯对阵俄罗斯时破门，"米拉大叔"的庆祝舞步成为经典。',
   },
 ];
+
+export type FunFactItem = {
+  title: string;
+  fact: string;
+  icon: string;
+};
+
+export const FUN_FACTS: FunFactItem[] = [
+  { title: '奖杯曾失窃', fact: '1966年世界杯前，雷米特杯在伦敦展览时被盗，一只名叫Pickles的牧羊犬在灌木丛中找到了它。', icon: '🐕' },
+  { title: '决赛帽子戏法', fact: '1966年英格兰的赫斯特在决赛中上演帽子戏法，至今仍是唯一在世界杯决赛中做到这一点的球员。', icon: '🎩' },
+  { title: '金球制胜', fact: '1998年法国世界杯首次使用"金球制"（突然死亡法），布兰科打入世界杯史上第一个金球。', icon: '✨' },
+  { title: '最远进球', fact: '2010年南非世界杯，西班牙的比利亚在对阵智利时从中圈附近射门得分，距离约45米。', icon: '🚀' },
+  { title: '红牌最多一届', fact: '2006年德国世界杯共出示28张红牌，是历史上红牌最多的一届，被称为"红牌世界杯"。', icon: '🟥' },
+  { title: '点球大战之王', fact: '德国队在世界杯点球大战中4战4胜，是点球大战胜率100%的球队。英格兰则3战1胜2负。', icon: '🎯' },
+  { title: '东道主魔咒', fact: '2010年南非是第一个小组未出线的东道主。此前所有东道主都至少进入了淘汰赛阶段。', icon: '🏠' },
+  { title: '卫冕冠军魔咒', fact: '2002年法国、2010年意大利、2014年西班牙、2018年德国——近20年4支卫冕冠军全部小组出局。', icon: '🔮' },
+];
+
+export type GoldenBootItem = {
+  year: number;
+  player: string;
+  code: string;
+  team: string;
+  goals: number;
+};
+
+export const GOLDEN_BOOT_WINNERS: GoldenBootItem[] = [
+  { year: 2022, player: '姆巴佩', code: 'FRA', team: '法国', goals: 8 },
+  { year: 2018, player: '凯恩', code: 'ENG', team: '英格兰', goals: 6 },
+  { year: 2014, player: 'J罗', code: 'COL', team: '哥伦比亚', goals: 6 },
+  { year: 2010, player: '穆勒', code: 'GER', team: '德国', goals: 5 },
+  { year: 2006, player: '克洛泽', code: 'GER', team: '德国', goals: 5 },
+  { year: 2002, player: '罗纳尔多', code: 'BRA', team: '巴西', goals: 8 },
+  { year: 1998, player: '苏克', code: 'CRO', team: '克罗地亚', goals: 6 },
+  { year: 1994, player: '斯托伊奇科夫', code: 'BUL', team: '保加利亚', goals: 6 },
+  { year: 1990, player: '斯基拉奇', code: 'ITA', team: '意大利', goals: 6 },
+  { year: 1986, player: '莱因克尔', code: 'ENG', team: '英格兰', goals: 6 },
+  { year: 1982, player: '罗西', code: 'ITA', team: '意大利', goals: 6 },
+  { year: 1978, player: '肯佩斯', code: 'ARG', team: '阿根廷', goals: 6 },
+  { year: 1974, player: '拉托', code: 'POL', team: '波兰', goals: 7 },
+  { year: 1970, player: '穆勒', code: 'GER', team: '西德', goals: 10 },
+  { year: 1966, player: '尤西比奥', code: 'POR', team: '葡萄牙', goals: 9 },
+  { year: 1962, player: '加林查', code: 'BRA', team: '巴西', goals: 4 },
+  { year: 1958, player: '方丹', code: 'FRA', team: '法国', goals: 13 },
+  { year: 1954, player: '柯奇士', code: 'HUN', team: '匈牙利', goals: 11 },
+  { year: 1950, player: '阿德米尔', code: 'BRA', team: '巴西', goals: 8 },
+  { year: 1938, player: '莱昂尼达斯', code: 'BRA', team: '巴西', goals: 7 },
+  { year: 1934, player: '内耶德利', code: 'TCH', team: '捷克斯洛伐克', goals: 5 },
+  { year: 1930, player: '斯塔比莱', code: 'ARG', team: '阿根廷', goals: 8 },
+];

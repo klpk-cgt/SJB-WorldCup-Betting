@@ -5,7 +5,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Brain, Calendar, CheckCircle2, Coins, Sparkles, XCircle } from 'lucide-react';
+import { Brain, Calendar, CheckCircle2, ChevronRight, Coins, Sparkles, Timer, XCircle, Zap } from 'lucide-react';
 import { AIContent, Match, MatchStatus } from '../types';
 import { apiRequest, formatDate } from '../utils/api';
 import { getBeijingDayLabel, getMatchesForNearestDay } from '../utils/matchDisplay';
@@ -15,6 +15,7 @@ import FlagBadge from './home/FlagBadge';
 import SmartAvatar from './SmartAvatar';
 import TeamDetailDrawer from './TeamDetailDrawer';
 import { useToast } from './ToastProvider';
+import ActivityFeed, { ActivityItem } from './ActivityFeed';
 
 interface HomeTabProps {
   user: any;
@@ -157,6 +158,38 @@ function extractAiView(ai: AIContent | null) {
   };
 }
 
+function ColdAlerts() {
+  const [alerts, setAlerts] = useState<Array<{ matchId: string; homeTeam: string; awayTeam: string; alert: string }>>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    apiRequest('/api/ai/cold-alerts')
+      .then((data) => {
+        setAlerts(data.alerts || []);
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
+  }, []);
+
+  if (!loaded || alerts.length === 0) return null;
+
+  return (
+    <div className="mt-4">
+      <div className="flex items-center gap-1.5 text-[10px] font-black text-amber-700">
+        <Zap className="h-3 w-3" />
+        冷门提醒
+      </div>
+      <div className="mt-2 space-y-1.5">
+        {alerts.slice(0, 3).map((a) => (
+          <div key={a.matchId} className="rounded-xl border border-amber-100 bg-amber-50/50 px-3 py-2 text-xs text-amber-800">
+            {a.alert}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: HomeTabProps) {
   const [matches, setMatches] = useState<Match[]>([]);
   const [dailyAI, setDailyAI] = useState<AIContent | null>(null);
@@ -173,6 +206,8 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
   const [quizFinishedToday, setQuizFinishedToday] = useState(false);
   const [teamDetailId, setTeamDetailId] = useState<string | null>(null);
   const [teamDetailOpen, setTeamDetailOpen] = useState(false);
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [activitiesLoading, setActivitiesLoading] = useState(true);
   const toast = useToast();
 
   useEffect(() => {
@@ -183,9 +218,15 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
   useEffect(() => {
     async function initHome() {
       try {
-        const [matchesData, aiData] = await Promise.all([apiRequest('/api/matches'), apiRequest('/api/ai/daily')]);
+        const [matchesData, aiData, activityData] = await Promise.all([
+          apiRequest('/api/matches'),
+          apiRequest('/api/ai/daily'),
+          apiRequest('/api/activities?limit=20'),
+        ]);
         setMatches(matchesData);
         setDailyAI(aiData);
+        setActivities(activityData.activities || []);
+        setActivitiesLoading(false);
 
         if (user) {
           try {
@@ -265,11 +306,33 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
 
   const liveMatch = matches.find((match) => match.status === MatchStatus.LIVE);
   const nearestDayMatches = getMatchesForNearestDay(matches);
-  const recentMatches = nearestDayMatches.slice(0, 4);
+  const recentMatches = nearestDayMatches.slice(0, 8);
   const featuredMatch = liveMatch || recentMatches[0] || matches[0];
   const focusMatch = useMemo(() => buildFocusMatch(featuredMatch, now), [featuredMatch, now]);
   const aiView = extractAiView(dailyAI);
   const nearestDayLabel = recentMatches[0] ? getBeijingDayLabel(recentMatches[0].startTimeUtc) : '';
+
+  // 下一场未开赛的比赛倒计时
+  const nextUpcoming = useMemo(() => {
+    const upcoming = matches
+      .filter((m) => m.status === MatchStatus.NS && new Date(m.startTimeUtc).getTime() > now)
+      .sort((a, b) => new Date(a.startTimeUtc).getTime() - new Date(b.startTimeUtc).getTime());
+    return upcoming[0] || null;
+  }, [matches, now]);
+
+  const countdownText = useMemo(() => {
+    if (!nextUpcoming) return null;
+    return formatCountdown(nextUpcoming.startTimeUtc, now);
+  }, [nextUpcoming, now]);
+
+  // AI 今日推荐 3 场
+  const aiRecommendations = useMemo(() => {
+    const upcoming = matches
+      .filter((m) => m.status === MatchStatus.NS && new Date(m.startTimeUtc).getTime() > now)
+      .sort((a, b) => new Date(a.startTimeUtc).getTime() - new Date(b.startTimeUtc).getTime())
+      .slice(0, 3);
+    return upcoming;
+  }, [matches, now]);
 
   if (loading) {
     return (
@@ -318,6 +381,31 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
         </div>
       </section>
 
+      {/* 下一场开赛倒计时 */}
+      {nextUpcoming && countdownText && (
+        <section className="rounded-[28px] border border-emerald-200 bg-gradient-to-r from-emerald-50 via-white to-cyan-50 px-5 py-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Timer className="h-4 w-4 text-emerald-600" />
+              <span className="text-xs font-black text-emerald-800">下一场开赛倒计时</span>
+            </div>
+            <span className="text-[10px] font-semibold text-slate-400">{formatBeijingTime(nextUpcoming.startTimeUtc)}</span>
+          </div>
+          <div className="mt-3 flex items-center gap-3">
+            <div className="flex items-center gap-2 text-sm font-black text-slate-900">
+              <FlagBadge flagCode={nextUpcoming.homeTeam?.code} size="sm" />
+              <span className="truncate">{nextUpcoming.homeTeam?.nameZh}</span>
+              <span className="text-slate-400">vs</span>
+              <span className="truncate">{nextUpcoming.awayTeam?.nameZh}</span>
+              <FlagBadge flagCode={nextUpcoming.awayTeam?.code} size="sm" />
+            </div>
+            <div className="ml-auto shrink-0 rounded-2xl bg-emerald-600 px-3 py-1.5 font-mono text-lg font-black tracking-wider text-white">
+              {countdownText}
+            </div>
+          </div>
+        </section>
+      )}
+
       <FocusMatchCard
         match={focusMatch}
         onPrimaryAction={() => onNavigate('prediction', featuredMatch?.id)}
@@ -342,6 +430,28 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
           setTeamDetailOpen(true);
         }}
       />
+
+      <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Zap className="h-4.5 w-4.5 text-rose-500" />
+            <h3 className="text-sm font-black text-slate-900">群内动态</h3>
+            <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-700 ring-1 ring-rose-100">
+              LIVE
+            </span>
+          </div>
+          <span className="text-[10px] font-semibold text-slate-400">最近 20 条</span>
+        </div>
+
+        <div className="mt-4">
+          <ActivityFeed
+            activities={activities}
+            loading={activitiesLoading}
+            emptyText="群里最近有点安静，快去下个注或者签个到带节奏吧～"
+            limit={6}
+          />
+        </div>
+      </section>
 
       <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
         <div className="flex items-center justify-between">
@@ -371,6 +481,44 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
 
           <p className="mt-3 text-[10px] leading-4 text-amber-700/70">风险提醒：{aiView.riskWarning}</p>
         </div>
+
+        {/* AI 今日推荐 3 场 */}
+        {aiRecommendations.length > 0 && (
+          <div className="mt-4">
+            <div className="flex items-center gap-1.5 text-[10px] font-black text-cyan-700">
+              <Sparkles className="h-3 w-3" />
+              AI 今日推荐关注
+            </div>
+            <div className="mt-2 space-y-2">
+              {aiRecommendations.map((match, idx) => (
+                <button
+                  key={match.id}
+                  onClick={() => onNavigate('match-detail', match.id, 'overview')}
+                  className="flex w-full items-center gap-3 rounded-2xl border border-cyan-100 bg-cyan-50/50 px-3 py-2 text-left transition hover:bg-cyan-50"
+                >
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-cyan-500 text-[10px] font-black text-white">
+                    {idx + 1}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 text-xs font-black text-slate-900">
+                      <FlagBadge flagCode={match.homeTeam?.code} size="sm" />
+                      <span className="truncate">{match.homeTeam?.nameZh}</span>
+                      <span className="text-slate-400">vs</span>
+                      <span className="truncate">{match.awayTeam?.nameZh}</span>
+                      <FlagBadge flagCode={match.awayTeam?.code} size="sm" />
+                    </div>
+                    <p className="mt-0.5 text-[9px] text-slate-500">{formatBeijingTime(match.startTimeUtc)} · {stageLabel(match.stage)}</p>
+                  </div>
+                  <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-[9px] text-amber-600/70">仅供朋友群娱乐讨论，不代表真实预测结果。</p>
+          </div>
+        )}
+
+        {/* 冷门提醒 */}
+        <ColdAlerts />
       </section>
 
       <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
@@ -378,81 +526,79 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
           <div className="flex items-center gap-2">
             <Calendar className="h-4.5 w-4.5 text-slate-700" />
             <div>
-              <h3 className="text-sm font-black text-slate-900">最近赛程</h3>
+              <h3 className="text-sm font-black text-slate-900">今日赛程</h3>
               {nearestDayLabel && <p className="mt-1 text-[11px] font-semibold text-slate-500">{nearestDayLabel}</p>}
             </div>
           </div>
-          <button onClick={() => onNavigate('matches')} className="text-xs font-bold text-slate-500 transition hover:text-slate-800">
-            去赛程页
+          <button onClick={() => onNavigate('matches')} className="flex items-center gap-1 text-xs font-bold text-slate-500 transition hover:text-slate-800">
+            全部赛程
+            <ChevronRight className="h-3.5 w-3.5" />
           </button>
         </div>
 
-        <div className="mt-4 space-y-3">
-          {recentMatches.length === 0 ? (
-            <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-xs text-slate-500">
-              最近还没有可展示的赛程，稍后回来看看。
-            </div>
-          ) : (
-            recentMatches.map((match) => {
+        {recentMatches.length === 0 ? (
+          <div className="mt-4 rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-xs text-slate-500">
+            最近还没有可展示的赛程，稍后回来看看。
+          </div>
+        ) : (
+          <div className="mt-4 -mx-1 flex gap-3 overflow-x-auto pb-2 scrollbar-thin snap-x snap-mandatory">
+            {recentMatches.map((match) => {
               const isLive = match.status === MatchStatus.LIVE;
               const isFinished = [MatchStatus.FT, MatchStatus.AET, MatchStatus.PEN].includes(match.status);
+              const matchCountdown = !isLive && !isFinished ? formatCountdown(match.startTimeUtc, now) : null;
 
               return (
                 <button
                   key={match.id}
                   onClick={() => onNavigate('match-detail', match.id, 'overview')}
-                  className="flex w-full items-center gap-3 rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-left transition hover:border-slate-300 hover:bg-white"
+                  className="snap-start shrink-0 w-[200px] rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-left transition hover:border-emerald-200 hover:bg-white hover:shadow-sm"
                 >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-500">
-                      <span>{stageLabel(match.stage)}</span>
-                      <span className="text-slate-300">·</span>
-                      <span>{formatDate(match.startTimeUtc)}</span>
-                    </div>
-                    <div className="mt-2 flex items-center gap-2 text-sm font-black text-slate-900">
-                      <span
-                        className="cursor-pointer"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setTeamDetailId(match.homeTeam?.id);
-                          setTeamDetailOpen(true);
-                        }}
-                      >
-                        <FlagBadge flagCode={match.homeTeam?.code} size="sm" />
-                      </span>
-                      <span className="truncate">{match.homeTeam?.nameZh}</span>
-                      <span className="text-slate-400">{isLive || isFinished ? `${match.homeScore ?? 0} : ${match.awayScore ?? 0}` : 'VS'}</span>
-                      <span className="truncate">{match.awayTeam?.nameZh}</span>
-                      <span
-                        className="cursor-pointer"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setTeamDetailId(match.awayTeam?.id);
-                          setTeamDetailOpen(true);
-                        }}
-                      >
-                        <FlagBadge flagCode={match.awayTeam?.code} size="sm" />
-                      </span>
-                    </div>
+                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
+                    <span>{stageLabel(match.stage)}</span>
+                    {isLive && (
+                      <span className="rounded-full bg-rose-500 px-1.5 py-0.5 text-[8px] font-black text-white">LIVE</span>
+                    )}
                   </div>
 
-                  <div className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold ring-1 ring-slate-200">
-                    <span className={isLive ? 'text-rose-600' : isFinished ? 'text-slate-600' : 'text-emerald-700'}>
+                  <div className="mt-2.5 flex items-center gap-1.5">
+                    <FlagBadge flagCode={match.homeTeam?.code} size="sm" />
+                    <span className="truncate text-xs font-black text-slate-900">{match.homeTeam?.nameZh}</span>
+                  </div>
+                  <div className="mt-1 flex items-center gap-1.5">
+                    <FlagBadge flagCode={match.awayTeam?.code} size="sm" />
+                    <span className="truncate text-xs font-black text-slate-900">{match.awayTeam?.nameZh}</span>
+                  </div>
+
+                  <div className="mt-2.5 flex items-center justify-between">
+                    {isLive || isFinished ? (
+                      <span className="text-sm font-black text-slate-900">{match.homeScore ?? 0} : {match.awayScore ?? 0}</span>
+                    ) : (
+                      <span className="text-[10px] font-bold text-emerald-600">{formatBeijingTime(match.startTimeUtc)}</span>
+                    )}
+                    <span className={`rounded-full px-1.5 py-0.5 text-[8px] font-black ${
+                      isLive ? 'bg-rose-50 text-rose-600' : isFinished ? 'bg-slate-100 text-slate-500' : 'bg-emerald-50 text-emerald-700'
+                    }`}>
                       {isLive ? '进行中' : isFinished ? '已结束' : '未开赛'}
                     </span>
                   </div>
+
+                  {!isLive && !isFinished && matchCountdown && matchCountdown !== '00:00:00' && (
+                    <div className="mt-2 rounded-xl bg-emerald-50 px-2 py-1 text-center">
+                      <span className="font-mono text-[10px] font-black text-emerald-700">{matchCountdown}</span>
+                    </div>
+                  )}
                 </button>
               );
-            })
-          )}
-        </div>
+            })}
+          </div>
+        )}
 
         {recentMatches.length > 0 && (
           <button
             onClick={() => onNavigate('matches')}
-            className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-2.5 text-xs font-black text-white transition hover:bg-slate-800"
+            className="mt-3 inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-2.5 text-xs font-black text-white transition hover:bg-slate-800"
           >
-            查看这一天的完整赛程
+            查看完整赛程
           </button>
         )}
       </section>

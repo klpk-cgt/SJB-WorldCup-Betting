@@ -5,13 +5,23 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
+    "postinstall": "prisma generate",
+    "start": "node dist/server.cjs",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist db.json",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "prisma:generate": "prisma generate",
+    "db:push:mysql": "prisma db push",
+    "prisma:migrate": "prisma migrate deploy",
+    "db:import:mysql": "node scripts/import-db-json-to-mysql.mjs",
+    "db:verify:mysql": "node scripts/verify-mysql-import.mjs",
+    "db:summary:mysql": "node scripts/db-storage.mjs summary",
+    "ops:diagnose": "node scripts/production-diagnostics.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
+    "@prisma/client": "^6.10.1",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
     "cors": "^2.8.6",
@@ -19,9 +29,12 @@
     "express": "^4.21.2",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
+    "node-cron": "^4.2.1",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "recharts": "^3.8.1",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3",
     "vite": "^6.2.3"
   },
   "devDependencies": {
@@ -30,6 +43,7 @@
     "@types/node": "^22.14.0",
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.25.0",
+    "prisma": "^6.10.1",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",

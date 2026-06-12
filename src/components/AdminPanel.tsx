@@ -5,18 +5,20 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Settings, Shield, Users, Trophy, Play, CheckCircle, RefreshCw, BarChart3, Database, Key, Coins, HelpCircle, FileText, AlertCircle, Sparkles, Plus, Trash2, Upload, X } from 'lucide-react';
-import { apiRequest } from '../utils/api';
+import { ADMIN_KEY_STORAGE, apiRequest } from '../utils/api';
 import { Match, User, SyncLog } from '../types';
 import { useToast } from './ToastProvider';
+import AdminDashboard from './AdminDashboard';
 
 interface AdminPanelProps {
   onBackToApp: () => void;
 }
 
 export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
+  const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('');
   const [isAuthed, setIsAuthed] = useState(false);
-  const [activeTab, setActiveTab] = useState<'users' | 'matches' | 'ai' | 'logs'>('matches');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'matches' | 'ai' | 'logs' | 'predictions' | 'transactions'>('dashboard');
   const [errorStr, setErrorStr] = useState('');
 
   // Admin states
@@ -25,6 +27,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
   const [integrationStatus, setIntegrationStatus] = useState<any | null>(null);
   const [lastTestSyncResult, setLastTestSyncResult] = useState<any | null>(null);
+  const [cardStats, setCardStats] = useState<any | null>(null);
 
   // User provisioning helpers
   const [pasteNames, setPasteNames] = useState('');
@@ -66,15 +69,41 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
 
   const [settleStatusMsg, setSettleStatusMsg] = useState('');
   const [isWorking, setIsWorking] = useState(false);
+
+  // 竞猜记录查询
+  const [predUserId, setPredUserId] = useState('');
+  const [predMatchId, setPredMatchId] = useState('');
+  const [predictions, setPredictions] = useState<any[]>([]);
+  const [predTotal, setPredTotal] = useState(0);
+  const [predPage, setPredPage] = useState(1);
+
+  // 积分流水查看
+  const [txUserId, setTxUserId] = useState('');
+  const [txType, setTxType] = useState('');
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [txTotal, setTxTotal] = useState(0);
+  const [txPage, setTxPage] = useState(1);
+
   const toast = useToast();
 
   useEffect(() => {
-    const savedToken = localStorage.getItem('wc_admin_token');
+    const savedToken = localStorage.getItem(ADMIN_KEY_STORAGE);
     if (savedToken) {
       setIsAuthed(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isAuthed) {
       loadAdminData();
     }
   }, [isAuthed]);
+
+  const clearAdminSession = (message?: string) => {
+    localStorage.removeItem(ADMIN_KEY_STORAGE);
+    setIsAuthed(false);
+    setErrorStr(message || '');
+  };
 
   const loadAdminData = async () => {
     try {
@@ -89,34 +118,83 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
 
       const statusData = await apiRequest('/api/admin/integrations/status');
       setIntegrationStatus(statusData);
+
+      // 卡牌统计（可选，失败不影响）
+      try {
+        const csData = await apiRequest('/api/admin/cards/stats');
+        setCardStats(csData);
+      } catch {
+        setCardStats(null);
+      }
+      setErrorStr('');
     } catch (e: any) {
       console.error(e);
-      setErrorStr('未取得授权或网络读取错误，请重新登录。');
+      const message = e?.message || '未取得授权或网络读取错误，请重新登录。';
+      if (message.includes('权限') || message.includes('登录已失效')) {
+        clearAdminSession('管理员登录已失效，请重新登录。');
+        return;
+      }
+      setErrorStr(message);
+    }
+  };
+
+  const loadPredictions = async (page = 1) => {
+    try {
+      const params = new URLSearchParams({ page: String(page), pageSize: '20' });
+      if (predUserId) params.set('userId', predUserId);
+      if (predMatchId) params.set('matchId', predMatchId);
+      const data = await apiRequest(`/api/admin/predictions?${params}`);
+      setPredictions(data.items || []);
+      setPredTotal(data.total || 0);
+      setPredPage(page);
+    } catch (e) {
+      console.error(e);
+      toast.error('加载竞猜记录失败');
+    }
+  };
+
+  const loadTransactions = async (page = 1) => {
+    try {
+      const params = new URLSearchParams({ page: String(page), pageSize: '20' });
+      if (txUserId) params.set('userId', txUserId);
+      if (txType) params.set('type', txType);
+      const data = await apiRequest(`/api/admin/transactions?${params}`);
+      setTransactions(data.items || []);
+      setTxTotal(data.total || 0);
+      setTxPage(page);
+    } catch (e) {
+      console.error(e);
+      toast.error('加载积分流水失败');
     }
   };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorStr('');
+    if (!username.trim() || !password.trim()) {
+      setErrorStr('请输入管理员账号和密码。');
+      return;
+    }
     try {
       const res = await apiRequest('/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: 'admin', password })
+        body: JSON.stringify({ username: username.trim(), password })
       });
       if (res.success) {
-        localStorage.setItem('wc_admin_token', res.token);
+        localStorage.setItem(ADMIN_KEY_STORAGE, res.token);
         setIsAuthed(true);
-        loadAdminData();
+        setErrorStr('');
       }
     } catch (err: any) {
-      setErrorStr(err.message || '管理员密钥错误，请联系技术人员。');
+      setErrorStr(err.message || '管理员账号或密码错误。');
     }
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('wc_admin_token');
+    localStorage.removeItem(ADMIN_KEY_STORAGE);
     setIsAuthed(false);
+    setPassword('');
   };
 
   // Bulk provisioning function
@@ -256,6 +334,43 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
     }
   };
 
+  // Adjust cards
+  const handleAdjustCards = async (userId: string, cardId: string, delta: number) => {
+    setIsWorking(true);
+    try {
+      await apiRequest(`/api/admin/users/${userId}/cards/adjust`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cardId, delta }),
+      });
+      await loadAdminData();
+      toast.success('卡牌已更新');
+    } catch (e: any) {
+      toast.error('调整卡牌失败', e.message);
+    } finally {
+      setIsWorking(false);
+    }
+  };
+
+  // Bootstrap cards for all users
+  const handleBootstrapCards = async () => {
+    if (!confirm('确认给所有用户补齐初始卡牌？')) return;
+    setIsWorking(true);
+    try {
+      const res = await apiRequest('/api/admin/cards/bootstrap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      toast.success('补卡完成', `已为 ${res.count || 0} 位用户补齐初始卡牌`);
+      await loadAdminData();
+    } catch (e: any) {
+      toast.error('补卡失败', e.message);
+    } finally {
+      setIsWorking(false);
+    }
+  };
+
   const handleMatchSelect = (match: Match) => {
     setSelectedMatch(match);
     setHomeScore(match.homeScore?.toString() || '0');
@@ -380,17 +495,30 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
           </h2>
         </div>
         <p className="text-xs text-slate-500 font-bold leading-relaxed">
-          出于积分操作及赛程模拟安全考虑，管理模块已被安全加密拦截。请输入您部署或指定的管理密钥以读取大权。
+          出于积分操作及赛程同步安全考虑，请使用生产环境里配置的管理员账号和密码登录后台。
         </p>
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
             <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block mb-1.5">
-              授权访问密钥 (ADMIN PIN)
+              管理员账号
+            </label>
+            <input
+              type="text"
+              placeholder="请输入管理员账号..."
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-3 text-xs text-slate-800 focus:outline-none focus:border-rose-450 focus:bg-white transition"
+            />
+          </div>
+
+          <div>
+            <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block mb-1.5">
+              管理员密码
             </label>
             <input
               type="password"
-              placeholder="请输入管理员私有密钥..."
+              placeholder="请输入管理员密码..."
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-3 text-xs text-slate-800 focus:outline-none focus:border-rose-450 focus:bg-white transition"
@@ -450,30 +578,55 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
       </div>
 
       {/* Sub tabs switcher */}
-      <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200/80 shadow-2xs overflow-x-auto">
+      <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200/80 shadow-2xs overflow-x-auto gap-1">
+        <button
+          onClick={() => setActiveTab('dashboard')}
+          className={`py-2.5 text-center text-[10px] font-bold rounded-xl transition shrink-0 px-2.5 cursor-pointer ${
+            activeTab === 'dashboard' ? 'bg-white text-emerald-600 font-extrabold shadow-sm' : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <BarChart3 className="h-3 w-3 inline mr-1" />
+          仪表盘
+        </button>
         <button
           onClick={() => setActiveTab('matches')}
-          className={`flex-1 py-3 text-center text-xs font-bold rounded-xl transition shrink-0 px-3 cursor-pointer ${
+          className={`py-2.5 text-center text-[10px] font-bold rounded-xl transition shrink-0 px-2.5 cursor-pointer ${
             activeTab === 'matches' ? 'bg-white text-rose-600 font-extrabold shadow-sm' : 'text-slate-500 hover:text-slate-800'
           }`}
         >
-          🏟️ 赛程结果和一键结算
+          赛程结算
         </button>
         <button
           onClick={() => setActiveTab('users')}
-          className={`flex-1 py-3 text-center text-xs font-bold rounded-xl transition shrink-0 px-3 cursor-pointer ${
+          className={`py-2.5 text-center text-[10px] font-bold rounded-xl transition shrink-0 px-2.5 cursor-pointer ${
             activeTab === 'users' ? 'bg-white text-rose-600 font-extrabold shadow-sm' : 'text-slate-500 hover:text-slate-800'
           }`}
         >
-          		&#120140; 人员预置与调拨款
+          人员拨款
+        </button>
+        <button
+          onClick={() => { setActiveTab('predictions'); loadPredictions(); }}
+          className={`py-2.5 text-center text-[10px] font-bold rounded-xl transition shrink-0 px-2.5 cursor-pointer ${
+            activeTab === 'predictions' ? 'bg-white text-rose-600 font-extrabold shadow-sm' : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          竞猜记录
+        </button>
+        <button
+          onClick={() => { setActiveTab('transactions'); loadTransactions(); }}
+          className={`py-2.5 text-center text-[10px] font-bold rounded-xl transition shrink-0 px-2.5 cursor-pointer ${
+            activeTab === 'transactions' ? 'bg-white text-rose-600 font-extrabold shadow-sm' : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          积分流水
         </button>
         <button
           onClick={() => setActiveTab('logs')}
-          className={`flex-1 py-3 text-center text-xs font-bold rounded-xl transition shrink-0 px-3 cursor-pointer ${
-            activeTab === 'logs' ? 'bg-white text-rose-600 font-extrabold shadow-sm' : 'text-slate-500 hover:text-slate-850'
+          className={`py-2.5 text-center text-[10px] font-bold rounded-xl transition shrink-0 px-2.5 cursor-pointer ${
+            activeTab === 'logs' ? 'bg-white text-rose-600 font-extrabold shadow-sm' : 'text-slate-500 hover:text-slate-800'
           }`}
         >
-          📊 API 同步调试账单
+          同步日志
         </button>
       </div>
 
@@ -672,6 +825,8 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
       )}
 
       {/* PROVISION AND WALLET ADJUST TAB */}
+      {activeTab === 'dashboard' && <AdminDashboard />}
+
       {activeTab === 'users' && (
         <div className="space-y-6">
           {/* 单个创建账号 */}
@@ -911,6 +1066,11 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
                       <p className="text-[9px] text-slate-400 font-bold mt-1">
                         群组: {u.groupName || '未分组'} | 猜单: {u.betsCount} 场
                       </p>
+                      {u.cards && Object.keys(u.cards).length > 0 && (
+                        <p className="text-[9px] text-amber-600 font-bold mt-0.5">
+                          🃏 {(u.cards.NO_LOSS || 0) + (u.cards.DOUBLE || 0) + (u.cards.REGRET || 0) + (u.cards.FLOOR || 0)} 张卡牌
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -947,6 +1107,57 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
                 </div>
               ))}
             </div>
+
+            {/* 卡牌管理工具栏 */}
+            <div className="mt-3 flex items-center justify-between rounded-2xl border border-amber-100 bg-amber-50/50 p-3">
+              <div>
+                <p className="text-xs font-bold text-amber-800">🃏 道具卡全局管理</p>
+                <p className="text-[10px] text-amber-600">给所有用户补齐初始卡牌，让大家都玩起来</p>
+              </div>
+              <button
+                onClick={handleBootstrapCards}
+                disabled={isWorking}
+                className="text-[10px] bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg font-bold cursor-pointer transition disabled:opacity-50"
+              >
+                一键补卡
+              </button>
+            </div>
+
+            {/* 卡牌使用统计 */}
+            {cardStats && (
+              <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50/50 p-3">
+                <p className="text-xs font-black text-slate-800 mb-2">📊 卡牌使用统计</p>
+                <div className="grid grid-cols-4 gap-2">
+                  {[
+                    { id: 'NO_LOSS', label: '免亏卡', icon: '🛡️' },
+                    { id: 'DOUBLE', label: '双倍卡', icon: '⚡' },
+                    { id: 'REGRET', label: '反悔卡', icon: '↩️' },
+                    { id: 'FLOOR', label: '保底卡', icon: '🛟' },
+                  ].map((c) => (
+                    <div key={c.id} className="rounded-xl bg-white p-2 text-center">
+                      <div className="text-base">{c.icon}</div>
+                      <div className="text-[10px] font-bold text-slate-500">{c.label}</div>
+                      <div className="text-[10px] text-slate-700 mt-0.5">库存 <span className="font-black text-emerald-600">{cardStats.totalStock?.[c.id] || 0}</span></div>
+                      <div className="text-[10px] text-slate-700">已用 <span className="font-black text-amber-600">{cardStats.usedCount?.[c.id] || 0}</span></div>
+                    </div>
+                  ))}
+                </div>
+                {cardStats.recentUses && cardStats.recentUses.length > 0 && (
+                  <div className="mt-2 max-h-32 overflow-y-auto rounded-lg bg-white p-2 text-[10px]">
+                    {cardStats.recentUses.slice(0, 8).map((use: any, idx: number) => (
+                      <div key={idx} className="flex justify-between items-center py-1 border-b border-slate-50 last:border-0">
+                        <span>
+                          <span className="font-black text-amber-700">{use.userName}</span>
+                          <span className="text-slate-400"> 使用 </span>
+                          <span className="font-mono text-slate-700">{use.cardId}</span>
+                        </span>
+                        <span className="text-slate-400 text-[9px]">{use.status}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1037,6 +1248,178 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
                   )}
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* PREDICTIONS ADMIN TAB */}
+      {activeTab === 'predictions' && (
+        <div className="bg-white p-5 rounded-3xl border border-slate-200 space-y-4 shadow-2xs">
+          <h4 className="text-xs font-black text-slate-800 flex items-center gap-1.5 border-b border-slate-100 pb-2">
+            <FileText className="w-5 h-5 text-rose-500" />
+            竞猜记录查询
+            <span className="ml-auto text-[10px] font-bold text-slate-400">共 {predTotal} 条</span>
+          </h4>
+
+          <div className="flex flex-wrap gap-2">
+            <select
+              value={predUserId}
+              onChange={(e) => setPredUserId(e.target.value)}
+              className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700"
+            >
+              <option value="">全部用户</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>{u.displayName} ({u.loginCode})</option>
+              ))}
+            </select>
+            <select
+              value={predMatchId}
+              onChange={(e) => setPredMatchId(e.target.value)}
+              className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700"
+            >
+              <option value="">全部比赛</option>
+              {matches.map((m) => (
+                <option key={m.id} value={m.id}>{m.homeTeam?.nameZh || '?'} vs {m.awayTeam?.nameZh || '?'}</option>
+              ))}
+            </select>
+            <button
+              onClick={() => loadPredictions(1)}
+              className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-black text-white hover:bg-rose-700 transition"
+            >
+              查询
+            </button>
+          </div>
+
+          {predictions.length === 0 ? (
+            <p className="text-xs text-slate-400 py-8 font-bold text-center">暂无竞猜记录</p>
+          ) : (
+            <div className="space-y-2 max-h-[400px] overflow-y-auto">
+              {predictions.map((p) => (
+                <div key={p.id} className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-black text-slate-900">{p.userName}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${
+                      p.status === 'WON' ? 'bg-emerald-100 text-emerald-700' : p.status === 'LOST' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-500'
+                    }`}>{p.status}</span>
+                  </div>
+                  <div className="mt-1 text-slate-600">{p.matchLabel}</div>
+                  <div className="mt-1 flex items-center gap-3 text-[10px] text-slate-500">
+                    <span>{p.optionLabel}</span>
+                    <span>赔率 {p.oddsDecimal}</span>
+                    <span>投注 {p.stakePoints}</span>
+                    {p.potentialReturn && <span>可赢 {p.potentialReturn}</span>}
+                    {p.usedCard && <span className="text-violet-600">道具: {p.usedCard}</span>}
+                  </div>
+                  <div className="mt-1 text-[9px] text-slate-400">{p.placedAt}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {predTotal > 20 && (
+            <div className="flex items-center justify-center gap-2 text-xs">
+              <button
+                onClick={() => loadPredictions(predPage - 1)}
+                disabled={predPage <= 1}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold disabled:opacity-40"
+              >
+                上一页
+              </button>
+              <span className="text-slate-500">第 {predPage} 页</span>
+              <button
+                onClick={() => loadPredictions(predPage + 1)}
+                disabled={predPage * 20 >= predTotal}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold disabled:opacity-40"
+              >
+                下一页
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TRANSACTIONS ADMIN TAB */}
+      {activeTab === 'transactions' && (
+        <div className="bg-white p-5 rounded-3xl border border-slate-200 space-y-4 shadow-2xs">
+          <h4 className="text-xs font-black text-slate-800 flex items-center gap-1.5 border-b border-slate-100 pb-2">
+            <Coins className="w-5 h-5 text-rose-500" />
+            积分流水查看
+            <span className="ml-auto text-[10px] font-bold text-slate-400">共 {txTotal} 条</span>
+          </h4>
+
+          <div className="flex flex-wrap gap-2">
+            <select
+              value={txUserId}
+              onChange={(e) => setTxUserId(e.target.value)}
+              className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700"
+            >
+              <option value="">全部用户</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>{u.displayName} ({u.loginCode})</option>
+              ))}
+            </select>
+            <select
+              value={txType}
+              onChange={(e) => setTxType(e.target.value)}
+              className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700"
+            >
+              <option value="">全部类型</option>
+              <option value="INITIAL_GRANT">初始发放</option>
+              <option value="BET_PLACED">下注扣除</option>
+              <option value="BET_WON">中奖收入</option>
+              <option value="BET_LOST">下注亏损</option>
+              <option value="ADMIN_ADJUST">管理员调整</option>
+              <option value="CARD_EFFECT">道具效果</option>
+            </select>
+            <button
+              onClick={() => loadTransactions(1)}
+              className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-black text-white hover:bg-rose-700 transition"
+            >
+              查询
+            </button>
+          </div>
+
+          {transactions.length === 0 ? (
+            <p className="text-xs text-slate-400 py-8 font-bold text-center">暂无积分流水</p>
+          ) : (
+            <div className="space-y-2 max-h-[400px] overflow-y-auto">
+              {transactions.map((t) => (
+                <div key={t.id} className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-black text-slate-900">{t.userName}</span>
+                    <span className={`font-black ${t.amount > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {t.amount > 0 ? '+' : ''}{t.amount}
+                    </span>
+                  </div>
+                  <div className="mt-1 flex items-center gap-3 text-[10px] text-slate-500">
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 font-bold">{t.type}</span>
+                    <span>余额: {t.balanceBefore} → {t.balanceAfter}</span>
+                  </div>
+                  {t.note && <div className="mt-1 text-[10px] text-slate-400">{t.note}</div>}
+                  <div className="mt-1 text-[9px] text-slate-400">{t.createdAt}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {txTotal > 20 && (
+            <div className="flex items-center justify-center gap-2 text-xs">
+              <button
+                onClick={() => loadTransactions(txPage - 1)}
+                disabled={txPage <= 1}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold disabled:opacity-40"
+              >
+                上一页
+              </button>
+              <span className="text-slate-500">第 {txPage} 页</span>
+              <button
+                onClick={() => loadTransactions(txPage + 1)}
+                disabled={txPage * 20 >= txTotal}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold disabled:opacity-40"
+              >
+                下一页
+              </button>
             </div>
           )}
         </div>

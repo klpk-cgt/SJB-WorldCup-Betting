@@ -365,10 +365,12 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
                       }`}
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <button
-                          type="button"
+                        <div
+                          role="button"
+                          tabIndex={0}
                           onClick={() => onNavigate('match-detail', match.id, 'overview')}
-                          className="min-w-0 flex-1 text-left"
+                          onKeyDown={(e) => { if (e.key === 'Enter') onNavigate('match-detail', match.id, 'overview'); }}
+                          className="min-w-0 flex-1 text-left cursor-pointer"
                         >
                           <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-500">
                             <span>{STAGE_LABELS[match.stage] || match.stage}</span>
@@ -413,7 +415,7 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
                               </button>
                             </div>
                           </div>
-                        </button>
+                        </div>
 
                         <div className="shrink-0 text-right">
                           <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold ring-1 ${badge.tone}`}>

@@ -1,13 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BarChart3, Clock3, Flag, History, Info, MapPin, Shirt, Trophy } from 'lucide-react';
-import { Match, Player, TeamHistoryResult } from '../types';
+import { BarChart3, Brain, Clock3, Flag, History, Info, MapPin, Shirt, Sparkles, Trophy, AlertTriangle, Users } from 'lucide-react';
+import { Match, MatchStatus, Player, TeamHistoryResult, AIContent } from '../types';
+import type { TeamCompleteProfile } from '../types/worldcup';
 import { apiRequest, formatDate } from '../utils/api';
 import { resolvePlayerAvatar } from '../utils/playerAvatar';
 import FlagBadge from './home/FlagBadge';
 import SmartAvatar from './SmartAvatar';
 import TeamDetailDrawer from './TeamDetailDrawer';
 
-type MatchDetailTab = 'overview' | 'lineup' | 'history' | 'stats';
+type MatchDetailTab = 'overview' | 'lineup' | 'history' | 'stats' | 'ai';
 
 interface MatchDetailPageProps {
   matchId?: string;
@@ -46,6 +47,7 @@ const TAB_META: Array<{
   { key: 'lineup', label: '阵容', icon: <Shirt className="h-3.5 w-3.5" /> },
   { key: 'history', label: '战绩', icon: <History className="h-3.5 w-3.5" /> },
   { key: 'stats', label: '统计', icon: <BarChart3 className="h-3.5 w-3.5" /> },
+  { key: 'ai', label: 'AI', icon: <Brain className="h-3.5 w-3.5" /> },
 ];
 
 export default function MatchDetailPage({
@@ -63,6 +65,11 @@ export default function MatchDetailPage({
   const [awayPlayers, setAwayPlayers] = useState<Player[]>([]);
   const [homeHistory, setHomeHistory] = useState<TeamHistoryResult[]>([]);
   const [awayHistory, setAwayHistory] = useState<TeamHistoryResult[]>([]);
+  const [homeStaticProfile, setHomeStaticProfile] = useState<TeamCompleteProfile | null>(null);
+  const [awayStaticProfile, setAwayStaticProfile] = useState<TeamCompleteProfile | null>(null);
+  const [headToHead, setHeadToHead] = useState<import('../types/worldcup').WorldCupHeadToHead | null>(null);
+  const [aiContent, setAiContent] = useState<AIContent | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
 
   useEffect(() => {
     setActiveTab(defaultTab);
@@ -77,7 +84,10 @@ export default function MatchDetailPage({
 
     setLoading(true);
     apiRequest(`/api/matches/${matchId}`)
-      .then((data) => setMatch(data))
+      .then((data) => {
+        setMatch(data);
+        setHeadToHead(data.headToHead || null);
+      })
       .catch(() => setMatch(null))
       .finally(() => setLoading(false));
   }, [matchId]);
@@ -93,13 +103,27 @@ export default function MatchDetailPage({
       setAwayPlayers(away.players || []);
       setHomeHistory(home.history || []);
       setAwayHistory(away.history || []);
+      setHomeStaticProfile(home.staticProfile || null);
+      setAwayStaticProfile(away.staticProfile || null);
     }).catch(() => {
       setHomePlayers([]);
       setAwayPlayers([]);
       setHomeHistory([]);
       setAwayHistory([]);
+      setHomeStaticProfile(null);
+      setAwayStaticProfile(null);
     });
   }, [match?.homeTeam?.id, match?.awayTeam?.id]);
+
+  // 加载 AI 分析内容
+  useEffect(() => {
+    if (activeTab !== 'ai' || !matchId) return;
+    setAiLoading(true);
+    apiRequest(`/api/ai/match/${matchId}/analysis`)
+      .then((data) => setAiContent(data))
+      .catch(() => setAiContent(null))
+      .finally(() => setAiLoading(false));
+  }, [activeTab, matchId]);
 
   const sentimentRows = useMemo(() => {
     const sentiment = (match as Match & { sentiment?: { home: number; draw: number; away: number } })?.sentiment;
@@ -219,6 +243,93 @@ export default function MatchDetailPage({
                 ))}
               </div>
 
+              {/* 球队静态数据对比 */}
+              {(homeStaticProfile || awayStaticProfile) && (
+                <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                  <h4 className="text-sm font-black text-slate-900">球队资料对比</h4>
+                  <div className="mt-3 space-y-2.5">
+                    {/* 标签对比 */}
+                    {(homeStaticProfile?.profile?.tags?.length || awayStaticProfile?.profile?.tags?.length) && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <p className="text-[9px] font-bold text-slate-400">{match.homeTeam?.nameZh}</p>
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {homeStaticProfile?.profile?.tags?.map((tag) => (
+                              <span key={tag} className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700">{tag}</span>
+                            )) || <span className="text-[9px] text-slate-400">-</span>}
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-[9px] font-bold text-slate-400">{match.awayTeam?.nameZh}</p>
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {awayStaticProfile?.profile?.tags?.map((tag) => (
+                              <span key={tag} className="rounded-full bg-cyan-50 px-1.5 py-0.5 text-[9px] font-bold text-cyan-700">{tag}</span>
+                            )) || <span className="text-[9px] text-slate-400">-</span>}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 关键数据对比 */}
+                    <div className="space-y-1.5">
+                      {[
+                        { label: 'FIFA排名', home: homeStaticProfile?.profile?.fifaRank ? `#${homeStaticProfile.profile.fifaRank}` : '-', away: awayStaticProfile?.profile?.fifaRank ? `#${awayStaticProfile.profile.fifaRank}` : '-' },
+                        { label: '世界杯参赛', home: homeStaticProfile?.profile?.worldCupAppearances ? `${homeStaticProfile.profile.worldCupAppearances}届` : '-', away: awayStaticProfile?.profile?.worldCupAppearances ? `${awayStaticProfile.profile.worldCupAppearances}届` : '-' },
+                        { label: '最佳成绩', home: homeStaticProfile?.profile?.bestResult || '-', away: awayStaticProfile?.profile?.bestResult || '-' },
+                        { label: '主教练', home: homeStaticProfile?.profile?.coachName || '-', away: awayStaticProfile?.profile?.coachName || '-' },
+                        { label: '队长', home: homeStaticProfile?.profile?.captainName || '-', away: awayStaticProfile?.profile?.captainName || '-' },
+                      ].map((row) => (
+                        <div key={row.label} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-xl bg-white px-3 py-2">
+                          <span className="text-left text-[11px] font-bold text-emerald-700">{row.home}</span>
+                          <span className="text-[9px] font-bold text-slate-400">{row.label}</span>
+                          <span className="text-right text-[11px] font-bold text-cyan-700">{row.away}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* 身价对比 */}
+                    {(homeStaticProfile?.profile?.squadValue || awayStaticProfile?.profile?.squadValue) && (
+                      <div className="rounded-xl bg-white p-3">
+                        <p className="text-center text-[9px] font-bold text-slate-400">球队身价</p>
+                        <div className="mt-1.5 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                          <span className="text-left text-xs font-black text-emerald-600">
+                            {homeStaticProfile?.profile?.squadValue ? formatMarketValue(homeStaticProfile.profile.squadValue) : '-'}
+                          </span>
+                          <span className="text-[9px] text-slate-300">vs</span>
+                          <span className="text-right text-xs font-black text-cyan-600">
+                            {awayStaticProfile?.profile?.squadValue ? formatMarketValue(awayStaticProfile.profile.squadValue) : '-'}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* 球队简介 */}
+              {(homeStaticProfile?.profile?.intro || awayStaticProfile?.profile?.intro) && (
+                <div className="grid gap-3 md:grid-cols-2">
+                  {homeStaticProfile?.profile?.intro && (
+                    <div className="rounded-3xl border border-slate-200 bg-white p-4">
+                      <div className="flex items-center gap-2">
+                        <FlagBadge flagCode={match.homeTeam?.code} size="sm" />
+                        <span className="text-xs font-black text-slate-900">{match.homeTeam?.nameZh}</span>
+                      </div>
+                      <p className="mt-2 text-[11px] leading-5 text-slate-600">{homeStaticProfile.profile.intro}</p>
+                    </div>
+                  )}
+                  {awayStaticProfile?.profile?.intro && (
+                    <div className="rounded-3xl border border-slate-200 bg-white p-4">
+                      <div className="flex items-center gap-2">
+                        <FlagBadge flagCode={match.awayTeam?.code} size="sm" />
+                        <span className="text-xs font-black text-slate-900">{match.awayTeam?.nameZh}</span>
+                      </div>
+                      <p className="mt-2 text-[11px] leading-5 text-slate-600">{awayStaticProfile.profile.intro}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {sentimentRows.length > 0 && (
                 <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
                   <h4 className="text-sm font-black text-slate-900">群内倾向</h4>
@@ -235,6 +346,71 @@ export default function MatchDetailPage({
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* 历史交锋 */}
+              {headToHead && (
+                <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-black text-slate-900">历史交锋</h4>
+                    {headToHead.accuracyLevel && (
+                      <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ${
+                        headToHead.accuracyLevel === 'verified' ? 'bg-emerald-100 text-emerald-700' :
+                        headToHead.accuracyLevel === 'needs_review' ? 'bg-amber-100 text-amber-700' :
+                        'bg-slate-100 text-slate-500'
+                      }`}>
+                        {headToHead.accuracyLevel === 'verified' ? '已验证' : headToHead.accuracyLevel === 'needs_review' ? '待复核' : '摘要'}
+                      </span>
+                    )}
+                  </div>
+                  {headToHead.worldCupMatches.length > 0 && (() => {
+                    const aWins = headToHead.worldCupMatches.filter(m => m.winner === headToHead.teamA).length;
+                    const draws = headToHead.worldCupMatches.filter(m => m.winner === 'draw').length;
+                    const bWins = headToHead.worldCupMatches.filter(m => m.winner === headToHead.teamB).length;
+                    return (
+                      <div className="mt-2 flex items-center gap-2 text-[10px]">
+                        <span className="font-black text-emerald-600">{headToHead.teamA} {aWins}胜</span>
+                        <span className="text-slate-400">{draws}平</span>
+                        <span className="font-black text-cyan-600">{bWins}胜 {headToHead.teamB}</span>
+                        <span className="text-slate-300">| 世界杯</span>
+                      </div>
+                    );
+                  })()}
+                  <p className="mt-2 text-[11px] leading-5 text-slate-500">{headToHead.worldCupSummary}</p>
+                  {headToHead.worldCupMatches.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      <p className="text-[9px] font-bold text-slate-400">世界杯交锋</p>
+                      {headToHead.worldCupMatches.map((m, i) => (
+                        <div key={i} className="rounded-xl bg-white p-2.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-slate-700">{m.competition}</span>
+                            <span className={`text-[10px] font-black ${
+                              m.winner === headToHead.teamA ? 'text-emerald-600' : m.winner === headToHead.teamB ? 'text-cyan-600' : 'text-slate-500'
+                            }`}>{m.score}</span>
+                          </div>
+                          {m.note && <p className="mt-1 text-[9px] text-slate-400">{m.note}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {headToHead.recentMatches.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      <p className="text-[9px] font-bold text-slate-400">近期交锋</p>
+                      {headToHead.recentMatches.slice(0, 3).map((m, i) => (
+                        <div key={i} className="rounded-xl bg-white p-2.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-slate-700">{m.competition}</span>
+                            <span className={`text-[10px] font-black ${
+                              m.winner === headToHead.teamA ? 'text-emerald-600' : m.winner === headToHead.teamB ? 'text-cyan-600' : 'text-slate-500'
+                            }`}>{m.score}</span>
+                          </div>
+                          {m.note && <p className="mt-1 text-[9px] text-slate-400">{m.note}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <p className="mt-2 text-[8px] italic text-slate-300">历史交锋数据为公开资料整理，不同来源可能存在统计口径差异</p>
                 </div>
               )}
 
@@ -261,10 +437,16 @@ export default function MatchDetailPage({
               awayTeam={match.awayTeam}
               homeHistory={homeHistory}
               awayHistory={awayHistory}
+              homeStaticProfile={homeStaticProfile}
+              awayStaticProfile={awayStaticProfile}
             />
           )}
 
           {activeTab === 'stats' && <StatsPanel match={match} />}
+
+          {activeTab === 'ai' && (
+            <AiAnalysisPanel match={match} aiContent={aiContent} loading={aiLoading} />
+          )}
         </div>
 
         <div className="border-t border-slate-100 px-5 py-4">
@@ -276,6 +458,11 @@ export default function MatchDetailPage({
           </button>
         </div>
       </section>
+
+      {/* 赛后复盘区 */}
+      {match && [MatchStatus.FT, MatchStatus.AET, MatchStatus.PEN].includes(match.status) && (
+        <PostMatchReview match={match} />
+      )}
 
       <TeamDetailDrawer teamId={teamDetailId} open={teamDetailOpen} onClose={() => setTeamDetailOpen(false)} />
     </div>
@@ -427,20 +614,24 @@ function HistoryPanel({
   awayTeam,
   homeHistory,
   awayHistory,
+  homeStaticProfile,
+  awayStaticProfile,
 }: {
   homeTeam?: Match['homeTeam'];
   awayTeam?: Match['awayTeam'];
   homeHistory: TeamHistoryResult[];
   awayHistory: TeamHistoryResult[];
+  homeStaticProfile?: TeamCompleteProfile | null;
+  awayStaticProfile?: TeamCompleteProfile | null;
 }) {
-  if (homeHistory.length === 0 && awayHistory.length === 0) {
+  if (homeHistory.length === 0 && awayHistory.length === 0 && !homeStaticProfile && !awayStaticProfile) {
     return <EmptyState text="暂无双方球队历史战绩数据。" />;
   }
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      <TeamHistoryColumn team={homeTeam} history={homeHistory} />
-      <TeamHistoryColumn team={awayTeam} history={awayHistory} />
+      <TeamHistoryColumn team={homeTeam} history={homeHistory} staticProfile={homeStaticProfile} />
+      <TeamHistoryColumn team={awayTeam} history={awayHistory} staticProfile={awayStaticProfile} />
     </div>
   );
 }
@@ -448,9 +639,11 @@ function HistoryPanel({
 function TeamHistoryColumn({
   team,
   history,
+  staticProfile,
 }: {
   team?: Match['homeTeam'];
   history: TeamHistoryResult[];
+  staticProfile?: TeamCompleteProfile | null;
 }) {
   const stats = useMemo(() => {
     if (history.length === 0) return null;
@@ -473,6 +666,11 @@ function TeamHistoryColumn({
         <h4 className="text-sm font-black text-slate-900">{team?.nameZh}</h4>
       </div>
 
+      {/* 静态数据 - 世界杯历史总结 */}
+      {staticProfile?.worldCupHistory?.summary && (
+        <p className="mt-2 text-[11px] leading-5 text-slate-500">{staticProfile.worldCupHistory.summary}</p>
+      )}
+
       {stats && (
         <div className="mt-3 grid grid-cols-4 gap-1.5 text-center">
           <div className="rounded-lg bg-white p-1.5">
@@ -494,33 +692,66 @@ function TeamHistoryColumn({
         </div>
       )}
 
-      <div className="mt-3 space-y-2">
-        {history.map((item) => (
-          <div key={item.id} className="rounded-xl bg-white p-2.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-black text-slate-900">{item.year}</span>
-                <span
-                  className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
-                    item.result.includes('冠军')
-                      ? 'bg-amber-100 text-amber-700'
-                      : item.result.includes('亚军')
-                        ? 'bg-gray-200 text-gray-700'
-                        : 'bg-slate-100 text-slate-600'
-                  }`}
-                >
-                  {item.result}
-                </span>
+      {/* 静态数据 - 详细世界杯历史 */}
+      {staticProfile?.worldCupHistory?.records && staticProfile.worldCupHistory.records.length > 0 ? (
+        <div className="mt-3 space-y-2">
+          {staticProfile.worldCupHistory.records.map((rec) => (
+            <div key={rec.year} className="rounded-xl bg-white p-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black text-slate-900">{rec.year}</span>
+                  <span
+                    className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
+                      rec.result.includes('冠军')
+                        ? 'bg-amber-100 text-amber-700'
+                        : rec.result.includes('亚军')
+                          ? 'bg-gray-200 text-gray-700'
+                          : 'bg-slate-100 text-slate-600'
+                    }`}
+                  >
+                    {rec.result}
+                  </span>
+                  {rec.finalRank && <span className="text-[9px] text-slate-400">第{rec.finalRank}名</span>}
+                </div>
+                <span className="text-[9px] text-slate-400">{rec.host}</span>
               </div>
-              <span className="text-[9px] text-slate-400">{item.host}</span>
+              <div className="mt-1.5 flex items-center gap-3 text-[9px] text-slate-500">
+                <span>{rec.wins}胜 {rec.draws}平 {rec.losses}负</span>
+                <span>{rec.goalsFor}:{rec.goalsAgainst}</span>
+              </div>
+              {rec.note && <p className="mt-1 text-[9px] italic text-slate-400">{rec.note}</p>}
             </div>
-            <div className="mt-1.5 flex items-center gap-3 text-[9px] text-slate-500">
-              <span>{item.wins}胜 {item.draws}平 {item.losses}负</span>
-              <span>{item.goalsFor}球</span>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-3 space-y-2">
+          {history.map((item) => (
+            <div key={item.id} className="rounded-xl bg-white p-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black text-slate-900">{item.year}</span>
+                  <span
+                    className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
+                      item.result.includes('冠军')
+                        ? 'bg-amber-100 text-amber-700'
+                        : item.result.includes('亚军')
+                          ? 'bg-gray-200 text-gray-700'
+                          : 'bg-slate-100 text-slate-600'
+                    }`}
+                  >
+                    {item.result}
+                  </span>
+                </div>
+                <span className="text-[9px] text-slate-400">{item.host}</span>
+              </div>
+              <div className="mt-1.5 flex items-center gap-3 text-[9px] text-slate-500">
+                <span>{item.wins}胜 {item.draws}平 {item.losses}负</span>
+                <span>{item.goalsFor}球</span>
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -570,5 +801,197 @@ function EmptyState({ text }: { text: string }) {
     <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-xs text-slate-500">
       {text}
     </div>
+  );
+}
+
+/* ─── AI 分析面板 ─── */
+function AiAnalysisPanel({
+  match,
+  aiContent,
+  loading,
+}: {
+  match: Match;
+  aiContent: AIContent | null;
+  loading: boolean;
+}) {
+  const [crowdReview, setCrowdReview] = useState<string>('');
+  const [crowdLoading, setCrowdLoading] = useState(true);
+
+  useEffect(() => {
+    apiRequest(`/api/ai/match/${match.id}/crowd-review`)
+      .then((data) => {
+        setCrowdReview(data.summary || data.content || '');
+      })
+      .catch(() => setCrowdReview(''))
+      .finally(() => setCrowdLoading(false));
+  }, [match.id]);
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center py-12">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-cyan-500 border-t-transparent" />
+        <p className="mt-3 text-xs font-medium text-slate-500">AI 正在分析比赛...</p>
+      </div>
+    );
+  }
+
+  if (!aiContent) {
+    return (
+      <div className="space-y-4">
+        <EmptyState text="AI 分析暂不可用，请稍后再试。" />
+        <div className="rounded-3xl border border-amber-200 bg-amber-50 p-4">
+          <div className="flex items-center gap-2 text-xs font-bold text-amber-800">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            风险提示
+          </div>
+          <p className="mt-1.5 text-[11px] leading-5 text-amber-700">
+            仅供朋友群娱乐讨论，不代表真实预测结果。临场变化多，娱乐积分别一次性压太重。
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const bullets = aiContent.bullets || [];
+  const summary = aiContent.summary || aiContent.content?.split('\n').find(Boolean) || '';
+
+  return (
+    <div className="space-y-4">
+      {/* 一句话看点 */}
+      <div className="rounded-3xl bg-gradient-to-br from-cyan-50 via-white to-emerald-50 p-4 ring-1 ring-slate-100">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-cyan-500" />
+          <span className="text-xs font-black text-cyan-700">AI 一句话看点</span>
+        </div>
+        <p className="mt-2 text-sm font-black text-slate-900">{aiContent.title || summary}</p>
+      </div>
+
+      {/* 三点分析 */}
+      {bullets.length > 0 && (
+        <div className="rounded-3xl border border-slate-200 bg-white p-4">
+          <h4 className="text-xs font-black text-slate-900">AI 三点分析</h4>
+          <div className="mt-3 space-y-2">
+            {bullets.map((bullet, idx) => (
+              <div key={idx} className="flex items-start gap-2 text-xs text-slate-700">
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-cyan-500 text-[10px] font-black text-white">
+                  {idx + 1}
+                </span>
+                <span className="leading-5">{bullet}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 娱乐倾向 */}
+      {summary && (
+        <div className="rounded-3xl border border-slate-200 bg-white p-4">
+          <h4 className="text-xs font-black text-slate-900">AI 娱乐倾向</h4>
+          <p className="mt-2 text-xs leading-5 text-slate-600">{summary}</p>
+        </div>
+      )}
+
+      {/* 群友竞猜点评 */}
+      {crowdReview && (
+        <div className="rounded-3xl border border-violet-200 bg-violet-50 p-4">
+          <div className="flex items-center gap-2">
+            <Users className="h-3.5 w-3.5 text-violet-600" />
+            <span className="text-xs font-black text-violet-700">群友竞猜点评</span>
+          </div>
+          <p className="mt-2 text-xs leading-5 text-violet-800">{crowdReview}</p>
+        </div>
+      )}
+      {!crowdReview && !crowdLoading && (
+        <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+          <div className="flex items-center gap-2">
+            <Users className="h-3.5 w-3.5 text-slate-400" />
+            <span className="text-xs font-bold text-slate-500">群友竞猜点评</span>
+          </div>
+          <p className="mt-2 text-xs text-slate-400">还没有群友下注，快来第一个！</p>
+        </div>
+      )}
+
+      {/* 冷门提醒 */}
+      <div className="rounded-3xl border border-amber-200 bg-amber-50 p-4">
+        <div className="flex items-center gap-2 text-xs font-bold text-amber-800">
+          <AlertTriangle className="h-3.5 w-3.5" />
+          冷门提醒
+        </div>
+        <p className="mt-1.5 text-[11px] leading-5 text-amber-700">
+          {aiContent.riskWarning || '注意临场变化，娱乐积分别一次性压太重。'}
+        </p>
+      </div>
+
+      {/* 风险提示 */}
+      <p className="text-center text-[9px] text-slate-400">
+        仅供朋友群娱乐讨论，不代表真实预测结果。 · {aiContent.provider || aiContent.model || 'AI 赛前助手'}
+      </p>
+    </div>
+  );
+}
+
+/* ─── 赛后复盘区 ─── */
+function PostMatchReview({ match }: { match: Match }) {
+  const [review, setReview] = useState<AIContent | null>(null);
+  const [reviewLoading, setReviewLoading] = useState(true);
+
+  useEffect(() => {
+    apiRequest(`/api/ai/match/${match.id}`)
+      .then((data: AIContent[]) => {
+        const postMatch = Array.isArray(data)
+          ? data.find((item) => item.type === 'POST_MATCH_RECAP' || item.type === 'PRE_MATCH_ANALYSIS')
+          : null;
+        setReview(postMatch || null);
+      })
+      .catch(() => setReview(null))
+      .finally(() => setReviewLoading(false));
+  }, [match.id]);
+
+  const isFinished = [MatchStatus.FT, MatchStatus.AET, MatchStatus.PEN].includes(match.status);
+  if (!isFinished) return null;
+
+  return (
+    <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+      <div className="flex items-center gap-2">
+        <Trophy className="h-4 w-4 text-amber-500" />
+        <h3 className="text-sm font-black text-slate-900">赛后复盘</h3>
+      </div>
+
+      <div className="mt-4 rounded-3xl bg-gradient-to-br from-amber-50 via-white to-slate-50 p-4 ring-1 ring-slate-100">
+        <div className="text-center">
+          <p className="text-2xl font-black text-slate-900">
+            {match.homeScore} : {match.awayScore}
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            {match.homeTeam?.nameZh} vs {match.awayTeam?.nameZh}
+          </p>
+        </div>
+      </div>
+
+      {reviewLoading ? (
+        <div className="mt-4 flex items-center justify-center py-6">
+          <div className="h-6 w-6 animate-spin rounded-full border-3 border-amber-500 border-t-transparent" />
+        </div>
+      ) : review ? (
+        <div className="mt-4 space-y-3">
+          <p className="text-sm font-black text-slate-900">{review.title || 'AI 赛后复盘'}</p>
+          <p className="text-xs leading-5 text-slate-600">{review.summary || review.content}</p>
+          {review.bullets && review.bullets.length > 0 && (
+            <div className="space-y-1.5">
+              {review.bullets.map((bullet, idx) => (
+                <div key={idx} className="flex items-start gap-1.5 text-xs text-slate-600">
+                  <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-amber-500" />
+                  <span>{bullet}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="text-[9px] text-slate-400">{review.provider || review.model || 'AI 赛后助手'}</p>
+        </div>
+      ) : (
+        <div className="mt-4 rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-xs text-slate-500">
+          AI 赛后复盘暂未生成，请稍后再来查看。
+        </div>
+      )}
+    </section>
   );
 }
