@@ -3,13 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Brain, Calendar, CheckCircle2, ChevronRight, Coins, Sparkles, Timer, XCircle, Zap } from 'lucide-react';
 import { AIContent, Match, MatchStatus } from '../types';
 import { apiRequest, formatDate } from '../utils/api';
+import { useStaggerReveal, useFadeIn } from '../animations';
 import { getBeijingDayLabel, getMatchesForNearestDay } from '../utils/matchDisplay';
 import FocusMatchCard from './home/FocusMatchCard';
+import AIPredictionCard from './home/AIPredictionCard';
 import { FocusMatch, FocusMatchStatus, TeamStats, mockFocusMatch } from './home/focusMatch';
 import FlagBadge from './home/FlagBadge';
 import SmartAvatar from './SmartAvatar';
@@ -204,6 +206,13 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
   const [quizCompleted, setQuizCompleted] = useState(false);
   const [quizScore, setQuizScore] = useState(0);
   const [quizFinishedToday, setQuizFinishedToday] = useState(false);
+  const quizSubmittingRef = useRef(false);
+  const matchesContainerRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+
+  // 动画
+  useStaggerReveal(matchesContainerRef, '.match-card-item', { stagger: 0.06, y: 15 });
+  useFadeIn(headerRef, { delay: 0.1 });
   const [teamDetailId, setTeamDetailId] = useState<string | null>(null);
   const [teamDetailOpen, setTeamDetailOpen] = useState(false);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
@@ -268,7 +277,8 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
   };
 
   const handleAnswer = async (optionIndex: number) => {
-    if (answered || !quizQuestions[currentQIndex]) return;
+    if (answered || quizSubmittingRef.current || !quizQuestions[currentQIndex]) return;
+    quizSubmittingRef.current = true;
     setSelectedOption(optionIndex);
     setAnswered(true);
 
@@ -288,6 +298,8 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
       }
     } catch {
       // Keep local feedback even if request fails
+    } finally {
+      quizSubmittingRef.current = false;
     }
   };
 
@@ -304,10 +316,39 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
     onRefreshWallet();
   };
 
-  const liveMatch = matches.find((match) => match.status === MatchStatus.LIVE);
+  const liveMatch = matches.find((match) => match.status === MatchStatus.LIVE || match.status === MatchStatus.HT);
   const nearestDayMatches = getMatchesForNearestDay(matches);
   const recentMatches = nearestDayMatches.slice(0, 8);
-  const featuredMatch = liveMatch || recentMatches[0] || matches[0];
+
+  // 焦点战卡片优先级：进行中 > 即将开赛 > 未来最近 > 已结束最近
+  const featuredMatch = useMemo(() => {
+    // 1. 优先显示正在进行的比赛
+    if (liveMatch) return liveMatch;
+
+    // 2. 显示下一场即将开赛的比赛（今天或未来最近）
+    const upcomingMatches = matches
+      .filter((m) => m.status === MatchStatus.NS && new Date(m.startTimeUtc).getTime() > now)
+      .sort((a, b) => new Date(a.startTimeUtc).getTime() - new Date(b.startTimeUtc).getTime());
+
+    if (upcomingMatches.length > 0) return upcomingMatches[0];
+
+    // 3. 如果今天没有未开赛比赛，显示未来最近一场
+    const futureMatches = matches
+      .filter((m) => new Date(m.startTimeUtc).getTime() > now)
+      .sort((a, b) => new Date(a.startTimeUtc).getTime() - new Date(b.startTimeUtc).getTime());
+
+    if (futureMatches.length > 0) return futureMatches[0];
+
+    // 4. 如果全部比赛都结束，显示最近一场已结束比赛
+    const finishedMatches = matches
+      .filter((m) => [MatchStatus.FT, MatchStatus.AET, MatchStatus.PEN].includes(m.status))
+      .sort((a, b) => new Date(b.startTimeUtc).getTime() - new Date(a.startTimeUtc).getTime());
+
+    if (finishedMatches.length > 0) return finishedMatches[0];
+
+    // 兜底
+    return matches[0];
+  }, [matches, liveMatch, now]);
   const focusMatch = useMemo(() => buildFocusMatch(featuredMatch, now), [featuredMatch, now]);
   const aiView = extractAiView(dailyAI);
   const nearestDayLabel = recentMatches[0] ? getBeijingDayLabel(recentMatches[0].startTimeUtc) : '';
@@ -358,7 +399,7 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
 
   return (
     <div className="space-y-5 pb-6">
-      <section className="flex items-center justify-between rounded-[28px] border border-slate-200 bg-white px-4 py-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+      <section ref={headerRef} className="flex items-center justify-between rounded-[28px] border border-slate-200 bg-white px-4 py-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
         <div className="flex items-center gap-3">
           <SmartAvatar name={user?.displayName || '游客观赛模式'} src={user?.avatarUrl} size={48} className="ring-1 ring-emerald-100" />
           <div>
@@ -453,73 +494,7 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
         </div>
       </section>
 
-      <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-4.5 w-4.5 text-cyan-500" />
-            <h3 className="text-sm font-black text-slate-900">AI 看点</h3>
-          </div>
-          <span className="rounded-full bg-cyan-50 px-2.5 py-1 text-[10px] font-bold text-cyan-700 ring-1 ring-cyan-100">
-            {aiView.provider}
-          </span>
-        </div>
 
-        <div className="mt-3 rounded-3xl bg-gradient-to-br from-cyan-50 via-white to-emerald-50 p-4 ring-1 ring-slate-100">
-          <p className="text-sm font-black text-slate-900">{aiView.title}</p>
-          <p className="mt-2 text-xs leading-5 text-slate-600">{aiView.summary}</p>
-
-          {aiView.bullets.length > 0 && (
-            <div className="mt-3 space-y-1.5">
-              {aiView.bullets.slice(0, 2).map((bullet) => (
-                <div key={bullet} className="flex items-start gap-1.5 text-xs text-slate-600">
-                  <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-cyan-500" />
-                  <span>{bullet}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <p className="mt-3 text-[10px] leading-4 text-amber-700/70">风险提醒：{aiView.riskWarning}</p>
-        </div>
-
-        {/* AI 今日推荐 3 场 */}
-        {aiRecommendations.length > 0 && (
-          <div className="mt-4">
-            <div className="flex items-center gap-1.5 text-[10px] font-black text-cyan-700">
-              <Sparkles className="h-3 w-3" />
-              AI 今日推荐关注
-            </div>
-            <div className="mt-2 space-y-2">
-              {aiRecommendations.map((match, idx) => (
-                <button
-                  key={match.id}
-                  onClick={() => onNavigate('match-detail', match.id, 'overview')}
-                  className="flex w-full items-center gap-3 rounded-2xl border border-cyan-100 bg-cyan-50/50 px-3 py-2 text-left transition hover:bg-cyan-50"
-                >
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-cyan-500 text-[10px] font-black text-white">
-                    {idx + 1}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 text-xs font-black text-slate-900">
-                      <FlagBadge flagCode={match.homeTeam?.code} size="sm" />
-                      <span className="truncate">{match.homeTeam?.nameZh}</span>
-                      <span className="text-slate-400">vs</span>
-                      <span className="truncate">{match.awayTeam?.nameZh}</span>
-                      <FlagBadge flagCode={match.awayTeam?.code} size="sm" />
-                    </div>
-                    <p className="mt-0.5 text-[9px] text-slate-500">{formatBeijingTime(match.startTimeUtc)} · {stageLabel(match.stage)}</p>
-                  </div>
-                  <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                </button>
-              ))}
-            </div>
-            <p className="mt-2 text-[9px] text-amber-600/70">仅供朋友群娱乐讨论，不代表真实预测结果。</p>
-          </div>
-        )}
-
-        {/* 冷门提醒 */}
-        <ColdAlerts />
-      </section>
 
       <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
         <div className="flex items-center justify-between">
@@ -541,7 +516,7 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
             最近还没有可展示的赛程，稍后回来看看。
           </div>
         ) : (
-          <div className="mt-4 -mx-1 flex gap-3 overflow-x-auto pb-2 scrollbar-thin snap-x snap-mandatory">
+          <div ref={matchesContainerRef} className="mt-4 -mx-1 flex gap-3 overflow-x-auto pb-2 scrollbar-thin snap-x snap-mandatory">
             {recentMatches.map((match) => {
               const isLive = match.status === MatchStatus.LIVE;
               const isFinished = [MatchStatus.FT, MatchStatus.AET, MatchStatus.PEN].includes(match.status);
@@ -551,7 +526,7 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
                 <button
                   key={match.id}
                   onClick={() => onNavigate('match-detail', match.id, 'overview')}
-                  className="snap-start shrink-0 w-[200px] rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-left transition hover:border-emerald-200 hover:bg-white hover:shadow-sm"
+                  className="match-card-item snap-start shrink-0 w-[200px] rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-left transition hover:border-emerald-200 hover:bg-white hover:shadow-sm"
                 >
                   <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
                     <span>{stageLabel(match.stage)}</span>

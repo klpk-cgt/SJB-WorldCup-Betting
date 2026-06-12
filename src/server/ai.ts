@@ -12,6 +12,7 @@ import {
   ShareCardRecord,
 } from '../types';
 import type { RuntimeConfig } from './config';
+import { getRuntimeConfig } from './config';
 
 const DEFAULT_PROMPT_VERSION = 'v3';
 const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash';
@@ -992,17 +993,19 @@ function buildCacheKey(params: {
 }
 
 function buildExpiryAt(match: Match | undefined, contentType: GenerateAiResultParams['contentType']) {
+  const configTtlMs = getRuntimeConfig().aiCacheTtlMinutes * 60 * 1000;
+
   if (contentType === 'LEADERBOARD_COMMENTARY') {
-    return new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
+    return new Date(Date.now() + Math.max(configTtlMs, 4 * 60 * 60 * 1000)).toISOString();
   }
   if (!match) {
-    return new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    return new Date(Date.now() + Math.max(configTtlMs, 60 * 60 * 1000)).toISOString();
   }
 
   const kickoff = new Date(match.startTimeUtc).getTime();
   const now = Date.now();
   if (kickoff <= now) {
-    return new Date(now + 30 * 60 * 1000).toISOString();
+    return new Date(now + Math.max(configTtlMs, 30 * 60 * 1000)).toISOString();
   }
 
   for (const windowMs of MATCH_ANALYSIS_REFRESH_WINDOWS_MS) {

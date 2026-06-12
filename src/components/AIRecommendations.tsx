@@ -3,7 +3,7 @@
  * 展示 AI 分析后的推荐投注方案，支持一键跟投
  */
 import { useState, useEffect } from 'react';
-import { Sparkles, TrendingUp, Shield, Target, AlertTriangle } from 'lucide-react';
+import { Sparkles, TrendingUp, Shield, Target, AlertTriangle, Swords } from 'lucide-react';
 import { apiRequest } from '../utils/api';
 import { useToast } from './ToastProvider';
 
@@ -51,7 +51,7 @@ export default function AIRecommendations({ onNavigate }: { onNavigate: (tab: st
   const handleFollow = async (rec: Recommendation) => {
     setFollowing(rec.matchId);
     try {
-      const userResp = await apiRequest('/api/user/profile');
+      const userResp = await apiRequest('/api/me');
       const wallet = userResp.wallet;
 
       if (wallet.balance < rec.suggestedStake) {
@@ -127,14 +127,17 @@ export default function AIRecommendations({ onNavigate }: { onNavigate: (tab: st
               className="rounded-2xl border border-slate-200 bg-white p-5 transition hover:shadow-md"
             >
               <div className="flex items-start justify-between mb-3">
-                <div>
+                <div className="flex-1">
                   <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 ring-1 ring-emerald-100 mb-1">
                     <Sparkles className="h-3 w-3" />
                     推荐 #{i + 1}
                   </span>
-                  <h3 className="text-sm font-black text-slate-900">{rec.label}</h3>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Swords className="h-4 w-4 text-slate-400 shrink-0" />
+                    <h3 className="text-sm font-black text-slate-900">{rec.label}</h3>
+                  </div>
                 </div>
-                <div className="text-right">
+                <div className="text-right shrink-0 ml-3">
                   <div className="text-lg font-black text-slate-900">{rec.odds.toFixed(2)}</div>
                   <div className="text-[10px] text-slate-400">赔率</div>
                 </div>

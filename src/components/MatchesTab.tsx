@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, Calendar, ChevronDown, Filter, Info, RefreshCw, Sparkles } from 'lucide-react';
 import { Match, MatchStatus, Team } from '../types';
 import { apiRequest, formatDate } from '../utils/api';
@@ -12,6 +12,7 @@ import { useToast } from './ToastProvider';
 import FlagBadge from './home/FlagBadge';
 import TeamDetailDrawer from './TeamDetailDrawer';
 import GroupStandings from './GroupStandings';
+import { useStaggerReveal } from '../animations';
 
 interface MatchesTabProps {
   onNavigate: (tab: string, matchId?: string, detailTab?: string) => void;
@@ -58,6 +59,9 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
   const [teamDetailId, setTeamDetailId] = useState<string | null>(null);
   const [teamDetailOpen, setTeamDetailOpen] = useState(false);
   const toast = useToast();
+  const matchListRef = useRef<HTMLDivElement>(null);
+
+  useStaggerReveal(matchListRef, '.match-row', { stagger: 0.05, y: 12 });
 
   const loadMatches = async () => {
     const data = await apiRequest('/api/matches');
@@ -102,9 +106,34 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
   };
 
   const featuredMatch = useMemo(() => {
-    const live = matches.find((match) => match.status === MatchStatus.LIVE || match.status === MatchStatus.HT);
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+
+    // 1. 正在进行的比赛
+    const live = matches.find((m) => m.status === MatchStatus.LIVE || m.status === MatchStatus.HT);
     if (live) return live;
-    return sortMatchesByKickoff(matches).find((match) => ![MatchStatus.FT, MatchStatus.AET, MatchStatus.PEN].includes(match.status)) || matches[0];
+
+    // 2. 今天即将开赛的比赛
+    const todayUpcoming = matches
+      .filter((m) => {
+        if ([MatchStatus.FT, MatchStatus.AET, MatchStatus.PEN].includes(m.status)) return false;
+        const start = new Date(m.startTimeUtc);
+        return start >= todayStart && start < todayEnd;
+      })
+      .sort((a, b) => new Date(a.startTimeUtc).getTime() - new Date(b.startTimeUtc).getTime());
+    if (todayUpcoming.length > 0) return todayUpcoming[0];
+
+    // 3. 未来最近一场比赛
+    const futureMatch = sortMatchesByKickoff(matches)
+      .find((m) => ![MatchStatus.FT, MatchStatus.AET, MatchStatus.PEN].includes(m.status));
+    if (futureMatch) return futureMatch;
+
+    // 4. 全部结束 → 最近一场已结束比赛
+    const finished = matches
+      .filter((m) => [MatchStatus.FT, MatchStatus.AET, MatchStatus.PEN].includes(m.status))
+      .sort((a, b) => new Date(b.startTimeUtc).getTime() - new Date(a.startTimeUtc).getTime());
+    return finished[0] || matches[0];
   }, [matches]);
 
   const visibleWindowIds = useMemo(() => new Set(getMatchesForNearestDays(matches, 2).map((match) => match.id)), [matches]);
@@ -156,67 +185,6 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
 
   return (
     <div className="space-y-5 pb-8">
-      <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-600">赛程中心</p>
-            <h3 className="mt-1 text-lg font-black text-slate-900">赛程页回归轻量，只负责找比赛和进资料页</h3>
-            <p className="mt-2 text-xs leading-6 text-slate-500">
-              默认只展示最近两天的比赛，远期赛程收纳到展开入口里，避免整页过长。
-            </p>
-          </div>
-          {isAdmin && (
-            <button
-              type="button"
-              onClick={handleManualSync}
-              disabled={syncing}
-              className="inline-flex shrink-0 items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700 transition hover:bg-white disabled:opacity-60"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />
-              {syncing ? '同步中' : '同步赛程'}
-            </button>
-          )}
-        </div>
-
-        <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_150px_auto]">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5">
-            <label className="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">搜索球队</label>
-            <input
-              type="text"
-              value={filterTeam}
-              onChange={(event) => setFilterTeam(event.target.value)}
-              placeholder="输入国家名"
-              className="w-full bg-transparent text-sm font-semibold text-slate-800 outline-none placeholder:text-slate-400"
-            />
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5">
-            <label className="mb-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">比赛阶段</label>
-            <select
-              value={filterStage}
-              onChange={(event) => setFilterStage(event.target.value as 'All' | Match['stage'])}
-              className="w-full bg-transparent text-sm font-semibold text-slate-800 outline-none"
-            >
-              <option value="All">全部阶段</option>
-              {stageOptions.map((stage) => (
-                <option key={stage} value={stage}>
-                  {STAGE_LABELS[stage] || stage}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setShowAllDays((value) => !value)}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-xs font-black text-white transition hover:bg-slate-800"
-          >
-            <Filter className="h-3.5 w-3.5" />
-            {showAllDays ? '只看最近两天' : '展开全部赛程'}
-          </button>
-        </div>
-      </section>
-
       {featuredMatch && (
         <section className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_12px_30px_rgba(15,23,42,0.05)]">
           <div className="bg-gradient-to-br from-slate-950 via-emerald-950 to-slate-900 px-5 py-5 text-white">
@@ -328,9 +296,59 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
               </p>
             </div>
           </div>
-          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-600">
-            {filteredMatches.length} 场
-          </span>
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={handleManualSync}
+                disabled={syncing}
+                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-bold text-slate-600 transition hover:bg-white disabled:opacity-60"
+              >
+                <RefreshCw className={`h-3 w-3 ${syncing ? 'animate-spin' : ''}`} />
+                {syncing ? '同步中' : '同步'}
+              </button>
+            )}
+            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-600">
+              {filteredMatches.length} 场
+            </span>
+          </div>
+        </div>
+
+        {/* 搜索和筛选按钮组 */}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="flex flex-1 items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-2">
+            <Filter className="h-3.5 w-3.5 text-slate-400" />
+            <input
+              type="text"
+              value={filterTeam}
+              onChange={(event) => setFilterTeam(event.target.value)}
+              placeholder="搜索球队"
+              className="w-full bg-transparent text-xs font-semibold text-slate-800 outline-none placeholder:text-slate-400"
+            />
+          </div>
+          <select
+            value={filterStage}
+            onChange={(event) => setFilterStage(event.target.value as 'All' | Match['stage'])}
+            className="rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700 outline-none"
+          >
+            <option value="All">全部阶段</option>
+            {stageOptions.map((stage) => (
+              <option key={stage} value={stage}>
+                {STAGE_LABELS[stage] || stage}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => setShowAllDays((value) => !value)}
+            className={`rounded-full px-3 py-2 text-xs font-bold transition ${
+              showAllDays
+                ? 'bg-emerald-600 text-white'
+                : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            {showAllDays ? '全部赛程' : '近两天'}
+          </button>
         </div>
 
         <div className="mt-4 space-y-5">
@@ -340,7 +358,7 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
             </div>
           ) : (
             groupedMatches.map((group) => (
-              <div key={group.dayKey} className="space-y-3">
+              <div key={group.dayKey} ref={matchListRef} className="space-y-3">
                 <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 ring-1 ring-slate-200">
                   <div>
                     <p className="text-sm font-black text-slate-900">{group.label}</p>
@@ -358,7 +376,7 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
                   return (
                     <div
                       key={match.id}
-                      className={`rounded-3xl border px-4 py-4 transition ${
+                      className={`match-row rounded-3xl border px-4 py-4 transition ${
                         isSelected
                           ? 'border-emerald-300 bg-emerald-50/70 shadow-[0_12px_24px_rgba(16,185,129,0.08)]'
                           : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'

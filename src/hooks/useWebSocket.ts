@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 
-type WSEventType = 
+type WSEventType =
   | 'match:score_update'
   | 'match:settled'
   | 'prediction:result'
@@ -41,23 +41,42 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
 
   const socketRef = useRef<Socket | null>(null);
   const [connected, setConnected] = useState(false);
-  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const connect = useCallback(() => {
-    if (socketRef.current?.connected) return;
+  // 用 ref 存储回调，避免 useCallback 依赖变化导致无限重连
+  const callbacksRef = useRef({
+    onScoreUpdate,
+    onMatchSettled,
+    onPredictionResult,
+    onOddsChange,
+    onNotification,
+  });
+  callbacksRef.current = {
+    onScoreUpdate,
+    onMatchSettled,
+    onPredictionResult,
+    onOddsChange,
+    onNotification,
+  };
+
+  const userIdRef = useRef(userId);
+  userIdRef.current = userId;
+
+  // 只在 enabled 变化时连接/断开
+  useEffect(() => {
+    if (!enabled) return;
 
     const socket = io(window.location.origin, {
       transports: ['websocket', 'polling'],
       reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionAttempts: 10,
+      reconnectionDelay: 2000,
+      reconnectionAttempts: 20,
+      timeout: 10000,
     });
 
     socket.on('connect', () => {
       setConnected(true);
-      // 发送用户认证
-      if (userId) {
-        socket.emit('auth', userId);
+      if (userIdRef.current) {
+        socket.emit('auth', userIdRef.current);
       }
     });
 
@@ -65,39 +84,41 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
       setConnected(false);
     });
 
-    // 监听各种事件
     socket.on('match:score_update', (payload: WSPayload) => {
-      onScoreUpdate?.(payload.data);
+      callbacksRef.current.onScoreUpdate?.(payload.data);
     });
 
     socket.on('match:settled', (payload: WSPayload) => {
-      onMatchSettled?.(payload.data);
+      callbacksRef.current.onMatchSettled?.(payload.data);
     });
 
     socket.on('prediction:result', (payload: WSPayload) => {
-      onPredictionResult?.(payload.data);
+      callbacksRef.current.onPredictionResult?.(payload.data);
     });
 
     socket.on('odds:change', (payload: WSPayload) => {
-      onOddsChange?.(payload.data);
+      callbacksRef.current.onOddsChange?.(payload.data);
     });
 
     socket.on('system:notification', (payload: WSPayload) => {
-      onNotification?.(payload.data);
+      callbacksRef.current.onNotification?.(payload.data);
     });
 
     socketRef.current = socket;
-  }, [userId, onScoreUpdate, onMatchSettled, onPredictionResult, onOddsChange, onNotification]);
 
-  const disconnect = useCallback(() => {
-    socketRef.current?.disconnect();
-    socketRef.current = null;
-    setConnected(false);
-    if (reconnectTimerRef.current) {
-      clearTimeout(reconnectTimerRef.current);
-      reconnectTimerRef.current = null;
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+      setConnected(false);
+    };
+  }, [enabled]);
+
+  // userId 变化时重新认证
+  useEffect(() => {
+    if (userId && socketRef.current?.connected) {
+      socketRef.current.emit('auth', userId);
     }
-  }, []);
+  }, [userId]);
 
   const subscribeMatch = useCallback((matchId: string) => {
     socketRef.current?.emit('subscribe:match', matchId);
@@ -106,16 +127,6 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
   const unsubscribeMatch = useCallback((matchId: string) => {
     socketRef.current?.emit('unsubscribe:match', matchId);
   }, []);
-
-  // 自动连接/断开
-  useEffect(() => {
-    if (enabled) {
-      connect();
-    }
-    return () => {
-      disconnect();
-    };
-  }, [enabled, connect, disconnect]);
 
   return {
     connected,

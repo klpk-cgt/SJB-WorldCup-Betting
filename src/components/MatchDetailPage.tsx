@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BarChart3, Brain, Clock3, Flag, History, Info, MapPin, Shirt, Sparkles, Trophy, AlertTriangle, Users } from 'lucide-react';
+import { BarChart3, Brain, Clock3, Flag, History, Info, MapPin, Shirt, Sparkles, Trophy, AlertTriangle, Users, Swords, Target, Zap } from 'lucide-react';
 import { Match, MatchStatus, Player, TeamHistoryResult, AIContent } from '../types';
 import type { TeamCompleteProfile } from '../types/worldcup';
 import { apiRequest, formatDate } from '../utils/api';
@@ -7,6 +7,7 @@ import { resolvePlayerAvatar } from '../utils/playerAvatar';
 import FlagBadge from './home/FlagBadge';
 import SmartAvatar from './SmartAvatar';
 import TeamDetailDrawer from './TeamDetailDrawer';
+import { TEAM_TACTICS } from '../data/worldcup/tactics';
 
 type MatchDetailTab = 'overview' | 'lineup' | 'history' | 'stats' | 'ai';
 
@@ -329,6 +330,57 @@ export default function MatchDetailPage({
                   )}
                 </div>
               )}
+
+              {/* 战术分析对比 */}
+              {(() => {
+                const homeTactics = match.homeTeam?.id ? TEAM_TACTICS[match.homeTeam.id] : undefined;
+                const awayTactics = match.awayTeam?.id ? TEAM_TACTICS[match.awayTeam.id] : undefined;
+                if (!homeTactics && !awayTactics) return null;
+
+                const LEVEL_MAP: Record<string, { label: string; color: string; width: string }> = {
+                  high: { label: '强', color: 'bg-emerald-500', width: 'w-full' },
+                  medium: { label: '中', color: 'bg-amber-400', width: 'w-2/3' },
+                  low: { label: '弱', color: 'bg-slate-300', width: 'w-1/3' },
+                };
+                const POSSESSION_MAP: Record<string, { label: string; color: string; width: string }> = {
+                  dominant: { label: '控球主导', color: 'bg-emerald-500', width: 'w-full' },
+                  balanced: { label: '攻守平衡', color: 'bg-cyan-500', width: 'w-2/3' },
+                  direct: { label: '直接快速', color: 'bg-amber-400', width: 'w-1/2' },
+                };
+
+                return (
+                  <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex items-center gap-2">
+                      <Swords className="h-4 w-4 text-emerald-600" />
+                      <h4 className="text-sm font-black text-slate-900">战术分析对比</h4>
+                    </div>
+
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      {/* 主队战术 */}
+                      {homeTactics && (
+                        <div className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50/50 to-white p-3">
+                          <div className="flex items-center gap-2">
+                            <FlagBadge flagCode={match.homeTeam?.code} size="sm" />
+                            <span className="text-xs font-black text-slate-900">{match.homeTeam?.nameZh}</span>
+                          </div>
+                          <TacticsCardContent tactics={homeTactics} LEVEL_MAP={LEVEL_MAP} POSSESSION_MAP={POSSESSION_MAP} />
+                        </div>
+                      )}
+
+                      {/* 客队战术 */}
+                      {awayTactics && (
+                        <div className="rounded-2xl border border-cyan-100 bg-gradient-to-br from-cyan-50/50 to-white p-3">
+                          <div className="flex items-center gap-2">
+                            <FlagBadge flagCode={match.awayTeam?.code} size="sm" />
+                            <span className="text-xs font-black text-slate-900">{match.awayTeam?.nameZh}</span>
+                          </div>
+                          <TacticsCardContent tactics={awayTactics} LEVEL_MAP={LEVEL_MAP} POSSESSION_MAP={POSSESSION_MAP} />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {sentimentRows.length > 0 && (
                 <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
@@ -791,6 +843,113 @@ function StatsPanel({ match }: { match: Match }) {
             <span className="text-sm font-black text-cyan-700">{row.away}</span>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function TacticsCardContent({
+  tactics,
+  LEVEL_MAP,
+  POSSESSION_MAP,
+}: {
+  tactics: import('../data/worldcup/tactics').TeamTactics;
+  LEVEL_MAP: Record<string, { label: string; color: string; width: string }>;
+  POSSESSION_MAP: Record<string, { label: string; color: string; width: string }>;
+}) {
+  const spLevel = LEVEL_MAP[tactics.setPieceThreat];
+  const caLevel = LEVEL_MAP[tactics.counterAttack];
+  const posInfo = POSSESSION_MAP[tactics.possessionStyle];
+  const indicators = [
+    { label: '定位球威胁', value: spLevel.label, color: spLevel.color, width: spLevel.width },
+    { label: '反击能力', value: caLevel.label, color: caLevel.color, width: caLevel.width },
+    { label: '控球风格', value: posInfo.label, color: posInfo.color, width: posInfo.width },
+  ];
+
+  return (
+    <div className="mt-2 space-y-2.5">
+      {/* 阵型 */}
+      <div className="flex items-center gap-2">
+        <span className="rounded-lg bg-emerald-600 px-2 py-0.5 text-[10px] font-black text-white">{tactics.formation}</span>
+        {tactics.formationAlt && (
+          <>
+            <span className="text-[9px] text-slate-400">备选</span>
+            <span className="rounded-lg bg-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-700">{tactics.formationAlt}</span>
+          </>
+        )}
+      </div>
+
+      {/* 风格标签 */}
+      <div className="flex flex-wrap gap-1">
+        {tactics.style.map((s) => (
+          <span key={s} className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700">{s}</span>
+        ))}
+      </div>
+
+      {/* 进攻套路 */}
+      <div>
+        <div className="flex items-center gap-1 text-[9px] font-bold text-slate-500">
+          <Target className="h-3 w-3 text-emerald-500" />
+          进攻套路
+        </div>
+        <p className="mt-0.5 text-[10px] leading-4 text-slate-600">{tactics.attackPattern}</p>
+      </div>
+
+      {/* 防守策略 */}
+      <div>
+        <div className="flex items-center gap-1 text-[9px] font-bold text-slate-500">
+          <Flag className="h-3 w-3 text-cyan-500" />
+          防守策略
+        </div>
+        <p className="mt-0.5 text-[10px] leading-4 text-slate-600">{tactics.defensePattern}</p>
+      </div>
+
+      {/* 核心球员角色 */}
+      {tactics.keyPlayerRole.length > 0 && (
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-1 text-[9px] font-bold text-slate-500">
+            <Sparkles className="h-3 w-3 text-amber-500" />
+            核心球员
+          </div>
+          {tactics.keyPlayerRole.map((kr) => (
+            <div key={kr.playerName} className="rounded-lg bg-white p-2 ring-1 ring-slate-100">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-black text-slate-900">{kr.playerName}</span>
+                <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[8px] font-bold text-emerald-700">{kr.role}</span>
+              </div>
+              <p className="mt-0.5 text-[9px] leading-3.5 text-slate-500">{kr.description}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 三项指标 */}
+      <div className="space-y-2">
+        {indicators.map((item) => (
+          <div key={item.label}>
+            <div className="mb-0.5 flex items-center justify-between text-[9px]">
+              <span className="font-bold text-slate-500">{item.label}</span>
+              <span className="font-bold text-slate-700">{item.value}</span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+              <div className={`h-full rounded-full ${item.color} ${item.width}`} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* 弱点 */}
+      <div className="rounded-lg bg-amber-50 p-2">
+        <div className="flex items-center gap-1 text-[9px] font-bold text-amber-700">
+          <AlertTriangle className="h-3 w-3" />
+          弱点
+        </div>
+        <p className="mt-0.5 text-[9px] leading-4 text-amber-800">{tactics.weakness}</p>
+      </div>
+
+      {/* 战术总结 */}
+      <div className="rounded-lg bg-slate-50 p-2">
+        <p className="text-[9px] leading-4 text-slate-600">{tactics.summary}</p>
       </div>
     </div>
   );

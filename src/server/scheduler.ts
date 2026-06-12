@@ -1,11 +1,15 @@
 /**
  * 定时任务调度器
  * 使用 node-cron 替代请求触发的维护任务
+ *
+ * V2: 同步任务改为动态频率（sync_scheduler_service），
+ *     不再每分钟无脑全量同步。
  */
 import cron from 'node-cron';
 import logger from './logger';
 import { dbService } from '../db/db_service';
-import { autoSettleFinishedMatches, ensureLifecycleForAllMatches } from './helpers';
+import { ensureLifecycleForAllMatches } from './helpers';
+import { runDynamicSyncTick } from './services/sync_scheduler_service';
 
 interface ScheduledTask {
   name: string;
@@ -45,20 +49,9 @@ export function startAllTasks() {
  * 初始化所有定时任务
  */
 export function initScheduler() {
-  // 每 5 分钟：同步外部 API 数据
-  registerTask('sync-external-api', '* * * * *', async () => {
-    const { runScheduledMaintenance } = await import('./helpers');
-    await runScheduledMaintenance();
-  });
-
-  // 每 10 分钟：自动结算已结束比赛
-  registerTask('auto-settle-matches', '*/10 * * * *', async () => {
-    const db = dbService.getData();
-    const settledCount = autoSettleFinishedMatches(db);
-    if (settledCount > 0) {
-      logger.settlement(`Auto-settled ${settledCount} matches`);
-      dbService.save();
-    }
+  // 每分钟：动态同步 tick（内部根据比赛阶段决定是否真正调用 API）
+  registerTask('dynamic-sync-tick', '* * * * *', async () => {
+    await runDynamicSyncTick();
   });
 
   // 每 30 分钟：确保比赛生命周期状态

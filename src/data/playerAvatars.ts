@@ -1249,5 +1249,41 @@ export const PLAYER_AVATAR_MAP: Record<string, string> = {
   "EGY:Haissem Hassan": "https://ui-avatars.com/api/?name=Haissem%20Hassan&background=1e3a5f&color=e8edf5&size=128&bold=true",
   "EGY:Ibrahim Adel": "https://ui-avatars.com/api/?name=Ibrahim%20Adel&background=1e3a5f&color=e8edf5&size=128&bold=true",
   "EGY:Omar Marmoush": "https://raw.githubusercontent.com/cairongquan/world_cup_2026/main/assets/players/egypt_omar-marmoush.jpg",
-  "EGY:Zizo": "https://ui-avatars.com/api/?name=Zizo&background=1e3a5f&color=e8edf5&size=128&bold=true"
+  "EGY:Zizo": "https://ui-avatars.com/api/?name=Zizo&background=1e3a5f&color=e8edf5&size=128&bold=true",
+
+  // ═══ 传奇球星 & 金靴榜（历史球员）═══
+  // 球星档案 key 格式: teamId:name (英文名)
+  // 金靴榜 key 格式: code:player (中文名)
+  "BRA:Pelé": "https://ui-avatars.com/api/?name=Pel%C3%A9&background=f59e0b&color=fff&size=128&bold=true",
+  "ARG:Diego Maradona": "https://ui-avatars.com/api/?name=D.+Maradona&background=3b82f6&color=fff&size=128&bold=true",
+  "GER:Miroslav Klose": "https://ui-avatars.com/api/?name=M.+Klose&background=ef4444&color=fff&size=128&bold=true",
+  "BRA:Ronaldo": "https://ui-avatars.com/api/?name=Ronaldo&background=22c55e&color=fff&size=128&bold=true",
+  "FRA:Zinedine Zidane": "https://ui-avatars.com/api/?name=Z.+Zidane&background=2563eb&color=fff&size=128&bold=true",
+  "NED:Johan Cruyff": "https://ui-avatars.com/api/?name=J.+Cruyff&background=f97316&color=fff&size=128&bold=true",
+  "FRA:Just Fontaine": "https://ui-avatars.com/api/?name=J.+Fontaine&background=2563eb&color=fff&size=128&bold=true",
+  "GER:Gerd Müller": "https://ui-avatars.com/api/?name=G.+M%C3%BCller&background=ef4444&color=fff&size=128&bold=true",
+  "GER:Lothar Matthäus": "https://ui-avatars.com/api/?name=L.+Matth%C3%A4us&background=ef4444&color=fff&size=128&bold=true",
+
+  // 金靴榜 key 格式: code:player (中文名)
+  "FRA:姆巴佩": "https://ui-avatars.com/api/?name=K.+Mbapp%C3%A9&background=2563eb&color=fff&size=128&bold=true",
+  "ENG:凯恩": "https://ui-avatars.com/api/?name=H.+Kane&background=ffffff&color=dc2626&size=128&bold=true",
+  "COL:J罗": "https://ui-avatars.com/api/?name=J.+Rodriguez&background=fbbf24&color=1e3a5f&size=128&bold=true",
+  "GER:穆勒": "https://ui-avatars.com/api/?name=G.+M%C3%BCller&background=ef4444&color=fff&size=128&bold=true",
+  "BRA:罗纳尔多": "https://ui-avatars.com/api/?name=Ronaldo&background=22c55e&color=fff&size=128&bold=true",
+  "CRO:苏克": "https://ui-avatars.com/api/?name=D.+%C5%A0uker&background=dc2626&color=fff&size=128&bold=true",
+  "BUL:斯托伊奇科夫": "https://ui-avatars.com/api/?name=H.+Stoichkov&background=22c55e&color=fff&size=128&bold=true",
+  "ITA:斯基拉奇": "https://ui-avatars.com/api/?name=T.+Schillaci&background=2563eb&color=fff&size=128&bold=true",
+  "ENG:莱因克尔": "https://ui-avatars.com/api/?name=G.+Lineker&background=ffffff&color=dc2626&size=128&bold=true",
+  "ITA:罗西": "https://ui-avatars.com/api/?name=P.+Rossi&background=2563eb&color=fff&size=128&bold=true",
+  "ARG:肯佩斯": "https://ui-avatars.com/api/?name=M.+Kempes&background=3b82f6&color=fff&size=128&bold=true",
+  "POL:拉托": "https://ui-avatars.com/api/?name=G.+Lato&background=dc2626&color=fff&size=128&bold=true",
+  "GER:克洛泽": "https://ui-avatars.com/api/?name=M.+Klose&background=ef4444&color=fff&size=128&bold=true",
+  "POR:尤西比奥": "https://ui-avatars.com/api/?name=Eus%C3%A9bio&background=22c55e&color=fff&size=128&bold=true",
+  "BRA:加林查": "https://ui-avatars.com/api/?name=Garrincha&background=22c55e&color=fff&size=128&bold=true",
+  "FRA:方丹": "https://ui-avatars.com/api/?name=J.+Fontaine&background=2563eb&color=fff&size=128&bold=true",
+  "HUN:柯奇士": "https://ui-avatars.com/api/?name=S.+Kocsis&background=dc2626&color=fff&size=128&bold=true",
+  "BRA:阿德米尔": "https://ui-avatars.com/api/?name=Ademir&background=22c55e&color=fff&size=128&bold=true",
+  "BRA:莱昂尼达斯": "https://ui-avatars.com/api/?name=Le%C3%B4nidas&background=22c55e&color=fff&size=128&bold=true",
+  "TCH:内耶德利": "https://ui-avatars.com/api/?name=O.+Nejedly&background=dc2626&color=fff&size=128&bold=true",
+  "ARG:斯塔比莱": "https://ui-avatars.com/api/?name=G.+Stabile&background=3b82f6&color=fff&size=128&bold=true"
 };

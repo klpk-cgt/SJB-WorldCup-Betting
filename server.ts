@@ -31,6 +31,7 @@ import adminRoutes from './src/server/routes/admin';
 import activityRoutes from './src/server/routes/activities';
 import cardRoutes from './src/server/routes/cards';
 import adminDashboardRoutes from './src/server/routes/admin_dashboard';
+import homeRoutes from './src/server/routes/home';
 
 const app = express();
 
@@ -112,6 +113,7 @@ app.use(adminRoutes);
 app.use(activityRoutes);
 app.use(cardRoutes);
 app.use(adminDashboardRoutes);
+app.use(homeRoutes);
 
 // ─── Health Check ───
 app.get('/api/health', (_req, res) => {
@@ -297,4 +299,16 @@ async function startServer() {
 startServer().catch((error) => {
   logger.error('Failed to start server', { error: error.message, stack: error.stack });
   process.exit(1);
+});
+
+// 进程级未捕获异常处理
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught Exception - attempting graceful shutdown', { error: error.message, stack: error.stack });
+  try { dbService.save(); } catch { /* best effort */ }
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  logger.error('Unhandled Promise Rejection', { reason: reason instanceof Error ? reason.message : String(reason) });
+  // 不退出进程，仅记录日志，避免单次异步错误导致整个服务崩溃
 });

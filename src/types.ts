@@ -345,6 +345,17 @@ export interface CheckinLogRecord {
   createdAt: string;
 }
 
+export interface QuizLogRecord {
+  id: string;
+  userId: string;
+  date: string;
+  questionIds: string[];
+  selectedIndex?: number;
+  correctCount: number;
+  pointsEarned: number;
+  createdAt: string;
+}
+
 export type TournamentBetType = 'champion' | 'golden_boot' | 'golden_ball';
 export type TournamentBetStatus = 'OPEN' | 'LOCKED' | 'WON' | 'LOST' | 'VOID';
 

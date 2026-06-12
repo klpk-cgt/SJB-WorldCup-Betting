@@ -4,14 +4,10 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { dbService } from '../../db/db_service';
-import {
-  cancelPredictionByCard,
-  getCardDefinitions,
-  getUserCardInventory,
-  userHasCard,
-} from '../prediction_card_service';
+import { getCardDefinitions, getUserCardInventory } from '../prediction_card_service';
 import { getAuthenticatedUser } from '../helpers';
+import { runBusinessTransaction } from '../services/transaction_guard';
+import { useRegretCard } from '../services/card_transaction_service';
 
 const router = Router();
 
@@ -27,7 +23,7 @@ router.get('/api/cards/inventory', (req: Request, res: Response) => {
   res.json({ ...inventory, definitions: getCardDefinitions() });
 });
 
-router.post('/api/cards/use-regret', (req: Request, res: Response) => {
+router.post('/api/cards/use-regret', async (req: Request, res: Response) => {
   const user = getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ error: '请先登录。' });
 
@@ -36,38 +32,20 @@ router.post('/api/cards/use-regret', (req: Request, res: Response) => {
     return res.status(400).json({ error: '缺少 predictionId。' });
   }
 
-  if (!userHasCard(user.id, 'REGRET')) {
-    return res.status(400).json({ error: '反悔卡库存不足。' });
-  }
+  try {
+    const result = await runBusinessTransaction('useRegretCard', () => {
+      return useRegretCard({
+        userId: user.id,
+        predictionId,
+      });
+    });
 
-  const db = dbService.getData();
-  const prediction = db.predictions.find((item) => item.id === predictionId);
-  if (!prediction) {
-    return res.status(404).json({ error: '预测不存在。' });
+    res.json({ success: true, message: result.message });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '撤销失败';
+    const status = message.includes('不足') || message.includes('不存在') || message.includes('只能') || message.includes('已开始') ? 400 : 500;
+    res.status(status).json({ error: message });
   }
-  if (prediction.userId !== user.id) {
-    return res.status(403).json({ error: '只能撤销自己的预测。' });
-  }
-  if (prediction.status !== 'PENDING' && prediction.status !== 'LOCKED') {
-    return res.status(400).json({ error: '只能撤销未结算的下注。' });
-  }
-
-  const match = db.matches.find((item) => item.id === prediction.matchId);
-  if (match && new Date(match.startTimeUtc).getTime() <= Date.now()) {
-    return res.status(400).json({ error: '比赛已开始，无法使用反悔卡。' });
-  }
-
-  const inventory = getUserCardInventory(user.id);
-  inventory.cards.REGRET = Math.max(0, (inventory.cards.REGRET || 0) - 1);
-  inventory.updatedAt = new Date().toISOString();
-  prediction.usedCard = 'REGRET';
-
-  const success = cancelPredictionByCard(prediction, '反悔卡：撤销下注，返还全部本金');
-  if (!success) {
-    return res.status(500).json({ error: '撤销下注失败。' });
-  }
-
-  res.json({ success: true, message: '反悔卡生效，已撤销下注并返还本金。' });
 });
 
 export default router;

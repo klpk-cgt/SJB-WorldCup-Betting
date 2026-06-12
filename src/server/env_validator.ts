@@ -40,13 +40,13 @@ export function validateEnv(): void {
   // 生产环境额外检查
   if (isProd) {
     if (!process.env.APP_CORS_ORIGIN) {
-      warnings.push('生产环境建议设置 APP_CORS_ORIGIN 限制跨域来源');
+      missing.push('APP_CORS_ORIGIN (生产环境必须设置CORS允许域名)');
     }
-    if (process.env.ADMIN_PASSWORD === 'admin_worldcup2026') {
-      warnings.push('生产环境请修改默认管理员密码 (ADMIN_PASSWORD)');
+    if (!process.env.ADMIN_PASSWORD || process.env.ADMIN_PASSWORD === 'admin_worldcup2026') {
+      missing.push('ADMIN_PASSWORD (生产环境必须修改默认管理员密码)');
     }
-    if (process.env.APP_SECRET === 'worldcup2026_prod_secret_key_change_me' || !process.env.APP_SECRET) {
-      warnings.push('生产环境请修改默认 APP_SECRET');
+    if (!process.env.APP_SECRET || process.env.APP_SECRET === 'worldcup2026_prod_secret_key_change_me') {
+      missing.push('APP_SECRET (生产环境必须修改默认应用密钥)');
     }
   }
 

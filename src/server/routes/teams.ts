@@ -1,4 +1,4 @@
-﻿﻿/**
+﻿﻿﻿﻿﻿/**
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -7,7 +7,7 @@ import { Router, Request, Response } from 'express';
 import { dbService } from '../../db/db_service';
 import { THE_TEAMS } from '../../db/initial_data';
 import { resolveTeamProfile } from '../../data/worldcup/teams';
-import { serializeMatch } from '../helpers';
+import { serializeMatch, toLocalAvatarUrl } from '../helpers';
 
 const router = Router();
 
@@ -60,7 +60,7 @@ router.get('/api/teams/:id/players', (req: Request, res: Response) => {
     .getPlayersByTeamId(req.params.id)
     .sort((a, b) => (b.marketValue || 0) - (a.marketValue || 0));
 
-  res.json(players);
+  res.json(players.map((p: any) => ({ ...p, avatarUrl: toLocalAvatarUrl(p.avatarUrl) })));
 });
 
 router.get('/api/teams/:id/history', (req: Request, res: Response) => {
@@ -87,7 +87,7 @@ router.get('/api/teams/:id/detail', (req: Request, res: Response) => {
 
   res.json({
     team,
-    players: players || [],
+    players: (players || []).map((p: any) => ({ ...p, avatarUrl: toLocalAvatarUrl(p.avatarUrl) })),
     history: history || [],
     matches,
     staticProfile: staticProfile || null,

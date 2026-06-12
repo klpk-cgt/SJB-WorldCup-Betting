@@ -1,11 +1,11 @@
-﻿/**
+/**
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
 
 import { Router, Request, Response } from 'express';
 import { dbService } from '../../db/db_service';
-import { User, Wallet } from '../../types';
+import { User, Wallet, MatchStatus } from '../../types';
 import {
   generateStructuredAiContent,
   getOrGenerateLeaderboardCommentary,
@@ -25,7 +25,6 @@ import {
   requireAdmin,
   serializeUserForClient,
   serializeMatch,
-  settleMatch,
   runScheduledMaintenance,
   ensureLifecycleForAllMatches,
   markMatchAiStale,
@@ -36,6 +35,10 @@ import {
   pickNearestMatchDay,
   getPinyinInitials,
 } from '../helpers';
+import { runBusinessTransaction } from '../services/transaction_guard';
+import { settleMatchById } from '../services/settlement_service';
+import { regeneratePostMatchReport } from '../services/post_match_report_service';
+import { getSyncRuntimeState, getSyncPlan } from '../services/sync_scheduler_service';
 import { emitPointsAdjusted, emitUserJoined } from '../activity_service';
 import { evaluateAllBadges, syncAllTitles } from '../badge_service';
 import { initUserCardInventory, adjustUserCards, bootstrapAllCardInventories } from '../prediction_card_service';
@@ -529,10 +532,16 @@ router.put('/api/admin/matches/:id', (req: Request, res: Response) => {
   const match = db.matches.find((item) => item.id === req.params.id);
   if (!match) return res.status(404).json({ error: '比赛不存在。' });
 
-  const { homeScore, awayScore, status, isOddsFrozen, isPredictionLocked, winnerTeamId } = req.body;
-  if (status) match.status = status;
-  if (homeScore !== undefined) match.homeScore = Number(homeScore);
-  if (awayScore !== undefined) match.awayScore = Number(awayScore);
+  const { homeScore, awayScore, status, isOddsFrozen, isPredictionLocked, winnerTeamId, resetToNS } = req.body;
+  if (status) match.status = status as MatchStatus;
+  if (homeScore !== undefined) {
+    const n = Number(homeScore);
+    match.homeScore = Number.isNaN(n) ? undefined : n;
+  }
+  if (awayScore !== undefined) {
+    const n = Number(awayScore);
+    match.awayScore = Number.isNaN(n) ? undefined : n;
+  }
   if (winnerTeamId !== undefined) match.winnerTeamId = winnerTeamId || undefined;
   if (isOddsFrozen !== undefined) {
     match.isOddsFrozen = Boolean(isOddsFrozen);
@@ -541,6 +550,38 @@ router.put('/api/admin/matches/:id', (req: Request, res: Response) => {
   if (isPredictionLocked !== undefined) {
     match.isPredictionLocked = Boolean(isPredictionLocked);
     match.predictionLockedAt = match.isPredictionLocked ? new Date().toISOString() : undefined;
+  }
+  // 完整重置为未开赛状态
+  if (resetToNS) {
+    match.status = MatchStatus.NS;
+    match.isSettled = false;
+    match.settlementStatus = 'PENDING';
+    match.isOddsFrozen = false;
+    match.isPredictionLocked = false;
+    match.oddsFrozenAt = undefined;
+    match.predictionLockedAt = undefined;
+    match.settledAt = undefined;
+    match.homeScore = undefined;
+    match.awayScore = undefined;
+    match.winnerTeamId = undefined;
+    // 回滚该比赛关联的已结算预测
+    const matchPredictions = db.predictions.filter((p) => p.matchId === match.id);
+    for (const pred of matchPredictions) {
+      if (pred.status === 'WON' || pred.status === 'LOST') {
+        // 回退钱包：扣除已发放的中奖金额
+        if (pred.status === 'WON' && pred.settledReturn) {
+          const wallet = db.wallets.find((w) => w.userId === pred.userId);
+          if (wallet) {
+            wallet.balance -= pred.settledReturn;
+            if (wallet.balance < 0) wallet.balance = 0;
+          }
+        }
+        pred.status = 'PENDING';
+        pred.settledReturn = undefined;
+        pred.settledProfit = undefined;
+        pred.settledAt = undefined;
+      }
+    }
   }
   applyLifecycleUpdates(match, config.predictionLockMinutes);
   dbService.refreshBracketState();
@@ -576,7 +617,7 @@ router.put('/api/admin/matches/:id/odds', (req: Request, res: Response) => {
   res.json({ success: true, odds: existing });
 });
 
-router.post('/api/admin/matches/:id/settle', (req: Request, res: Response) => {
+router.post('/api/admin/matches/:id/settle', async (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
   const db = dbService.getData();
   const match = db.matches.find((item) => item.id === req.params.id);
@@ -585,9 +626,15 @@ router.post('/api/admin/matches/:id/settle', (req: Request, res: Response) => {
   try {
     const rawForce = req.body?.forceResettle ?? req.query.forceResettle;
     const forceResettle = rawForce === true || rawForce === 'true' || rawForce === 1 || rawForce === '1';
-    const count = settleMatch(match, { forceResettle });
-    dbService.save();
-    res.json({ success: true, count, forceResettle });
+    const result = await runBusinessTransaction('adminSettleMatch', async () => {
+      return await settleMatchById({
+        matchId: match.id,
+        source: 'ADMIN',
+        adminUser: 'admin',
+        forceResettle,
+      });
+    });
+    res.json({ success: true, count: result.settledPredictions, forceResettle });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : '结算失败。' });
   }
@@ -899,6 +946,15 @@ router.get('/api/admin/sync-logs', (req: Request, res: Response) => {
   res.json(logs);
 });
 
+// ─── 同步运行状态 ───
+
+router.get('/api/admin/sync-state', (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const state = getSyncRuntimeState();
+  const plan = getSyncPlan();
+  res.json({ state, plan });
+});
+
 // 鈹€鈹€鈹€ 绔炵寽璁板綍鏌ヨ 鈹€鈹€鈹€
 
 router.get('/api/admin/predictions', (req: Request, res: Response) => {
@@ -1022,6 +1078,17 @@ router.post('/api/admin/ai/regenerate/:id', async (req: Request, res: Response) 
     res.json({ success: true, aiContent: newContent });
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : 'AI 内容重新生成失败。' });
+  }
+});
+
+router.post('/api/admin/matches/:id/post-report/regenerate', (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const report = regeneratePostMatchReport(req.params.id);
+    dbService.save();
+    res.json({ success: true, report });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : '战报重新生成失败。' });
   }
 });
 

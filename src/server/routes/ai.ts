@@ -39,8 +39,8 @@ router.get('/api/ai/match/:id/prediction', async (req: Request, res: Response) =
       enhancementMode: 'off',
     });
     return res.json(aiContent);
-  } catch (error) {
-    return res.status(404).json({ error: error instanceof Error ? error.message : 'AI prediction generation failed.' });
+  } catch {
+    return res.json(buildAiFallback('AI 预测暂时不可用', '比赛数据正在更新中，请稍后再查看预测分析。'));
   }
 });
 
@@ -56,8 +56,8 @@ router.get('/api/ai/match/:id/analysis', async (req: Request, res: Response) => 
       enhancementMode: 'off',
     });
     return res.json(aiContent);
-  } catch (error) {
-    return res.status(404).json({ error: error instanceof Error ? error.message : 'AI analysis generation failed.' });
+  } catch {
+    return res.json(buildAiFallback('AI 分析暂时不可用', '赛前分析正在生成中，请稍后再查看。'));
   }
 });
 
@@ -73,8 +73,8 @@ router.get('/api/ai/leaderboard/:roomId', async (req: Request, res: Response) =>
       enhancementMode: 'off',
     });
     return res.json(aiContent);
-  } catch (error) {
-    return res.status(400).json({ error: error instanceof Error ? error.message : 'AI leaderboard generation failed.' });
+  } catch {
+    return res.json(buildAiFallback('AI 点评暂时不可用', '排行榜分析正在更新中，请稍后再查看。'));
   }
 });
 
@@ -365,8 +365,6 @@ router.get('/api/ai/cold-alerts', (_req: Request, res: Response) => {
   res.json({ alerts });
 });
 
-export default router;
-
 // ─── AI 推荐跟投 ───
 
 router.get('/api/ai/recommendations', async (_req: Request, res: Response) => {
@@ -384,48 +382,69 @@ router.get('/api/ai/recommendations', async (_req: Request, res: Response) => {
     .sort((a, b) => new Date(a.startTimeUtc).getTime() - new Date(b.startTimeUtc).getTime())
     .slice(0, 10);
 
-  const recommendations = upcoming.map((match) => {
+  const recommendations = [];
+  const seenMatchIds = new Set<string>();
+
+  for (const match of upcoming) {
+    // 去重：同一比赛只推荐一次
+    if (seenMatchIds.has(match.id)) continue;
+
+    const serialized = serializeMatch(match);
     const odds = db.matchOdds[match.id];
-    const homeTeam = match.homeTeam?.nameZh || '主队';
-    const awayTeam = match.awayTeam?.nameZh || '客队';
+    const homeTeam = serialized.homeTeam?.nameZh || '主队';
+    const awayTeam = serialized.awayTeam?.nameZh || '客队';
 
-    // 基于赔率和历史交锋生成简单推荐
-    let recommendation: {
-      matchId: string;
-      label: string;
-      market: string;
-      option: string;
-      optionLabel: string;
-      odds: number;
-      confidence: number;
-      reason: string;
-      suggestedStake: number;
-    } | null = null;
+    // 跳过 TBD 比赛
+    if (match.homeTeamId === 'TBD' || match.awayTeamId === 'TBD') continue;
 
-    if (odds?.h2h) {
-      const { homeWin, draw, awayWin } = odds.h2h;
-      const maxOdds = Math.max(homeWin, draw, awayWin);
-      const minOdds = Math.min(homeWin, draw, awayWin);
+    if (!odds?.h2h) continue;
 
-      // 推荐高赔率的选项（博冷）
-      let bestOption = 'HOME_WIN';
-      let bestLabel = homeTeam + ' 胜';
-      let bestOdds = homeWin;
-      if (draw > bestOdds) {
-        bestOption = 'DRAW';
-        bestLabel = '平局';
-        bestOdds = draw;
-      }
-      if (awayWin > bestOdds) {
-        bestOption = 'AWAY_WIN';
-        bestLabel = awayTeam + ' 胜';
-        bestOdds = awayWin;
-      }
+    const { homeWin, draw, awayWin } = odds.h2h;
+
+    // 选择最佳选项（基于赔率：赔率越低概率越高，推荐概率最高的选项）
+    let bestOption = 'HOME_WIN';
+    let bestLabel = homeTeam + ' 胜';
+    let bestOdds = homeWin;
+    if (draw < bestOdds) {
+      bestOption = 'DRAW';
+      bestLabel = '平局';
+      bestOdds = draw;
+    }
+    if (awayWin < bestOdds) {
+      bestOption = 'AWAY_WIN';
+      bestLabel = awayTeam + ' 胜';
+      bestOdds = awayWin;
+    }
+
+    seenMatchIds.add(match.id);
+
+    // 调用 AI 生成推荐文案
+    const prompt = `请为世界杯比赛生成一条简短的推荐文案。
+比赛：${homeTeam} vs ${awayTeam}
+推荐选项：${bestLabel}
+赔率：${bestOdds.toFixed(2)}
+
+要求：
+1. 30字以内
+2. 轻松有趣，像朋友群聊
+3. 不要使用"稳赚、必买、下注"等词
+4. 不要夸大确定性
+5. 输出纯文本，不要 Markdown`;
+
+    try {
+      const aiContent = await generateStructuredAiContent({
+        config,
+        type: 'MATCH_PREDICTION',
+        title: `AI推荐：${homeTeam} vs ${awayTeam}`,
+        prompt,
+        fallbackBody: `${homeTeam} vs ${awayTeam}，${bestLabel}赔率不错，可以小试。`,
+        matchId: match.id,
+      });
 
       const confidence = Math.max(30, Math.min(80, Math.round((1 / bestOdds) * 100)));
       const suggestedStake = Math.max(50, Math.min(500, Math.round((confidence / 80) * 300)));
 
-      recommendation = {
+      recommendations.push({
         matchId: match.id,
         label: `${homeTeam} vs ${awayTeam}`,
         market: 'H2H',
@@ -433,18 +452,34 @@ router.get('/api/ai/recommendations', async (_req: Request, res: Response) => {
         optionLabel: bestLabel,
         odds: bestOdds,
         confidence,
-        reason: `基于当前赔率分析，${bestLabel} 赔率 ${bestOdds.toFixed(2)}，建议投入 ${suggestedStake} 积分`,
+        reason: aiContent.summary || aiContent.content || `基于当前赔率分析，${bestLabel}赔率${bestOdds.toFixed(2)}，建议投入${suggestedStake}积分`,
         suggestedStake,
-      };
-    }
+      });
+    } catch (error) {
+      // 如果 AI 调用失败，使用模板文案
+      const confidence = Math.max(30, Math.min(80, Math.round((1 / bestOdds) * 100)));
+      const suggestedStake = Math.max(50, Math.min(500, Math.round((confidence / 80) * 300)));
 
-    return recommendation;
-  }).filter(Boolean);
+      recommendations.push({
+        matchId: match.id,
+        label: `${homeTeam} vs ${awayTeam}`,
+        market: 'H2H',
+        option: bestOption,
+        optionLabel: bestLabel,
+        odds: bestOdds,
+        confidence,
+        reason: `${homeTeam} vs ${awayTeam}，${bestLabel}赔率${bestOdds.toFixed(2)}，可以小试。`,
+        suggestedStake,
+      });
+    }
+  }
 
   res.json({
     recommendations: recommendations.slice(0, 5),
     total: recommendations.length,
-    aiNote: '以上推荐基于赔率分析，仅供参考，不构成投资建议。',
+    aiNote: '以上推荐基于AI分析，仅供娱乐参考，不构成任何建议。',
     generatedAt: now.toISOString(),
   });
 });
+
+export default router;

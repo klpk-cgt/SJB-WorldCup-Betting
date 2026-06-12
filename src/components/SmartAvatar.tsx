@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 type SmartAvatarProps = {
   name: string;
@@ -28,8 +28,9 @@ function isImageLike(src?: string | null) {
 export default function SmartAvatar({ name, src, size = 40, className = '' }: SmartAvatarProps) {
   const initials = buildInitials(name);
   const hue = buildHue(name);
+  const [imgError, setImgError] = useState(false);
 
-  if (isImageLike(src)) {
+  if (isImageLike(src) && !imgError) {
     return (
       <img
         src={src || undefined}
@@ -37,6 +38,7 @@ export default function SmartAvatar({ name, src, size = 40, className = '' }: Sm
         className={`rounded-full object-cover ring-1 ring-slate-200 ${className}`}
         style={{ width: size, height: size }}
         referrerPolicy="no-referrer"
+        onError={() => setImgError(true)}
       />
     );
   }
@@ -48,11 +50,11 @@ export default function SmartAvatar({ name, src, size = 40, className = '' }: Sm
       style={{
         width: size,
         height: size,
-        fontSize: src ? size * 0.48 : size * 0.34,
+        fontSize: size * 0.34,
         background: `linear-gradient(135deg, hsl(${hue} 56% 42%), hsl(${(hue + 36) % 360} 62% 34%))`,
       }}
     >
-      {src && !isImageLike(src) ? src : initials}
+      {initials}
     </span>
   );
 }

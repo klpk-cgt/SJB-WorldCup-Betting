@@ -384,3 +384,18 @@ model CheckinLog {
   @@index([userId, date])
   @@map("checkin_logs")
 }
+
+model QuizLog {
+  id           String @id @db.VarChar(191)
+  userId       String @db.VarChar(191)
+  date         String @db.VarChar(64)
+  questionIds  Json
+  selectedIndex Int?
+  correctCount Int
+  pointsEarned Int
+  createdAt    String @db.VarChar(64)
+
+  @@unique([userId, date])
+  @@index([userId, date])
+  @@map("quiz_logs")
+}

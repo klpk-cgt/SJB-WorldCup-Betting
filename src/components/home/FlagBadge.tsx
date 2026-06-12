@@ -8,6 +8,7 @@ export default function FlagBadge({
 }: {
   flagCode?: string;
   size?: 'sm' | 'md' | 'lg';
+  key?: string;
   className?: string;
 }) {
   const [imgError, setImgError] = useState(false);

@@ -3,11 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Award, BarChart2, Coins, Flame, Medal, RefreshCw, Sparkles, Star, TrendingDown, TrendingUp, Trophy, Zap } from 'lucide-react';
 import { CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { apiRequest } from '../utils/api';
 import SmartAvatar from './SmartAvatar';
+import { useStaggerReveal } from '../animations';
 
 interface LeaderboardTabProps {
   user: any;
@@ -138,6 +139,9 @@ export default function LeaderboardTab({ user }: LeaderboardTabProps) {
   const [selectedUserName, setSelectedUserName] = useState('');
   const [trendData, setTrendData] = useState<any[]>([]);
   const [trendLoading, setTrendLoading] = useState(false);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  useStaggerReveal(listRef, '.leaderboard-row', { stagger: 0.04, y: 10 });
 
   const fetchRanks = async () => {
     setLoading(true);
@@ -303,7 +307,7 @@ export default function LeaderboardTab({ user }: LeaderboardTabProps) {
               </div>
             </div>
 
-            <div className="mt-3 space-y-2">
+            <div ref={listRef} className="mt-3 space-y-2">
               {activeList.slice(3).map((item, idx) => {
                 const rank = idx + 4;
                 const isCurrentUser = item.userId === user?.id;
@@ -313,7 +317,7 @@ export default function LeaderboardTab({ user }: LeaderboardTabProps) {
                   <button
                     key={item.userId}
                     onClick={() => setSelectedUserId(item.userId)}
-                    className={`flex w-full items-center rounded-[22px] border px-4 py-3 text-left transition ${
+                    className={`leaderboard-row flex w-full items-center rounded-[22px] border px-4 py-3 text-left transition ${
                       isSelected
                         ? 'border-violet-300 bg-violet-50 shadow-[0_12px_24px_rgba(139,92,246,0.12)]'
                         : isCurrentUser

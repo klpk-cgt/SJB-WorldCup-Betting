@@ -28,6 +28,7 @@ import {
   UserTitleRecord,
   AdminSessionRecord,
   CheckinLogRecord,
+  QuizLogRecord,
 } from '../types';
 import { SEED_ROOMS, THE_TEAMS, PRESEEDED_USERS, SEED_MATCHES, SEED_ODDS } from './initial_data';
 import { SEED_PLAYERS, SEED_TEAM_HISTORY } from './team_details_seed';
@@ -59,6 +60,9 @@ export interface DatabaseSchema {
   userTitles?: UserTitleRecord[];
   adminSessions?: AdminSessionRecord[];
   checkinLog?: CheckinLogRecord[];
+  quizLogs?: QuizLogRecord[];
+  // 赛后战报（V1.4 新增）
+  postMatchReports?: import('../server/services/post_match_report_service').PostMatchReport[];
 }
 
 const DATA_DIR = process.env.APP_DATA_DIR
@@ -304,6 +308,7 @@ class DatabaseService {
       userTitles: [],
       adminSessions: [],
       checkinLog: [],
+      quizLogs: [],
     };
 
     this.save();
@@ -347,21 +352,45 @@ class DatabaseService {
   /**
    * 写锁机制 - 防止并发写入导致数据不一致
    * 适用于钱包扣减等需要原子性的操作
+   *
+   * 使用 Promise + waiter 队列实现公平锁：
+   * - 新请求等待在 waiter 队列中，按 FIFO 顺序获取锁
+   * - 避免自旋等待的 CPU 浪费
+   * - 超时保护防止死锁
    */
   public async acquireWriteLock(timeout = 5000): Promise<void> {
-    const start = Date.now();
-    while (this._writeLock) {
-      if (Date.now() - start > timeout) {
-        throw new Error('获取写锁超时');
-      }
-      await new Promise(resolve => setTimeout(resolve, 10));
+    if (!this._writeLock) {
+      this._writeLock = true;
+      return;
     }
-    this._writeLock = true;
+
+    // 锁已被占用，加入等待队列
+    return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        // 超时：从等待队列中移除
+        const idx = this._lockWaiters.indexOf(waiter);
+        if (idx !== -1) this._lockWaiters.splice(idx, 1);
+        reject(new Error('获取写锁超时'));
+      }, timeout);
+
+      const waiter = () => {
+        clearTimeout(timer);
+        if (!this._writeLock) {
+          this._writeLock = true;
+          resolve();
+        } else {
+          // 极端情况：锁又被抢了，继续等待
+          this._lockWaiters.push(waiter);
+        }
+      };
+
+      this._lockWaiters.push(waiter);
+    });
   }
 
   public releaseWriteLock() {
     this._writeLock = false;
-    // 唤醒等待者
+    // 唤醒下一个等待者
     const waiter = this._lockWaiters.shift();
     if (waiter) waiter();
   }
@@ -615,6 +644,9 @@ class DatabaseService {
     }
     if (!Array.isArray((this.cache as any).checkinLog)) {
       (this.cache as any).checkinLog = [];
+    }
+    if (!Array.isArray((this.cache as any).quizLogs)) {
+      (this.cache as any).quizLogs = [];
     }
     // 合并球队扩展字段（fifaRank、coachName等），并补齐缺失球队
     if (Array.isArray(this.cache.teams)) {

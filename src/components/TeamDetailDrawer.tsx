@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { BarChart3, Brain, Calendar, ChevronRight, History, MapPin, BookOpen, Shield, Sparkles, Star, TrendingUp, Trophy, Users, X } from 'lucide-react';
+import { BarChart3, Brain, Calendar, ChevronRight, History, MapPin, BookOpen, Shield, Sparkles, Star, TrendingUp, Trophy, Users, X, Swords, Target, AlertTriangle, Zap } from 'lucide-react';
 import { Match, MatchStatus, Player, Team, TeamHistoryResult } from '../types';
 import type { TeamCompleteProfile } from '../types/worldcup';
 import { apiRequest, formatDate } from '../utils/api';
 import { resolvePlayerAvatar } from '../utils/playerAvatar';
 import FlagBadge from './home/FlagBadge';
 import SmartAvatar from './SmartAvatar';
+import { TEAM_TACTICS } from '../data/worldcup/tactics';
 
 interface TeamDetailDrawerProps {
   teamId: string | null;
@@ -414,6 +415,123 @@ export default function TeamDetailDrawer({ teamId, open, onClose }: TeamDetailDr
                           )}
                         </div>
                       )}
+
+                      {/* 战术分析 */}
+                      {(() => {
+                        const tactics = teamId ? TEAM_TACTICS[teamId] : undefined;
+                        if (!tactics) return null;
+                        const LEVEL_MAP: Record<string, { label: string; color: string; width: string }> = {
+                          high: { label: '强', color: 'bg-emerald-500', width: 'w-full' },
+                          medium: { label: '中', color: 'bg-amber-400', width: 'w-2/3' },
+                          low: { label: '弱', color: 'bg-slate-300', width: 'w-1/3' },
+                        };
+                        const POSSESSION_MAP: Record<string, { label: string; color: string; width: string }> = {
+                          dominant: { label: '控球主导', color: 'bg-emerald-500', width: 'w-full' },
+                          balanced: { label: '攻守平衡', color: 'bg-cyan-500', width: 'w-2/3' },
+                          direct: { label: '直接快速', color: 'bg-amber-400', width: 'w-1/2' },
+                        };
+                        return (
+                          <div className="rounded-xl border border-emerald-100 bg-gradient-to-br from-emerald-50/50 to-white p-4">
+                            <div className="flex items-center gap-2 text-xs font-black text-emerald-700">
+                              <Swords className="h-3.5 w-3.5" />
+                              战术分析
+                            </div>
+
+                            {/* 阵型 */}
+                            <div className="mt-3 flex items-center gap-2">
+                              <span className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-black text-white">{tactics.formation}</span>
+                              {tactics.formationAlt && (
+                                <>
+                                  <span className="text-[10px] text-slate-400">备选</span>
+                                  <span className="rounded-lg bg-slate-200 px-2.5 py-1 text-xs font-bold text-slate-700">{tactics.formationAlt}</span>
+                                </>
+                              )}
+                            </div>
+
+                            {/* 风格标签 */}
+                            <div className="mt-3 flex flex-wrap gap-1.5">
+                              {tactics.style.map((s) => (
+                                <span key={s} className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">{s}</span>
+                              ))}
+                            </div>
+
+                            {/* 进攻套路 */}
+                            <div className="mt-3">
+                              <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
+                                <Target className="h-3 w-3 text-emerald-500" />
+                                进攻套路
+                              </div>
+                              <p className="mt-1 text-[11px] leading-5 text-slate-600">{tactics.attackPattern}</p>
+                            </div>
+
+                            {/* 防守策略 */}
+                            <div className="mt-3">
+                              <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
+                                <Shield className="h-3 w-3 text-cyan-500" />
+                                防守策略
+                              </div>
+                              <p className="mt-1 text-[11px] leading-5 text-slate-600">{tactics.defensePattern}</p>
+                            </div>
+
+                            {/* 核心球员角色 */}
+                            {tactics.keyPlayerRole.length > 0 && (
+                              <div className="mt-3 space-y-2">
+                                <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
+                                  <Star className="h-3 w-3 text-amber-500" />
+                                  核心球员角色
+                                </div>
+                                {tactics.keyPlayerRole.map((kr) => (
+                                  <div key={kr.playerName} className="rounded-lg bg-white p-2.5 ring-1 ring-slate-100">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-black text-slate-900">{kr.playerName}</span>
+                                      <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700">{kr.role}</span>
+                                    </div>
+                                    <p className="mt-1 text-[10px] leading-4 text-slate-500">{kr.description}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* 三项指标 */}
+                            <div className="mt-3 space-y-2.5">
+                              {(() => {
+                                const spLevel = LEVEL_MAP[tactics.setPieceThreat];
+                                const caLevel = LEVEL_MAP[tactics.counterAttack];
+                                const posInfo = POSSESSION_MAP[tactics.possessionStyle];
+                                return [
+                                  { label: '定位球威胁', value: spLevel.label, color: spLevel.color, width: spLevel.width },
+                                  { label: '反击能力', value: caLevel.label, color: caLevel.color, width: caLevel.width },
+                                  { label: '控球风格', value: posInfo.label, color: posInfo.color, width: posInfo.width },
+                                ];
+                              })().map((item) => (
+                                <div key={item.label}>
+                                  <div className="mb-1 flex items-center justify-between text-[10px]">
+                                    <span className="font-bold text-slate-500">{item.label}</span>
+                                    <span className="font-bold text-slate-700">{item.value}</span>
+                                  </div>
+                                  <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+                                    <div className={`h-full rounded-full ${item.color} ${item.width}`} />
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* 弱点 */}
+                            <div className="mt-3 rounded-lg bg-amber-50 p-2.5">
+                              <div className="flex items-center gap-1.5 text-[10px] font-bold text-amber-700">
+                                <AlertTriangle className="h-3 w-3" />
+                                弱点
+                              </div>
+                              <p className="mt-1 text-[10px] leading-4 text-amber-800">{tactics.weakness}</p>
+                            </div>
+
+                            {/* 战术总结 */}
+                            <div className="mt-3 rounded-lg bg-slate-50 p-2.5">
+                              <p className="text-[10px] leading-5 text-slate-600">{tactics.summary}</p>
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                       {/* 上届世界杯成绩 */}
                       {lastWorldCup && (

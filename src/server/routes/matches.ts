@@ -21,13 +21,20 @@ import {
   isMatchOnBeijingDate,
 } from '../helpers';
 import { getRuntimeConfig } from '../config';
-import { emitPredictionPlaced, emitTournamentBet } from '../activity_service';
-import { consumeCard, userHasCard, applyCardToSettlement } from '../prediction_card_service';
-import { PredictionCardId } from '../../types';
+import { emitTournamentBet } from '../activity_service';
 import { getUserTitle } from '../badge_service';
 import { getHeadToHead } from '../../data/worldcup/headToHead';
 import { mergeCorrectScoreOdds } from '../../utils/odds';
 import { getTeamProfile } from '../../data/worldcup/teams';
+import { runBusinessTransaction } from '../services/transaction_guard';
+import { placePrediction } from '../services/prediction_service';
+import {
+  getPostMatchReport,
+  getShareCardData,
+  getRecentReports,
+  regeneratePostMatchReport,
+} from '../services/post_match_report_service';
+import { adjustWalletBalance } from '../services/wallet_service';
 
 const config = getRuntimeConfig();
 const router = Router();
@@ -228,148 +235,46 @@ router.post('/api/predictions', async (req: Request, res: Response) => {
   const user = getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ error: '认证已失效，请重新登录。' });
 
-  const { matchId, market, optionKey, optionLabel, stakePoints } = req.body as {
+  const { matchId, market, optionKey, optionLabel, stakePoints, card } = req.body as {
     matchId: string;
     market: Prediction['market'];
     optionKey: string;
     optionLabel: string;
     stakePoints: number;
+    card?: string;
   };
 
   if (!matchId || !market || !optionKey || !optionLabel || !stakePoints) {
     return res.status(400).json({ error: '请完整选择玩法、选项和积分。' });
   }
 
-    const betAmount = roundPoints(Number(stakePoints));
-  if (!Number.isFinite(betAmount) || betAmount <= 0) {
-    return res.status(400).json({ error: '积分数量不合法。' });
-  }
-
-  await dbService.withWriteLock(async () => {
-    const db = dbService.getData();
-    const match = db.matches.find((item) => item.id === matchId);
-    if (!match) return res.status(404).json({ error: '比赛不存在。' });
-
-    const operationalStatus = deriveOperationalStatus(match, Date.now(), config.predictionLockMinutes);
-    if (operationalStatus !== 'BETTABLE' && operationalStatus !== 'LOCKING_SOON') {
-      return res.status(400).json({ error: '这场比赛当前不能继续竞猜。' });
-    }
-
-    const snapshot = resolveOddsSnapshot(matchId, market, optionKey);
-    if (!snapshot) return res.status(400).json({ error: '当前没有可用指数，请稍后再试。' });
-
-    const wallet = db.wallets.find((item) => item.userId === user.id);
-    if (!wallet) return res.status(500).json({ error: '钱包不存在。' });
-    if (wallet.balance < betAmount) {
-      return res.status(400).json({ error: `积分不足，当前余额 ${wallet.balance}。` });
-    }
-
-    const singleMatchTotalBet = db.predictions
-      .filter((item) => item.userId === user.id && item.matchId === matchId && (item.status === 'PENDING' || item.status === 'LOCKED'))
-      .reduce((sum, item) => sum + item.stakePoints, 0);
-
-    if (singleMatchTotalBet + betAmount > wallet.balance * 0.5 && wallet.balance > 200) {
-      return res.status(400).json({ error: '单场总投入不能超过当前余额的 50%。' });
-    }
-    if (wallet.balance - betAmount < 100) {
-      return res.status(400).json({ error: '下单后至少保留 100 积分。' });
-    }
-
-    const predictionId = createId('pred');
-    const potentialReturn = roundPoints(betAmount * snapshot.oddsDecimal);
-    const usedCard = (req.body.card && typeof req.body.card === 'string') ? (req.body.card as PredictionCardId) : undefined;
-    let cardEffectNotes: string | undefined;
-
-    // 验证卡牌
-    if (usedCard) {
-      if (!userHasCard(user.id, usedCard)) {
-        return res.status(400).json({ error: '你暂时没有这张卡牌。' });
-      }
-      // 验证卡牌使用时机：反悔卡不能在下注时使用
-      if (usedCard === 'REGRET') {
-        return res.status(400).json({ error: '反悔卡需要在开赛前手动使用，不能在下注时附带。' });
-      }
-    }
-
-    const prediction: Prediction = {
-      id: predictionId,
-      userId: user.id,
-      groupId: user.groupId,
-      matchId,
-      market,
-      optionKey,
-      optionLabel,
-      stakePoints: betAmount,
-      oddsDecimal: snapshot.oddsDecimal,
-      potentialReturn,
-      status: 'PENDING',
-      placedAt: new Date().toISOString(),
-      oddsSnapshot: {
+  try {
+    const result = await runBusinessTransaction('placePrediction', () => {
+      return placePrediction({
+        userId: user.id,
+        groupId: user.groupId,
+        matchId,
         market,
         optionKey,
         optionLabel,
-        oddsDecimal: snapshot.oddsDecimal,
-        source: snapshot.source as any,
-        capturedAt: snapshot.capturedAt,
-      },
-      usedCard,
-    };
-
-    // 消耗卡牌
-    if (usedCard) {
-      const consumed = consumeCard(user.id, usedCard);
-      if (consumed) {
-        const cardDef = {
-          NO_LOSS: '🛡️ 免亏卡',
-          DOUBLE: '⚡ 双倍卡',
-          REGRET: '↩️ 反悔卡',
-          FLOOR: '🛟 保底卡',
-        }[usedCard];
-        cardEffectNotes = `已使用 ${cardDef}`;
-        prediction.cardEffectNotes = cardEffectNotes;
-      }
-    }
-
-    const oldBalance = wallet.balance;
-    wallet.balance -= betAmount;
-    db.predictions.push(prediction);
-    db.transactions.push({
-      id: createId('stake'),
-      userId: user.id,
-      type: 'PREDICTION_STAKE',
-      amount: -betAmount,
-      balanceBefore: oldBalance,
-      balanceAfter: wallet.balance,
-      relatedPredictionId: predictionId,
-      relatedMatchId: matchId,
-      note: `竞猜投入：${optionLabel}`,
-      createdAt: new Date().toISOString(),
+        stakePoints: Number(stakePoints),
+        usedCard: card && typeof card === 'string' ? (card as any) : undefined,
+      });
     });
 
-    // 触发群内动态
-    try {
-      emitPredictionPlaced({
-        userId: user.id,
-        displayName: user.displayName,
-        avatarUrl: user.avatarUrl,
-        matchId,
-        optionLabel,
-        stakePoints: betAmount,
-        oddsDecimal: snapshot.oddsDecimal,
-        groupId: user.groupId,
-      });
-    } catch (e) {
-      console.error('触发下注动态失败', e);
-    }
-
-    dbService.save();
+    const db = dbService.getData();
+    const match = db.matches.find((item) => item.id === matchId);
     res.json({
       success: true,
-      prediction,
-      wallet,
-      match: serializeMatch(match),
+      prediction: result.prediction,
+      wallet: { userId: user.id, balance: result.walletBalance },
+      match: match ? serializeMatch(match) : null,
     });
-  });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '下注失败';
+    const status = message.includes('不存在') || message.includes('不足') || message.includes('不能') || message.includes('不合法') || message.includes('卡牌') || message.includes('反悔卡') ? 400 : 500;
+    res.status(status).json({ error: message });
+  }
 });
 
 // ─── 长线竞猜 ───
@@ -413,74 +318,77 @@ async function placeTournamentBet(req: Request, res: Response, type: TournamentB
     return res.status(400).json({ error: '积分数量不合法。' });
   }
 
-  const db = dbService.getData();
-  const wallet = db.wallets.find((item) => item.userId === user.id);
-  if (!wallet) return res.status(500).json({ error: '钱包不存在。' });
-  if (wallet.balance < stake) return res.status(400).json({ error: '当前积分不足。' });
-
-  const existing = db.tournamentBets.find((item) => item.userId === user.id && item.type === type);
-  if (existing) {
-    return res.status(400).json({ error: '同一玩法当前版本只允许保留一条竞猜记录。' });
-  }
-
-  const option = marketConfig.options.find((item) => item.id === targetId);
-  if (!option) return res.status(400).json({ error: '未找到对应竞猜目标。' });
-
-  const bet: TournamentBet = {
-    id: createId('tour'),
-    userId: user.id,
-    roomId: user.groupId,
-    type,
-    targetId: option.id,
-    targetLabel: option.label,
-    targetSubLabel: option.subLabel,
-    stakePoints: stake,
-    oddsDecimal: option.oddsDecimal,
-    potentialReturn: roundPoints(stake * option.oddsDecimal),
-    status: 'OPEN',
-    openedAt: marketConfig.openedAt || new Date().toISOString(),
-    lockedAt: marketConfig.lockedAt || undefined,
-    placedAt: new Date().toISOString(),
-  };
-
-  const oldBalance = wallet.balance;
-  wallet.balance -= stake;
-  db.tournamentBets.push(bet);
-  db.transactions.push({
-    id: createId('tour-stake'),
-    userId: user.id,
-    type: 'PREDICTION_STAKE',
-    amount: -stake,
-    balanceBefore: oldBalance,
-    balanceAfter: wallet.balance,
-    note:
-      type === 'champion'
-        ? `冠军竞猜投入：${option.label}`
-        : type === 'golden_boot'
-          ? `金靴竞猜投入：${option.label}`
-          : `金球竞猜投入：${option.label}`,
-    createdAt: new Date().toISOString(),
-  });
-
-  // 触发长线竞猜动态
   try {
-    emitTournamentBet({
-      userId: user.id,
-      displayName: user.displayName,
-      avatarUrl: user.avatarUrl,
-      type,
-      targetLabel: option.label,
-      stakePoints: stake,
-      oddsDecimal: option.oddsDecimal,
-      tournamentBetId: bet.id,
-      groupId: user.groupId,
-    });
-  } catch (e) {
-    console.error('触发长线竞猜动态失败', e);
-  }
+    const result = await runBusinessTransaction('placeTournamentBet', () => {
+      const db = dbService.getData();
+      const wallet = db.wallets.find((item) => item.userId === user.id);
+      if (!wallet) throw new Error('钱包不存在。');
+      if (wallet.balance < stake) throw new Error('当前积分不足。');
 
-  dbService.save();
-  return res.json({ success: true, bet: serializeTournamentBet(bet), wallet });
+      const existing = db.tournamentBets.find((item) => item.userId === user.id && item.type === type);
+      if (existing) throw new Error('同一玩法当前版本只允许保留一条竞猜记录。');
+
+      const option = marketConfig.options.find((item) => item.id === targetId);
+      if (!option) throw new Error('未找到对应竞猜目标。');
+
+      const bet: TournamentBet = {
+        id: createId('tour'),
+        userId: user.id,
+        roomId: user.groupId,
+        type,
+        targetId: option.id,
+        targetLabel: option.label,
+        targetSubLabel: option.subLabel,
+        stakePoints: stake,
+        oddsDecimal: option.oddsDecimal,
+        potentialReturn: roundPoints(stake * option.oddsDecimal),
+        status: 'OPEN',
+        openedAt: marketConfig.openedAt || new Date().toISOString(),
+        lockedAt: marketConfig.lockedAt || undefined,
+        placedAt: new Date().toISOString(),
+      };
+
+      db.tournamentBets.push(bet);
+
+      // 扣减钱包
+      adjustWalletBalance({
+        userId: user.id,
+        amount: -stake,
+        type: 'PREDICTION_STAKE',
+        note:
+          type === 'champion'
+            ? `冠军竞猜投入：${option.label}`
+            : type === 'golden_boot'
+              ? `金靴竞猜投入：${option.label}`
+              : `金球竞猜投入：${option.label}`,
+      });
+
+      // 触发长线竞猜动态
+      try {
+        emitTournamentBet({
+          userId: user.id,
+          displayName: user.displayName,
+          avatarUrl: user.avatarUrl,
+          type,
+          targetLabel: option.label,
+          stakePoints: stake,
+          oddsDecimal: option.oddsDecimal,
+          tournamentBetId: bet.id,
+          groupId: user.groupId,
+        });
+      } catch (e) {
+        console.error('触发长线竞猜动态失败', e);
+      }
+
+      return { bet, wallet };
+    });
+
+    return res.json({ success: true, bet: serializeTournamentBet(result.bet), wallet: result.wallet });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '竞猜失败';
+    const status = message.includes('不足') || message.includes('不存在') || message.includes('只允许') || message.includes('未找到') ? 400 : 500;
+    res.status(status).json({ error: message });
+  }
 }
 
 router.post('/api/tournament-bets/champion', (req: Request, res: Response) => {
@@ -667,6 +575,33 @@ router.get('/api/stats/summary', (req: Request, res: Response) => {
     championPickDistribution: topCounts(Array.from(championMap.entries()), 10),
     correctScoreHeat: topCounts(Array.from(correctScoreMap.entries()), 10),
   });
+});
+
+// ─── 赛后战报 ───
+
+router.get('/api/matches/:id/post-report', (req: Request, res: Response) => {
+  try {
+    const report = getPostMatchReport(req.params.id);
+    res.json(report);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '获取战报失败';
+    res.status(404).json({ error: message });
+  }
+});
+
+router.get('/api/matches/:id/share-card', (req: Request, res: Response) => {
+  try {
+    const card = getShareCardData(req.params.id);
+    res.json(card);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '获取分享卡失败';
+    res.status(404).json({ error: message });
+  }
+});
+
+router.get('/api/matches/recent-reports', (_req: Request, res: Response) => {
+  const limit = Math.min(10, Math.max(1, Number(_req.query.limit) || 3));
+  res.json(getRecentReports(limit));
 });
 
 export default router;

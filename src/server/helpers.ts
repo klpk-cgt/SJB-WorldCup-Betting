@@ -120,7 +120,7 @@ export function createAdminSession() {
 
 export function isAdminAuthenticated(req: Request) {
   cleanupExpiredSessions();
-  const token = (req.headers['x-admin-token'] || req.query.adminToken || '').toString();
+  const token = (req.headers['x-admin-token'] || '').toString();
   if (!token) return false;
   const session = adminSessions.get(token);
   if (!session) return false;
@@ -430,6 +430,15 @@ export function serializeUserForClient(user: User) {
   return safeUser;
 }
 
+/** 将外部 GitHub raw 头像 URL 转为本地 /player-avatars/ 路径，ui-avatars.com 等外部服务返回 null */
+export function toLocalAvatarUrl(url: string): string | null {
+  if (!url) return null;
+  const match = url.match(/\/assets\/players\/([a-z0-9_-]+\.jpg)$/i);
+  if (match) return `/player-avatars/${match[1]}`;
+  if (url.includes('ui-avatars.com')) return null;
+  return url;
+}
+
 export function serializeMatch(match: Match) {
   const db = dbService.getData();
   const homeTeam = db.teams.find((team) => team.id === match.homeTeamId) || seedTeamMap.get(match.homeTeamId);
@@ -544,7 +553,8 @@ export function getTournamentMarketConfig(type: TournamentBet['type']) {
   }
 
   const unlocked = hasLateStageMarketsUnlocked();
-  const options = type === 'golden_boot' ? GOLDEN_BOOT_OPTIONS : GOLDEN_BALL_OPTIONS;
+  const options = (type === 'golden_boot' ? GOLDEN_BOOT_OPTIONS : GOLDEN_BALL_OPTIONS)
+    .map(o => ({ ...o, avatarUrl: toLocalAvatarUrl(o.avatarUrl) }));
   return {
     type,
     label: type === 'golden_boot' ? '金靴竞猜' : '金球竞猜',
@@ -594,327 +604,16 @@ export function resolveOddsSnapshot(matchId: string, market: Prediction['market'
 }
 
 // ─── Match Settlement ───
+// 结算逻辑已迁移至 settlement_service.ts，这里保留兼容入口
 
-export function settleMatch(match: Match, options: { forceResettle?: boolean } = {}) {
-  const db = dbService.getData();
-  if (match.isSettled && !options.forceResettle) {
-    throw new Error('该比赛已完成正式结算；如需重结算，请显式传入 forceResettle。');
-  }
-  if (!FINISHED_MATCH_STATUSES.has(match.status)) {
-    throw new Error('比赛尚未正式结束，暂时不能结算。');
-  }
-  if (match.homeScore === undefined || match.awayScore === undefined) {
-    throw new Error('比分还不完整，不能开始结算。');
-  }
-
-  // 结算前自动备份（失败仅记录日志，不阻塞结算）
-  try {
-    const backupResult = createBackup(`auto-before-settle-${match.id}`);
-    if (!backupResult.ok) {
-      logger.warn('结算前自动备份失败', { matchId: match.id, error: backupResult.error });
-    }
-  } catch (e) {
-    logger.error('结算前自动备份异常', { error: e instanceof Error ? e.message : String(e) });
-  }
-
-  const matchPredictions = db.predictions.filter((prediction) => prediction.matchId === match.id);
-  if (match.isSettled) {
-    for (const prediction of matchPredictions) {
-    if (prediction.status === 'WON' && prediction.settledReturn) {
-      const wallet = db.wallets.find((item) => item.userId === prediction.userId);
-      if (wallet) {
-        const before = wallet.balance;
-        wallet.balance -= prediction.settledReturn;
-        db.transactions.push({
-          id: createId('rollback'),
-          userId: prediction.userId,
-          type: 'REFUND',
-          amount: -prediction.settledReturn,
-          balanceBefore: before,
-          balanceAfter: wallet.balance,
-          relatedPredictionId: prediction.id,
-          relatedMatchId: match.id,
-          note: `重结回滚：${match.roundName}`,
-          createdAt: new Date().toISOString(),
-        });
-      }
-    }
-
-    prediction.status = 'PENDING';
-    prediction.settledReturn = 0;
-    prediction.settledProfit = 0;
-    prediction.settledAt = undefined;
-    }
-  }
-
-  const hScore = match.homeScore;
-  const aScore = match.awayScore;
-
-  for (const prediction of matchPredictions) {
-    const wallet = db.wallets.find((item) => item.userId === prediction.userId);
-    if (!wallet) continue;
-
-    let won = false;
-    if (prediction.market === 'H2H') {
-      won =
-        (prediction.optionKey === 'home' && hScore > aScore) ||
-        (prediction.optionKey === 'draw' && hScore === aScore) ||
-        (prediction.optionKey === 'away' && hScore < aScore);
-    } else if (prediction.market === 'TOTAL_GOALS') {
-      const totalGoals = hScore + aScore;
-      won =
-        (prediction.optionKey === 'over_2_5' && totalGoals > 2.5) ||
-        (prediction.optionKey === 'under_2_5' && totalGoals < 2.5);
-    } else if (prediction.market === 'CORRECT_SCORE') {
-      const normalizedKey = prediction.optionKey.replace('correctScore_', '').replace('_', '-');
-      const actualScore = `${hScore}-${aScore}`;
-
-      if (normalizedKey === 'HOME_OTHER') {
-        // 主胜其他：主队赢且实际比分不在预设列表中
-        const presetHomeScores = ['1-0','2-0','2-1','3-0','3-1','3-2','4-0','4-1','4-2','5-0','5-1','5-2'];
-        won = hScore > aScore && !presetHomeScores.includes(actualScore);
-      } else if (normalizedKey === 'DRAW_OTHER') {
-        // 平局其他：平局且实际比分不在预设列表中
-        const presetDrawScores = ['0-0','1-1','2-2','3-3','4-4'];
-        won = hScore === aScore && !presetDrawScores.includes(actualScore);
-      } else if (normalizedKey === 'AWAY_OTHER') {
-        // 客胜其他：客队赢且实际比分不在预设列表中
-        const presetAwayScores = ['0-1','0-2','1-2','0-3','1-3','2-3','0-4','1-4','2-4','0-5','1-5','2-5'];
-        won = hScore < aScore && !presetAwayScores.includes(actualScore);
-      } else if (normalizedKey === 'Other') {
-        // 兼容旧数据
-        const allPreset = ['1-0','2-0','2-1','3-0','3-1','3-2','4-0','4-1','4-2','5-0','5-1','5-2',
-          '0-0','1-1','2-2','3-3','4-4',
-          '0-1','0-2','1-2','0-3','1-3','2-3','0-4','1-4','2-4','0-5','1-5','2-5'];
-        won = !allPreset.includes(actualScore);
-      } else {
-        won = normalizedKey === actualScore;
-      }
-    } else if (prediction.market === 'QUALIFY' && match.winnerTeamId) {
-      won =
-        (prediction.optionKey === 'homeQualify' && match.winnerTeamId === match.homeTeamId) ||
-        (prediction.optionKey === 'awayQualify' && match.winnerTeamId === match.awayTeamId);
-    }
-
-    if (won) {
-      const pointsWon = roundPoints(prediction.stakePoints * prediction.oddsDecimal);
-      const oldBalance = wallet.balance;
-      wallet.balance += pointsWon;
-      prediction.status = 'WON';
-      prediction.settledReturn = pointsWon;
-      prediction.settledProfit = pointsWon - prediction.stakePoints;
-      prediction.settledAt = new Date().toISOString();
-
-      // 应用卡牌效果
-      if (prediction.usedCard) {
-        const cardResult = applyCardToSettlement(
-          prediction,
-          pointsWon,
-          pointsWon - prediction.stakePoints,
-          'WON',
-        );
-        if (cardResult.finalReturn !== pointsWon) {
-          // 调整金额
-          const diff = cardResult.finalReturn - pointsWon;
-          wallet.balance = oldBalance + cardResult.finalReturn;
-          prediction.settledReturn = cardResult.finalReturn;
-          prediction.settledProfit = cardResult.finalProfit;
-          // 写一笔卡牌补偿流水
-          if (diff > 0) {
-            db.transactions.push({
-              id: createId('card-effect'),
-              userId: prediction.userId,
-              type: 'CARD_EFFECT',
-              amount: diff,
-              balanceBefore: oldBalance + pointsWon,
-              balanceAfter: wallet.balance,
-              relatedPredictionId: prediction.id,
-              relatedMatchId: match.id,
-              note: `卡牌效果：${cardResult.cardNote || prediction.usedCard}`,
-              createdAt: new Date().toISOString(),
-            });
-          }
-        }
-        if (cardResult.cardNote) {
-          prediction.cardEffectNotes = cardResult.cardNote;
-        }
-      }
-
-      db.transactions.push({
-        id: createId('win'),
-        userId: prediction.userId,
-        type: 'PREDICTION_WIN',
-        amount: pointsWon,
-        balanceBefore: oldBalance,
-        balanceAfter: wallet.balance,
-        relatedPredictionId: prediction.id,
-        relatedMatchId: match.id,
-        note: `竞猜命中：${match.roundName} ${prediction.optionLabel}`,
-        createdAt: new Date().toISOString(),
-      });
-
-      // 触发群内动态
-      const user = db.users.find((u) => u.id === prediction.userId);
-      if (user) {
-        try {
-          emitPredictionWon({
-            userId: user.id,
-            displayName: user.displayName,
-            avatarUrl: user.avatarUrl,
-            matchId: match.id,
-            predictionId: prediction.id,
-            optionLabel: prediction.optionLabel,
-            stakePoints: prediction.stakePoints,
-            settledReturn: pointsWon,
-            settledProfit: pointsWon - prediction.stakePoints,
-          });
-          if (pointsWon - prediction.stakePoints >= 5000) {
-            emitBigWin({
-              userId: user.id,
-              displayName: user.displayName,
-              avatarUrl: user.avatarUrl,
-              matchId: match.id,
-              predictionId: prediction.id,
-              optionLabel: prediction.optionLabel,
-              settledProfit: pointsWon - prediction.stakePoints,
-            });
-          }
-          // 评估连胜（连续 WON）
-          const sortedUserPreds = db.predictions
-            .filter((p) => p.userId === user.id && p.settledAt)
-            .sort((a, b) => new Date(a.settledAt!).getTime() - new Date(b.settledAt!).getTime());
-          let streak = 0;
-          for (let i = sortedUserPreds.length - 1; i >= 0; i--) {
-            if (sortedUserPreds[i].status === 'WON') {
-              streak += 1;
-            } else {
-              break;
-            }
-          }
-          if (streak === 3 || streak === 5 || streak === 10) {
-            emitStreakHit({
-              userId: user.id,
-              displayName: user.displayName,
-              avatarUrl: user.avatarUrl,
-              streak,
-              matchId: match.id,
-              predictionId: prediction.id,
-            });
-          }
-          // 评估徽章与称号
-          evaluateUserBadges(user.id, user.displayName, user.avatarUrl);
-          syncUserTitle(user.id, user.displayName, user.avatarUrl);
-        } catch (e) {
-          logger.error('结算触发动态失败', { error: e instanceof Error ? e.message : String(e) });
-        }
-      }
-    } else {
-      prediction.status = 'LOST';
-      prediction.settledReturn = 0;
-      prediction.settledProfit = -prediction.stakePoints;
-      prediction.settledAt = new Date().toISOString();
-
-      // 应用卡牌效果（免亏/保底卡）
-      if (prediction.usedCard) {
-        const cardResult = applyCardToSettlement(prediction, 0, -prediction.stakePoints, 'LOST');
-        if (cardResult.finalReturn > 0) {
-          wallet.balance += cardResult.finalReturn;
-          prediction.settledReturn = cardResult.finalReturn;
-          prediction.settledProfit = cardResult.finalProfit;
-          prediction.status = 'WON';
-          db.transactions.push({
-            id: createId('card-effect'),
-            userId: prediction.userId,
-            type: 'CARD_EFFECT',
-            amount: cardResult.finalReturn,
-            balanceBefore: wallet.balance - cardResult.finalReturn,
-            balanceAfter: wallet.balance,
-            relatedPredictionId: prediction.id,
-            relatedMatchId: match.id,
-            note: `卡牌效果：${cardResult.cardNote || prediction.usedCard}`,
-            createdAt: new Date().toISOString(),
-          });
-        }
-        if (cardResult.cardNote) {
-          prediction.cardEffectNotes = cardResult.cardNote;
-        }
-      }
-
-      db.transactions.push({
-        id: createId('lose'),
-        userId: prediction.userId,
-        type: 'PREDICTION_LOSE',
-        amount: -prediction.stakePoints,
-        balanceBefore: wallet.balance,
-        balanceAfter: wallet.balance,
-        relatedPredictionId: prediction.id,
-        relatedMatchId: match.id,
-        note: `竞猜未命中：${match.roundName} ${prediction.optionLabel}`,
-        createdAt: new Date().toISOString(),
-      });
-
-      // 触发未中动态
-      const user = db.users.find((u) => u.id === prediction.userId);
-      if (user) {
-        try {
-          emitPredictionLost({
-            userId: user.id,
-            displayName: user.displayName,
-            avatarUrl: user.avatarUrl,
-            matchId: match.id,
-            predictionId: prediction.id,
-            optionLabel: prediction.optionLabel,
-            stakePoints: prediction.stakePoints,
-          });
-          evaluateUserBadges(user.id, user.displayName, user.avatarUrl);
-          syncUserTitle(user.id, user.displayName, user.avatarUrl);
-        } catch (e) {
-          logger.error('结算触发动态失败', { error: e instanceof Error ? e.message : String(e) });
-        }
-      }
-    }
-  }
-
-  match.isSettled = true;
-  match.settledAt = new Date().toISOString();
-  match.settlementStatus = 'SETTLED';
-  match.operationalStatus = 'SETTLED';
-
-  const homeName = db.teams.find((team) => team.id === match.homeTeamId)?.nameZh || '主队';
-  const awayName = db.teams.find((team) => team.id === match.awayTeamId)?.nameZh || '客队';
-  db.aiContents.unshift({
-    id: createId('ai-recap'),
-    type: 'POST_MATCH_RECAP',
+export async function settleMatch(match: Match, options: { forceResettle?: boolean } = {}) {
+  // 委托给 settlement_service
+  const { settleMatchById } = await import('./services/settlement_service');
+  return await settleMatchById({
     matchId: match.id,
-    title: `赛后速览：${homeName} vs ${awayName}`,
-    content: `${homeName} 与 ${awayName} 的比赛已经结束，最终比分 ${hScore} : ${aScore}。本场竞猜已经自动结算完成。`,
-    summary: `比分定格在 ${hScore} : ${aScore}，本场竞猜已完成结算。`,
-    bullets: ['结算已写入钱包', '重结时会先回滚再重算', '榜单会随着结算自动刷新'],
-    riskWarning: '若赛果官方修订，后台可以触发重结。',
-    model: 'local-fallback',
-    provider: 'Local',
-    fallbackUsed: true,
-    createdAt: new Date().toISOString(),
+    source: 'AUTO' as const,
+    forceResettle: options.forceResettle,
   });
-
-  dbService.refreshBracketState();
-  markMatchAiStale(match.id);
-  markRoomLeaderboardAiStale(dbService.getPrimaryRoomId());
-
-  // WebSocket 推送：比赛结算
-  try {
-    const ws = require('./websocket');
-    ws.broadcastMatchSettled(match.id, hScore, aScore, match.winnerTeamId);
-    for (const pred of matchPredictions) {
-      const settledReturn = pred.settledReturn ?? 0;
-      const settledProfit = roundPoints(settledReturn - pred.stakePoints);
-      ws.sendPredictionResult(pred.userId, pred.id, match.id, pred.status, settledReturn, settledProfit);
-    }
-  } catch (e) {
-    // WS 推送失败不影响结算流程
-  }
-
-  return matchPredictions.length;
 }
 
 /**
@@ -922,7 +621,9 @@ export function settleMatch(match: Match, options: { forceResettle?: boolean } =
  * 由定时任务调度器调用
  * @returns 结算的比赛数量
  */
-export function autoSettleFinishedMatches(db: ReturnType<typeof dbService.getData>): number {
+export async function autoSettleFinishedMatches(db: ReturnType<typeof dbService.getData>): Promise<number> {
+  const { settleMatchById } = await import('./services/settlement_service');
+  const { runBusinessTransaction } = await import('./services/transaction_guard');
   let settledCount = 0;
   for (const match of db.matches) {
     if (
@@ -941,7 +642,12 @@ export function autoSettleFinishedMatches(db: ReturnType<typeof dbService.getDat
       continue;
     }
     try {
-      settleMatch(match);
+      await runBusinessTransaction('autoSettleMatch', async () => {
+        await settleMatchById({
+          matchId: match.id,
+          source: 'AUTO',
+        });
+      });
       settledCount++;
       logger.settlement(`Auto-settled: ${match.homeTeamId} ${match.homeScore}:${match.awayScore} ${match.awayTeamId}`, { matchId: match.id });
     } catch (error) {
@@ -977,7 +683,7 @@ export async function runScheduledMaintenance(forceSync = false) {
       FINISHED_MATCH_STATUSES.has(match.status)
     ) {
       try {
-        settleMatch(match);
+        await settleMatch(match);
         changed = true;
       } catch (error) {
         console.error('Auto settlement failed', error);
