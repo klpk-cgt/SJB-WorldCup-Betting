@@ -12,3 +12,4 @@ admin_sessions.json
 runtime/
 backups/
 *.png
+!src/assets/*.png
