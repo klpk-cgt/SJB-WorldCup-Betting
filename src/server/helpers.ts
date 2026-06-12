@@ -1063,7 +1063,7 @@ export const quizQuestionPool = [
 ];
 
 export function getDailyQuizQuestions(): typeof quizQuestionPool {
-  const today = new Date().toISOString().split('T')[0];
+  const today = toBeijingDateKey();
   const seed = today.split('-').join('');
   let hash = 0;
   for (let i = 0; i < seed.length; i++) {

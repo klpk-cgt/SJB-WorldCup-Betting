@@ -3,13 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/**
- * 统一下注服务
- *
- * 封装竞猜下注的完整业务逻辑，route 只负责参数读取和返回响应。
- * 必须在 runBusinessTransaction 内部调用。
- */
-
 import { dbService } from '../../db/db_service';
 import { Prediction, PredictionCardId } from '../../types';
 import { adjustWalletBalance } from './wallet_service';
@@ -42,45 +35,25 @@ interface PlacePredictionResult {
   walletBalance: number;
 }
 
-/**
- * 统一下注方法
- *
- * 内部负责：
- * 1. 校验比赛存在
- * 2. 校验比赛状态允许下注
- * 3. 校验赔率快照存在
- * 4. 校验余额充足
- * 5. 校验单场投入限制
- * 6. 校验卡牌库存
- * 7. 消耗卡牌
- * 8. 扣减钱包（通过 wallet_service）
- * 9. 写入 prediction
- * 10. 触发群内动态
- * 11. 返回结果
- */
 export function placePrediction(params: PlacePredictionParams): PlacePredictionResult {
   const db = dbService.getData();
   const { userId, groupId, matchId, market, optionKey, optionLabel, stakePoints, usedCard } = params;
 
-  // 1. 校验比赛存在
   const match = db.matches.find((item) => item.id === matchId);
   if (!match) {
     throw new Error('比赛不存在。');
   }
 
-  // 2. 校验比赛状态允许下注
   const operationalStatus = deriveOperationalStatus(match, Date.now(), config.predictionLockMinutes);
   if (operationalStatus !== 'BETTABLE' && operationalStatus !== 'LOCKING_SOON') {
     throw new Error('这场比赛当前不能继续竞猜。');
   }
 
-  // 3. 校验赔率快照存在
   const snapshot = resolveOddsSnapshot(matchId, market, optionKey);
   if (!snapshot) {
     throw new Error('当前没有可用指数，请稍后再试。');
   }
 
-  // 4. 校验余额充足
   const betAmount = roundPoints(stakePoints);
   if (!Number.isFinite(betAmount) || betAmount <= 0) {
     throw new Error('积分数量不合法。');
@@ -94,9 +67,13 @@ export function placePrediction(params: PlacePredictionParams): PlacePredictionR
     throw new Error(`积分不足，当前余额 ${wallet.balance}。`);
   }
 
-  // 5. 校验单场投入限制
   const singleMatchTotalBet = db.predictions
-    .filter((item) => item.userId === userId && item.matchId === matchId && (item.status === 'PENDING' || item.status === 'LOCKED'))
+    .filter(
+      (item) =>
+        item.userId === userId &&
+        item.matchId === matchId &&
+        (item.status === 'PENDING' || item.status === 'LOCKED'),
+    )
     .reduce((sum, item) => sum + item.stakePoints, 0);
 
   if (singleMatchTotalBet + betAmount > wallet.balance * 0.5 && wallet.balance > 200) {
@@ -106,7 +83,6 @@ export function placePrediction(params: PlacePredictionParams): PlacePredictionR
     throw new Error('下单后至少保留 100 积分。');
   }
 
-  // 6. 校验卡牌库存
   let cardEffectNotes: string | undefined;
   if (usedCard) {
     if (!userHasCard(userId, usedCard)) {
@@ -117,7 +93,6 @@ export function placePrediction(params: PlacePredictionParams): PlacePredictionR
     }
   }
 
-  // 7. 构建预测记录
   const predictionId = createId('pred');
   const potentialReturn = roundPoints(betAmount * snapshot.oddsDecimal);
 
@@ -145,22 +120,6 @@ export function placePrediction(params: PlacePredictionParams): PlacePredictionR
     usedCard,
   };
 
-  // 8. 消耗卡牌
-  if (usedCard) {
-    const consumed = consumeCard(userId, usedCard);
-    if (consumed) {
-      const cardDef = {
-        NO_LOSS: '🛡️ 免亏卡',
-        DOUBLE: '⚡ 双倍卡',
-        REGRET: '↩️ 反悔卡',
-        FLOOR: '🛟 保底卡',
-      }[usedCard];
-      cardEffectNotes = `已使用 ${cardDef}`;
-      prediction.cardEffectNotes = cardEffectNotes;
-    }
-  }
-
-  // 9. 扣减钱包（通过 wallet_service）
   adjustWalletBalance({
     userId,
     amount: -betAmount,
@@ -170,10 +129,22 @@ export function placePrediction(params: PlacePredictionParams): PlacePredictionR
     relatedMatchId: matchId,
   });
 
-  // 10. 写入 prediction
+  if (usedCard) {
+    const consumed = consumeCard(userId, usedCard);
+    if (consumed) {
+      const cardDef = {
+        NO_LOSS: '免亏卡',
+        DOUBLE: '双倍卡',
+        REGRET: '反悔卡',
+        FLOOR: '保底卡',
+      }[usedCard];
+      cardEffectNotes = `已使用 ${cardDef}`;
+      prediction.cardEffectNotes = cardEffectNotes;
+    }
+  }
+
   db.predictions.push(prediction);
 
-  // 11. 触发群内动态
   try {
     const user = db.users.find((u) => u.id === userId);
     if (user) {
@@ -189,7 +160,9 @@ export function placePrediction(params: PlacePredictionParams): PlacePredictionR
       });
     }
   } catch (e) {
-    logger.error('触发下注动态失败', { error: e instanceof Error ? e.message : String(e) });
+    logger.error('触发下注动态失败', {
+      error: e instanceof Error ? e.message : String(e),
+    });
   }
 
   return {

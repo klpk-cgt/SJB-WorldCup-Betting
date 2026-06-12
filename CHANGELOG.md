@@ -1,5 +1,44 @@
 # 更新日志 (Changelog)
 
+## v2.1.1 - 2026-06-13
+
+### Bug 修复
+
+- **事务回滚机制**：`transaction_guard.ts` 新增快照回滚，业务事务失败时自动恢复数据状态，防止脏数据写入
+- **下注扣款顺序修复**：`prediction_service.ts` 调整为先扣款再消耗卡牌，避免卡牌消耗后扣款失败导致数据不一致
+- **结算卡牌效果金额修复**：`settlement_service.ts` 统一卡牌效果处理逻辑，修复卡牌效果金额计算错误，中奖+卡牌效果合并为单笔交易记录
+- **每日问答时区修复**：`helpers.ts` 使用 `toBeijingDateKey()` 替代 `new Date().toISOString()`，确保北京时间日期正确
+
+### 性能优化
+
+- **移除请求级维护调用**：`matches.ts` 路由移除所有 `runScheduledMaintenance()` 调用，避免每次 API 请求都执行维护逻辑，显著提升响应速度
+
+### 功能改进
+
+- **观赛攻略入口**：`App.tsx` 新增观赛攻略页面导航入口（Eye 图标）
+- **连接状态优化**：WebSocket 连接状态"离线"改为"延迟"，移除脉冲动画减少视觉干扰
+- **MySQL 字符集保障**：`db-storage.mjs` 读写操作强制使用 `utf8mb4` 字符集，事务内设置 `SET NAMES utf8mb4`
+
+### 代码质量
+
+- **db_service 增强**：新增 `saveOrThrow()`、`createSnapshot()`、`restoreSnapshot()` 方法，提取 `persistCurrentState()` 私有方法
+- **代码格式化**：`settlement_service.ts` 和 `prediction_service.ts` 代码格式化，移除冗余注释
+- **清理废弃文档**：删除 `NAVIGATION_HUB_IMPLEMENTATION_PLAN.md`
+
+### 文件变更
+
+- 修改 `src/server/services/transaction_guard.ts` - 事务失败自动回滚
+- 修改 `src/server/services/prediction_service.ts` - 扣款顺序修复 + 代码清理
+- 修改 `src/server/services/settlement_service.ts` - 卡牌效果金额修复 + 代码格式化
+- 修改 `src/server/helpers.ts` - 每日问答时区修复
+- 修改 `src/server/routes/matches.ts` - 移除请求级维护调用
+- 修改 `src/db/db_service.ts` - 新增快照/回滚方法
+- 修改 `src/App.tsx` - 观赛攻略入口 + 连接状态优化
+- 修改 `scripts/db-storage.mjs` - MySQL utf8mb4 字符集保障
+- 删除 `NAVIGATION_HUB_IMPLEMENTATION_PLAN.md`
+
+---
+
 ## v2.1.0 - 2026-06-13
 
 ### 新增功能

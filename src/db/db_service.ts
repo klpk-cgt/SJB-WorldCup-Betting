@@ -338,15 +338,14 @@ class DatabaseService {
 
   public save() {
     try {
-      this.ensureDataDir();
-      const normalized = this.normalizeForPersistence();
-      fs.writeFileSync(DB_FILE_PATH, JSON.stringify(normalized, null, 2), 'utf-8');
-      if (this.useMySqlStorage()) {
-        this.writeMySqlSnapshot(normalized);
-      }
+      this.persistCurrentState();
     } catch (e) {
       console.error('Failed to write database to disk!', e);
     }
+  }
+
+  public saveOrThrow() {
+    this.persistCurrentState();
   }
 
   /**
@@ -407,6 +406,16 @@ class DatabaseService {
     }
   }
 
+  public createSnapshot(): DatabaseSchema {
+    return structuredClone(this.getData());
+  }
+
+  public restoreSnapshot(snapshot: DatabaseSchema) {
+    this.cache = structuredClone(snapshot);
+    this._derived = false;
+    this.ensureDerivedState();
+  }
+
   /** 延迟异步写入，合并短时间内的多次写入请求，不阻塞事件循环 */
   public saveAsync() {
     if (this._saveTimer) return; // 已有待写入的定时器，跳过
@@ -462,6 +471,15 @@ class DatabaseService {
   private useMySqlStorage() {
     const mode = String(process.env.APP_STORAGE_MODE || '').trim().toLowerCase();
     return mode === MYSQL_STORAGE_MODE || (!!process.env.DATABASE_URL && mode !== 'json');
+  }
+
+  private persistCurrentState() {
+    this.ensureDataDir();
+    const normalized = this.normalizeForPersistence();
+    fs.writeFileSync(DB_FILE_PATH, JSON.stringify(normalized, null, 2), 'utf-8');
+    if (this.useMySqlStorage()) {
+      this.writeMySqlSnapshot(normalized);
+    }
   }
 
   private normalizeForPersistence() {

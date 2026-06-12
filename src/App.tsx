@@ -5,7 +5,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Award, BarChart3, Calendar, GitBranch, History, Home, Menu, Settings, Sparkles, Trophy, UserRound, X } from 'lucide-react';
+import { Award, BarChart3, Calendar, Eye, GitBranch, History, Home, Menu, Settings, Sparkles, Trophy, UserRound, X } from 'lucide-react';
 import AdminPanel from './components/AdminPanel';
 import BracketPage from './components/BracketPage';
 import HistoryHallPage from './components/HistoryHallPage';
@@ -16,6 +16,7 @@ import MatchesTab from './components/MatchesTab';
 import MeTab from './components/MeTab';
 import PredictionTab from './components/PredictionTab';
 import StatsPage from './components/StatsPage';
+import WatchGuidePage from './components/WatchGuidePage';
 import SearchBar from './components/SearchBar';
 import AIRecommendations from './components/AIRecommendations';
 import { ADMIN_KEY_STORAGE, apiRequest, ROOM_SLUG_STORAGE, USER_CODE_STORAGE } from './utils/api';
@@ -23,7 +24,7 @@ import { useWebSocket } from './hooks/useWebSocket';
 import type { User, Wallet } from './types';
 
 type RootTab = 'home' | 'matches' | 'prediction' | 'leaderboard' | 'me' | 'admin';
-type PageTab = RootTab | 'match-detail' | 'history-hall' | 'bracket' | 'stats';
+type PageTab = RootTab | 'match-detail' | 'history-hall' | 'bracket' | 'stats' | 'watchguide';
 type MatchDetailTab = 'overview' | 'lineup' | 'events' | 'stats';
 
 const FOOTER_TABS: Array<{
@@ -163,6 +164,7 @@ export default function App() {
       { id: 'history-hall' as PageTab, label: '历史长廊', desc: '浏览历届世界杯经典内容', icon: <History className="h-5 w-5" /> },
       { id: 'bracket' as PageTab, label: '淘汰赛对阵图', desc: '查看晋级路径与实时比分', icon: <GitBranch className="h-5 w-5" /> },
       { id: 'stats' as PageTab, label: '统计页', desc: '查看群聊投注热度与分布', icon: <BarChart3 className="h-5 w-5" /> },
+      { id: 'watchguide' as PageTab, label: '观赛攻略', desc: '2026世界杯小组分析与必看比赛', icon: <Eye className="h-5 w-5" /> },
       { id: 'ai-recommend' as PageTab, label: 'AI推荐', desc: 'AI分析推荐投注方案', icon: <Sparkles className="h-5 w-5 text-amber-500" /> },
       {
         id: 'admin' as PageTab,
@@ -217,8 +219,8 @@ export default function App() {
             <div className={`shrink-0 flex items-center gap-1 rounded-full px-2 py-1 text-[9px] font-bold ${
               wsConnected ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'
             }`}>
-              <span className={`h-1.5 w-1.5 rounded-full ${wsConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
-              {wsConnected ? '实时' : '离线'}
+              <span className={`h-1.5 w-1.5 rounded-full ${wsConnected ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+              {wsConnected ? '实时' : '延迟'}
             </div>
           </div>
         </header>
@@ -246,6 +248,7 @@ export default function App() {
           {activeTab === 'history-hall' && <HistoryHallPage />}
           {activeTab === 'bracket' && <BracketPage onOpenMatch={(matchId) => navigateTo('match-detail', matchId, 'overview')} />}
           {activeTab === 'stats' && <StatsPage />}
+          {activeTab === 'watchguide' && <WatchGuidePage />}
           {activeTab === 'ai-recommend' && <AIRecommendations onNavigate={navigateTo} />}
           {activeTab === 'me' &&
             (user ? (

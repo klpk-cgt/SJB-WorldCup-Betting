@@ -25,7 +25,10 @@ function normalizeCheckinLog(rows) {
 
 async function createPrisma() {
   const { PrismaClient } = await import('@prisma/client');
-  return new PrismaClient();
+  const prisma = new PrismaClient();
+  // 确保 MySQL 连接使用 utf8mb4 字符集
+  await prisma.$executeRawUnsafe('SET NAMES utf8mb4');
+  return prisma;
 }
 
 function normalizeSnapshot(snapshot) {
@@ -115,106 +118,113 @@ function buildSummary(snapshot) {
 async function loadSnapshot() {
   const prisma = await createPrisma();
   try {
-    const [
-      rooms,
-      users,
-      wallets,
-      transactions,
-      teams,
-      matches,
-      matchOddsRows,
-      predictions,
-      tournamentBets,
-      aiContents,
-      shareCards,
-      syncLogs,
-      adminOverrides,
-      players,
-      teamHistory,
-      activities,
-      userBadges,
-      userTitles,
-      cardInventories,
-      adminSessions,
-      checkinLog,
-    ] = await Promise.all([
-      prisma.room.findMany(),
-      prisma.user.findMany(),
-      prisma.wallet.findMany(),
-      prisma.transaction.findMany(),
-      prisma.team.findMany(),
-      prisma.match.findMany(),
-      prisma.matchOdds.findMany(),
-      prisma.prediction.findMany(),
-      prisma.tournamentBet.findMany(),
-      prisma.aiContent.findMany(),
-      prisma.shareCard.findMany(),
-      prisma.syncLog.findMany(),
-      prisma.adminOverride.findMany(),
-      prisma.player.findMany(),
-      prisma.teamHistory.findMany(),
-      prisma.activity.findMany(),
-      prisma.userBadge.findMany(),
-      prisma.userTitle.findMany(),
-      prisma.cardInventory.findMany(),
-      prisma.adminSession.findMany(),
-      prisma.checkinLog.findMany(),
-    ]);
+    // 使用事务确保所有读取操作使用同一个 utf8mb4 连接
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe('SET NAMES utf8mb4');
 
-    const matchOdds = {};
-    for (const row of matchOddsRows) {
-      matchOdds[row.matchId] = {
-        matchId: row.matchId,
-        h2h: {
-          homeWin: row.h2hHomeWin,
-          draw: row.h2hDraw,
-          awayWin: row.h2hAwayWin,
-        },
-        correctScore: row.correctScore || [],
-        totalGoals: {
-          over25: row.totalGoalsOver25,
-          under25: row.totalGoalsUnder25,
-        },
-        qualify: row.qualifyHome != null || row.qualifyAway != null
-          ? {
-              homeQualify: row.qualifyHome ?? undefined,
-              awayQualify: row.qualifyAway ?? undefined,
-            }
-          : undefined,
-        lastUpdated: row.lastUpdated,
-        source: row.source ?? undefined,
-        syncStatus: row.syncStatus ?? undefined,
-        lastSyncedAt: row.lastSyncedAt ?? undefined,
-      };
-    }
+      const [
+        rooms,
+        users,
+        wallets,
+        transactions,
+        teams,
+        matches,
+        matchOddsRows,
+        predictions,
+        tournamentBets,
+        aiContents,
+        shareCards,
+        syncLogs,
+        adminOverrides,
+        players,
+        teamHistory,
+        activities,
+        userBadges,
+        userTitles,
+        cardInventories,
+        adminSessions,
+        checkinLog,
+      ] = await Promise.all([
+        tx.room.findMany(),
+        tx.user.findMany(),
+        tx.wallet.findMany(),
+        tx.transaction.findMany(),
+        tx.team.findMany(),
+        tx.match.findMany(),
+        tx.matchOdds.findMany(),
+        tx.prediction.findMany(),
+        tx.tournamentBet.findMany(),
+        tx.aiContent.findMany(),
+        tx.shareCard.findMany(),
+        tx.syncLog.findMany(),
+        tx.adminOverride.findMany(),
+        tx.player.findMany(),
+        tx.teamHistory.findMany(),
+        tx.activity.findMany(),
+        tx.userBadge.findMany(),
+        tx.userTitle.findMany(),
+        tx.cardInventory.findMany(),
+        tx.adminSession.findMany(),
+        tx.checkinLog.findMany(),
+      ]);
 
-    return normalizeSnapshot({
-      rooms,
-      users,
-      wallets,
-      transactions,
-      teams,
-      matches,
-      matchOdds,
-      predictions,
-      tournamentBets,
-      aiContents,
-      shareCards,
-      bracketState: { generatedAt: new Date().toISOString(), rounds: [] },
-      syncLogs,
-      adminOverrides,
-      players,
-      teamHistory,
-      activities,
-      userBadges,
-      userTitles,
-      cardInventories,
-      adminSessions: adminSessions.map((item) => ({
-        token: item.token,
-        expiresAt: Number(item.expiresAt),
-      })),
-      checkinLog,
+      const matchOdds = {};
+      for (const row of matchOddsRows) {
+        matchOdds[row.matchId] = {
+          matchId: row.matchId,
+          h2h: {
+            homeWin: row.h2hHomeWin,
+            draw: row.h2hDraw,
+            awayWin: row.h2hAwayWin,
+          },
+          correctScore: row.correctScore || [],
+          totalGoals: {
+            over25: row.totalGoalsOver25,
+            under25: row.totalGoalsUnder25,
+          },
+          qualify: row.qualifyHome != null || row.qualifyAway != null
+            ? {
+                homeQualify: row.qualifyHome ?? undefined,
+                awayQualify: row.qualifyAway ?? undefined,
+              }
+            : undefined,
+          lastUpdated: row.lastUpdated,
+          source: row.source ?? undefined,
+          syncStatus: row.syncStatus ?? undefined,
+          lastSyncedAt: row.lastSyncedAt ?? undefined,
+        };
+      }
+
+      return normalizeSnapshot({
+        rooms,
+        users,
+        wallets,
+        transactions,
+        teams,
+        matches,
+        matchOdds,
+        predictions,
+        tournamentBets,
+        aiContents,
+        shareCards,
+        bracketState: { generatedAt: new Date().toISOString(), rounds: [] },
+        syncLogs,
+        adminOverrides,
+        players,
+        teamHistory,
+        activities,
+        userBadges,
+        userTitles,
+        cardInventories,
+        adminSessions: adminSessions.map((item) => ({
+          token: item.token,
+          expiresAt: Number(item.expiresAt),
+        })),
+        checkinLog,
+      });
     });
+
+    return result;
   } finally {
     await prisma.$disconnect();
   }
@@ -241,6 +251,9 @@ async function saveSnapshot(snapshot) {
 
   try {
     await prisma.$transaction(async (tx) => {
+      // 确保事务连接使用 utf8mb4 字符集（必须在事务内部设置，否则可能使用连接池中未设置字符集的连接）
+      await tx.$executeRawUnsafe('SET NAMES utf8mb4');
+
       await tx.checkinLog.deleteMany();
       await tx.adminSession.deleteMany();
       await tx.cardInventory.deleteMany();

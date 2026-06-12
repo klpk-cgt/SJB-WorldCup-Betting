@@ -25,11 +25,13 @@ export async function runBusinessTransaction<T>(
   fn: () => Promise<T> | T,
 ): Promise<T> {
   return dbService.withWriteLock(async () => {
+    const snapshot = dbService.createSnapshot();
     try {
       const result = await fn();
-      dbService.save();
+      dbService.saveOrThrow();
       return result;
     } catch (error) {
+      dbService.restoreSnapshot(snapshot);
       logger.error(`[BusinessTx] ${name} failed`, {
         error: error instanceof Error ? error.message : String(error),
       });

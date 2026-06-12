@@ -11,7 +11,6 @@ import {
   createId,
   getAuthenticatedUser,
   serializeMatch,
-  runScheduledMaintenance,
   deriveOperationalStatus,
   resolveOddsSnapshot,
   getTournamentMarketConfig,
@@ -42,12 +41,10 @@ const router = Router();
 // ─── 比赛列表 ───
 
 router.get('/api/matches', async (_req: Request, res: Response) => {
-  await runScheduledMaintenance();
   res.json(dbService.getMatches().map(serializeMatch));
 });
 
 router.get('/api/matches/today', async (_req: Request, res: Response) => {
-  await runScheduledMaintenance();
   const today = toBeijingDateKey();
   res.json(dbService.getMatches().filter((match) => isMatchOnBeijingDate(match, today)).map(serializeMatch));
 });
@@ -55,7 +52,6 @@ router.get('/api/matches/today', async (_req: Request, res: Response) => {
 // ─── 比赛搜索（必须在 :id 之前注册）───
 
 router.get('/api/matches/search', async (req: Request, res: Response) => {
-  await runScheduledMaintenance();
   const db = dbService.getData();
   const { q, status, from, to } = req.query as { q?: string; status?: string; from?: string; to?: string };
 
@@ -102,7 +98,6 @@ router.get('/api/matches/search', async (req: Request, res: Response) => {
 // ─── 队伍搜索 ───
 
 router.get('/api/matches/:id', async (req: Request, res: Response) => {
-  await runScheduledMaintenance();
   const db = dbService.getData();
   const match = db.matches.find((item) => item.id === req.params.id);
   if (!match) return res.status(404).json({ error: '未找到该比赛。' });
@@ -136,7 +131,6 @@ router.get('/api/matches/:id', async (req: Request, res: Response) => {
 });
 
 router.get('/api/bracket', async (_req: Request, res: Response) => {
-  await runScheduledMaintenance();
   dbService.refreshBracketState();
   res.json(dbService.getBracketState());
 });
@@ -144,7 +138,6 @@ router.get('/api/bracket', async (_req: Request, res: Response) => {
 // ─── 好友投注分布 ───
 
 router.get('/api/matches/:id/friend-picks', async (req: Request, res: Response) => {
-  await runScheduledMaintenance();
   const user = getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ error: '请先登录。' });
 
@@ -192,7 +185,6 @@ router.get('/api/matches/:id/friend-picks', async (req: Request, res: Response) 
 // ─── 竞猜快照 ───
 
 router.get('/api/predictions/snapshot/:matchId', async (req: Request, res: Response) => {
-  await runScheduledMaintenance();
   const db = dbService.getData();
   const match = db.matches.find((item) => item.id === req.params.matchId);
   if (!match) return res.status(404).json({ error: '未找到比赛。' });
@@ -231,7 +223,6 @@ router.get('/api/predictions/me', (req: Request, res: Response) => {
 // ─── 下注竞猜 ───
 
 router.post('/api/predictions', async (req: Request, res: Response) => {
-  await runScheduledMaintenance();
   const user = getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ error: '认证已失效，请重新登录。' });
 
