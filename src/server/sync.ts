@@ -1,6 +1,6 @@
 import { DatabaseSchema } from '../db/db_service';
 import { Match, MatchOdds, MatchStatus, SyncLog, SyncProvider, SyncStatus, SyncType, Team } from '../types';
-import { generateDefaultOdds, mergeCorrectScoreOdds, scaleCorrectScoreOdds } from '../utils/odds';
+import { generateDefaultOdds, mergeCorrectScoreOdds, scaleCorrectScoreOdds, DEFAULT_CORRECT_SCORE_OPTIONS } from '../utils/odds';
 import { broadcastScoreUpdate, broadcastOddsChange } from './websocket';
 
 // ── 默认赔率生成（委托给 utils/odds.ts 统一版本） ──
@@ -490,6 +490,12 @@ export async function syncOddsForMatches(params: {
       const oldOdds = db.matchOdds[match.id];
       const newH2h = { homeWin, draw, awayWin };
 
+      // 基于新 h2h 赔率重新缩放比分赔率（API 不支持 correct_score，用强弱队推算）
+      const scaledCorrectScore = scaleCorrectScoreOdds(
+        DEFAULT_CORRECT_SCORE_OPTIONS,
+        newH2h,
+      );
+
       db.matchOdds[match.id] = {
         matchId: match.id,
         h2h: newH2h,
@@ -497,14 +503,10 @@ export async function syncOddsForMatches(params: {
           over25: over25 || db.matchOdds[match.id]?.totalGoals.over25 || 1.9,
           under25: under25 || db.matchOdds[match.id]?.totalGoals.under25 || 1.9,
         },
-        correctScore:
-          mergeCorrectScoreOdds(
-            scoreMarket?.outcomes
-              ?.map((outcome) => ({
-                score: outcome.name,
-                odds: outcome.price,
-              })) || db.matchOdds[match.id]?.correctScore || [],
-          ).map(({ score, odds }) => ({ score, odds })),
+        correctScore: mergeCorrectScoreOdds(
+          scaledCorrectScore,
+          DEFAULT_CORRECT_SCORE_OPTIONS,
+        ).map(({ score, odds }) => ({ score, odds })),
         qualify: db.matchOdds[match.id]?.qualify,
         lastUpdated: new Date().toISOString(),
         source: 'The Odds API',
