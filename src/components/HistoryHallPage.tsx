@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Crown, Flag, History, Lightbulb, Medal, Trophy, UserRound } from 'lucide-react';
 import FlagBadge from './home/FlagBadge';
@@ -11,6 +11,8 @@ import { CLASSIC_MATCHES } from '../data/worldcup/classicMatches';
 import { PLAYER_PROFILES } from '../data/worldcup/playerProfiles';
 import type { PlayerProfileType } from '../data/worldcup/playerProfiles';
 import { CONTINENT_TITLES, GOALS_PER_TOURNAMENT, HOST_PERFORMANCE, PENALTY_SHOOTOUT_RECORDS } from '../data/worldcup/visualStats';
+import { apiRequest } from '../utils/api';
+import type { User } from '../types';
 
 type HistoryTab = 'champions' | 'teams' | 'players' | 'records' | 'funfacts' | 'goldenboot' | 'classicmatches' | 'visualstats';
 
@@ -31,10 +33,20 @@ const TAB_META: Array<{
   { key: 'funfacts', label: '冷知识', icon: <Lightbulb className="h-3.5 w-3.5" /> },
 ];
 
-export default function HistoryHallPage() {
+export default function HistoryHallPage({ user }: { user?: User | null }) {
   const [activeTab, setActiveTab] = useState<HistoryTab>('champions');
   const [funFactCategory, setFunFactCategory] = useState<FunFactCategory | 'all'>('all');
   const [playerType, setPlayerType] = useState<PlayerProfileType | 'all'>('all');
+
+  // 记录历史长廊访问事件（用于 history_scholar 徽章）
+  useEffect(() => {
+    if (!user?.id) return;
+    apiRequest('/api/activities/record', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'HISTORY_VISIT', userId: user.id }),
+    }).catch(() => { /* 静默失败，不影响页面 */ });
+  }, [user?.id]);
 
   const filteredFunFacts = useMemo(() => {
     if (funFactCategory === 'all') return FUN_FACTS;

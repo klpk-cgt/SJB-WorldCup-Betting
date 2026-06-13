@@ -10,9 +10,10 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { getRecentActivities, getUserActivities } from '../activity_service';
-import { getUserBadges, getUserTitle } from '../badge_service';
+import { getRecentActivities, getUserActivities, emitHistoryVisit } from '../activity_service';
+import { getUserBadges, getUserTitle, evaluateUserBadges } from '../badge_service';
 import { getBadgeDefinitions } from '../badge_service';
+import { dbService } from '../../db/db_service';
 
 const router = Router();
 
@@ -79,6 +80,39 @@ router.get('/api/users/:id/badges', (req: Request, res: Response) => {
   }
 
   res.json({ title, badges: payload });
+});
+
+/**
+ * 记录用户活动事件（如 HISTORY_VISIT）
+ * Body: { type: string, userId: string }
+ */
+router.post('/api/activities/record', (req: Request, res: Response) => {
+  const { type, userId } = req.body;
+  if (!type || !userId) {
+    res.status(400).json({ error: 'Missing type or userId' });
+    return;
+  }
+
+  // 查找用户信息
+  const db = dbService.getData();
+  const user = db.users.find((u) => u.id === userId);
+  if (!user) {
+    res.status(404).json({ error: 'User not found' });
+    return;
+  }
+
+  if (type === 'HISTORY_VISIT') {
+    emitHistoryVisit({
+      userId,
+      displayName: user.displayName,
+      avatarUrl: user.avatarUrl,
+    });
+    // 评估徽章（可能解锁 history_scholar）
+    const { newlyUnlocked } = evaluateUserBadges(userId, user.displayName, user.avatarUrl);
+    res.json({ recorded: true, newlyUnlocked });
+  } else {
+    res.status(400).json({ error: `Unsupported activity type: ${type}` });
+  }
 });
 
 export default router;

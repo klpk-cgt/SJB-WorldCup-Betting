@@ -1,5 +1,5 @@
 import React from 'react';
-import { GitBranch } from 'lucide-react';
+import { Check, GitBranch } from 'lucide-react';
 import { BracketState, BracketMatchNode } from '../types';
 import { formatDate } from '../utils/api';
 import FlagBadge from './home/FlagBadge';
@@ -89,6 +89,7 @@ export default function BracketBoard({ bracket, onOpenMatch }: BracketBoardProps
 function BracketCard({ match, onOpen }: { match: BracketMatchNode; onOpen: (id?: string) => void }) {
   const hasMatch = Boolean(match.matchId);
   const isFinished = Boolean(match.winnerTeamId);
+  const isLive = match.status === 'LIVE' || match.status === 'HT' || match.status === 'AET' || match.status === 'PEN';
 
   return (
     <button
@@ -98,17 +99,30 @@ function BracketCard({ match, onOpen }: { match: BracketMatchNode; onOpen: (id?:
         hasMatch
           ? isFinished
             ? 'border-emerald-200 bg-emerald-50/50 hover:border-emerald-300'
-            : 'border-slate-200 bg-white hover:border-violet-200 hover:bg-violet-50/30'
+            : isLive
+              ? 'border-amber-200 bg-amber-50/50 hover:border-amber-300 animate-pulse'
+              : 'border-slate-200 bg-white hover:border-violet-200 hover:bg-violet-50/30'
           : 'cursor-default border-dashed border-slate-200 bg-slate-50'
       }`}
     >
-      <p className="mb-2 text-[10px] font-bold text-slate-400">{match.title}</p>
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-[10px] font-bold text-slate-400">{match.title}</p>
+        {isFinished && (
+          <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-black text-emerald-700">
+            <Check className="h-2.5 w-2.5" /> 已晋级
+          </span>
+        )}
+        {isLive && (
+          <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-black text-amber-700">进行中</span>
+        )}
+      </div>
       <div className="space-y-1.5">
         <BracketTeamRow
           code={match.homeTeamCode}
           name={match.homeTeamName || '待定'}
           score={match.homeScore}
           isWinner={match.winnerTeamId === match.homeTeamId}
+          isFinished={isFinished}
         />
         <div className="flex items-center justify-center">
           <span className="text-[9px] font-bold text-slate-300">VS</span>
@@ -118,6 +132,7 @@ function BracketCard({ match, onOpen }: { match: BracketMatchNode; onOpen: (id?:
           name={match.awayTeamName || match.slotLabel || '待定'}
           score={match.awayScore}
           isWinner={match.winnerTeamId === match.awayTeamId}
+          isFinished={isFinished}
         />
       </div>
       {match.startTimeUtc && (
@@ -127,16 +142,18 @@ function BracketCard({ match, onOpen }: { match: BracketMatchNode; onOpen: (id?:
   );
 }
 
-function BracketTeamRow({ code, name, score, isWinner }: { code?: string; name: string; score?: number; isWinner?: boolean }) {
+function BracketTeamRow({ code, name, score, isWinner, isFinished }: { code?: string; name: string; score?: number; isWinner?: boolean; isFinished?: boolean }) {
+  const isEliminated = isFinished && !isWinner;
   return (
     <div className={`flex items-center justify-between rounded-xl px-2.5 py-1.5 ring-1 ${
-      isWinner ? 'bg-emerald-50 ring-emerald-200' : 'bg-white ring-slate-200'
+      isWinner ? 'bg-emerald-50 ring-emerald-200' : isEliminated ? 'bg-slate-50 ring-slate-200 opacity-50' : 'bg-white ring-slate-200'
     }`}>
       <div className="flex min-w-0 items-center gap-1.5">
         <FlagBadge flagCode={code} size="sm" />
-        <span className={`truncate text-xs ${isWinner ? 'font-black text-emerald-700' : 'font-bold text-slate-800'}`}>
+        <span className={`truncate text-xs ${isWinner ? 'font-black text-emerald-700' : isEliminated ? 'font-medium text-slate-400 line-through' : 'font-bold text-slate-800'}`}>
           {name}
         </span>
+        {isWinner && <Check className="h-3 w-3 text-emerald-500 shrink-0" />}
       </div>
       <span className={`text-xs ${isWinner ? 'font-black text-emerald-600' : 'font-black text-slate-900'}`}>
         {typeof score === 'number' ? score : '--'}

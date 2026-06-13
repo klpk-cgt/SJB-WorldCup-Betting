@@ -10,6 +10,7 @@ import https from 'node:https';
 import { Router, Request, Response } from 'express';
 import { dbService } from '../../db/db_service';
 import { serializeMatch, sortMatchesByStartTime } from '../helpers';
+import logger from '../logger';
 import {
   AIPredictionResponse,
   DataJsonMatch,
@@ -95,9 +96,12 @@ function saveLocalCache(data: DataJsonResponse): void {
       fs.mkdirSync(dir, { recursive: true });
     }
     fs.writeFileSync(LOCAL_CACHE_PATH, JSON.stringify(data, null, 2), 'utf8');
-    console.log(`[AI Prediction] Saved local cache to ${LOCAL_CACHE_PATH}`);
+    logger.ai('[AI Prediction] Saved local cache', { path: LOCAL_CACHE_PATH });
   } catch (error) {
-    console.error('[AI Prediction] Failed to save local cache:', (error as Error).message);
+    logger.ai('[AI Prediction] Failed to save local cache', {
+      error: (error as Error).message,
+      path: LOCAL_CACHE_PATH,
+    });
   }
 }
 
@@ -107,11 +111,17 @@ function loadLocalCache(): DataJsonMatch[] | null {
     const raw = fs.readFileSync(LOCAL_CACHE_PATH, 'utf8');
     const data = JSON.parse(raw) as DataJsonResponse;
     if (Array.isArray(data?.matches) && data.matches.length > 0) {
-      console.log(`[AI Prediction] Loaded ${data.matches.length} matches from local cache (updated: ${data.updated || 'unknown'})`);
+      logger.ai('[AI Prediction] Loaded local cache', {
+        matches: data.matches.length,
+        updated: data.updated || 'unknown',
+      });
       return data.matches;
     }
   } catch (error) {
-    console.error('[AI Prediction] Failed to load local cache:', (error as Error).message);
+    logger.ai('[AI Prediction] Failed to load local cache', {
+      error: (error as Error).message,
+      path: LOCAL_CACHE_PATH,
+    });
   }
   return null;
 }
@@ -123,19 +133,26 @@ async function fetchDataJsonPredictions(): Promise<DataJsonMatch[]> {
   try {
     const data = (await requestJson(DATA_JSON_URL)) as DataJsonResponse;
     if (Array.isArray(data?.matches) && data.matches.length > 0) {
-      console.log(`[AI Prediction] Fetched ${data.matches.length} matches from jsDelivr (updated: ${data.updated || 'unknown'})`);
+      logger.ai('[AI Prediction] Fetched remote prediction data', {
+        matches: data.matches.length,
+        updated: data.updated || 'unknown',
+        source: DATA_JSON_URL,
+      });
       // Save to local file cache
       saveLocalCache(data);
       cachedDataJsonMatches = data.matches;
       return data.matches;
     }
   } catch (error) {
-    console.error('[AI Prediction] jsDelivr fetch failed:', (error as Error).message);
+    logger.ai('[AI Prediction] Remote prediction fetch failed', {
+      error: (error as Error).message,
+      source: DATA_JSON_URL,
+    });
   }
 
   // 2. Try in-memory cache
   if (cachedDataJsonMatches && cachedDataJsonMatches.length > 0) {
-    console.log('[AI Prediction] Using in-memory cache');
+    logger.ai('[AI Prediction] Using in-memory cache');
     return cachedDataJsonMatches;
   }
 
@@ -146,7 +163,7 @@ async function fetchDataJsonPredictions(): Promise<DataJsonMatch[]> {
     return fileCache;
   }
 
-  console.warn('[AI Prediction] All data sources failed, no prediction data available');
+  logger.ai('[AI Prediction] All data sources failed, no prediction data available');
   return [];
 }
 
@@ -156,7 +173,10 @@ async function fetchThirdPartyPredictions(): Promise<ThirdPartyPrediction[]> {
     const data = (await requestJson(url)) as { matches?: ThirdPartyPrediction[] };
     return Array.isArray(data?.matches) ? data.matches : [];
   } catch (error) {
-    console.error('[AI Prediction] third-party API failed:', (error as Error).message);
+    logger.ai('[AI Prediction] Third-party prediction API failed', {
+      error: (error as Error).message,
+      source: url,
+    });
     return [];
   }
 }
@@ -172,14 +192,19 @@ function startBackgroundRefresh(): void {
     try {
       const data = (await requestJson(DATA_JSON_URL)) as DataJsonResponse;
       if (Array.isArray(data?.matches) && data.matches.length > 0) {
-        console.log(`[AI Prediction] Background refresh: ${data.matches.length} matches (updated: ${data.updated || 'unknown'})`);
+        logger.ai('[AI Prediction] Background refresh completed', {
+          matches: data.matches.length,
+          updated: data.updated || 'unknown',
+        });
         saveLocalCache(data);
         cachedDataJsonMatches = data.matches;
         // Invalidate prediction cache so next request uses fresh data
         predictionCache = null;
       }
     } catch (error) {
-      console.error('[AI Prediction] Background refresh failed:', (error as Error).message);
+      logger.ai('[AI Prediction] Background refresh failed', {
+        error: (error as Error).message,
+      });
     }
   }, CACHE_TTL_MS);
 }
@@ -187,12 +212,12 @@ function startBackgroundRefresh(): void {
 // ─── Startup: warm cache ───
 
 (async () => {
-  console.log('[AI Prediction] Warming cache on startup...');
+  logger.ai('[AI Prediction] Warming cache on startup');
   const matches = await fetchDataJsonPredictions();
   if (matches.length > 0) {
-    console.log(`[AI Prediction] Startup cache ready: ${matches.length} matches`);
+    logger.ai('[AI Prediction] Startup cache ready', { matches: matches.length });
   } else {
-    console.warn('[AI Prediction] Startup cache empty, will retry on first request');
+    logger.ai('[AI Prediction] Startup cache empty, will retry on first request');
   }
   startBackgroundRefresh();
 })();
@@ -225,7 +250,9 @@ router.get('/api/home/ai-prediction-card', async (_req: Request, res: Response) 
 
     return res.json(payload);
   } catch (error) {
-    console.error('[AI Prediction] Failed to generate card:', error);
+    logger.ai('[AI Prediction] Failed to generate card', {
+      error: error instanceof Error ? error.message : String(error),
+    });
     return res.status(500).json({
       success: false,
       updatedAt: new Date().toISOString(),

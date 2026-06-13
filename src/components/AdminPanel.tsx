@@ -935,6 +935,11 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
                   <div className={`mt-1 text-[11px] font-bold ${systemStatus?.storage?.databaseConnected ? 'text-emerald-600' : 'text-rose-600'}`}>
                     {systemStatus?.storage?.databaseConnected ? 'Database connected' : 'Database unavailable'}
                   </div>
+                  {systemStatus?.storage?.logDirectory && (
+                    <div className="mt-1 text-[10px] font-bold text-slate-400 break-all">
+                      {systemStatus.storage.logDirectory}
+                    </div>
+                  )}
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
                   <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Data</div>

@@ -39,48 +39,8 @@ interface QuizQuestion {
   explanation: string;
 }
 
-const FINISHED_STATUSES = new Set<MatchStatus>([MatchStatus.FT, MatchStatus.AET, MatchStatus.PEN]);
-const LIVE_STATUSES = new Set<MatchStatus>([MatchStatus.LIVE, MatchStatus.HT]);
-const ESTIMATED_MATCH_WINDOW_MS = 3 * 60 * 60 * 1000;
-
 function getKickoffTime(match: Match) {
   return new Date(match.startTimeUtc).getTime();
-}
-
-function isFinishedMatch(match: Match) {
-  return FINISHED_STATUSES.has(match.status);
-}
-
-function isLiveMatch(match: Match) {
-  return LIVE_STATUSES.has(match.status);
-}
-
-function isInCurrentMatchWindow(match: Match, now: number) {
-  if (isFinishedMatch(match) || match.status === MatchStatus.CANCELLED) return false;
-  const kickoff = getKickoffTime(match);
-  return kickoff <= now && now - kickoff <= ESTIMATED_MATCH_WINDOW_MS;
-}
-
-function pickFeaturedMatch(matches: Match[], now: number) {
-  const sortedMatches = sortMatchesByKickoff(matches);
-
-  const liveMatch = sortedMatches.find((match) => isLiveMatch(match));
-  if (liveMatch) return liveMatch;
-
-  const currentWindowMatch = [...sortedMatches]
-    .filter((match) => isInCurrentMatchWindow(match, now))
-    .sort((a, b) => getKickoffTime(b) - getKickoffTime(a))[0];
-  if (currentWindowMatch) return currentWindowMatch;
-
-  const upcomingMatch = sortedMatches.find((match) => match.status === MatchStatus.NS && getKickoffTime(match) > now);
-  if (upcomingMatch) return upcomingMatch;
-
-  const recentFinishedMatch = [...sortedMatches]
-    .filter((match) => isFinishedMatch(match))
-    .sort((a, b) => getKickoffTime(b) - getKickoffTime(a))[0];
-  if (recentFinishedMatch) return recentFinishedMatch;
-
-  return sortedMatches[0];
 }
 
 function formatCountdown(target: string, now: number) {
@@ -367,39 +327,8 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
   };
 
   const sortedMatches = useMemo(() => sortMatchesByKickoff(matches), [matches]);
-  const liveMatch = useMemo(() => pickFeaturedMatch(sortedMatches, now), [sortedMatches, now]);
   const nearestDayMatches = getMatchesForNearestDay(sortedMatches);
   const recentMatches = nearestDayMatches.slice(0, 8);
-
-  // 焦点战卡片优先级：进行中 > 即将开赛 > 未来最近 > 已结束最近
-  const featuredMatch = useMemo(() => {
-    // 1. 优先显示正在进行的比赛
-    if (liveMatch) return liveMatch;
-
-    // 2. 显示下一场即将开赛的比赛（今天或未来最近）
-    const upcomingMatches = matches
-      .filter((m) => m.status === MatchStatus.NS && new Date(m.startTimeUtc).getTime() > now)
-      .sort((a, b) => new Date(a.startTimeUtc).getTime() - new Date(b.startTimeUtc).getTime());
-
-    if (upcomingMatches.length > 0) return upcomingMatches[0];
-
-    // 3. 如果今天没有未开赛比赛，显示未来最近一场
-    const futureMatches = matches
-      .filter((m) => new Date(m.startTimeUtc).getTime() > now)
-      .sort((a, b) => new Date(a.startTimeUtc).getTime() - new Date(b.startTimeUtc).getTime());
-
-    if (futureMatches.length > 0) return futureMatches[0];
-
-    // 4. 如果全部比赛都结束，显示最近一场已结束比赛
-    const finishedMatches = matches
-      .filter((m) => [MatchStatus.FT, MatchStatus.AET, MatchStatus.PEN].includes(m.status))
-      .sort((a, b) => new Date(b.startTimeUtc).getTime() - new Date(a.startTimeUtc).getTime());
-
-    if (finishedMatches.length > 0) return finishedMatches[0];
-
-    // 兜底
-    return matches[0];
-  }, [matches, liveMatch, now]);
   const unifiedFeaturedMatch = useMemo(() => selectFeaturedHomeMatch(sortedMatches, now), [sortedMatches, now]);
   const unifiedFeaturedCategory = useMemo(
     () => (unifiedFeaturedMatch ? getHomeMatchCategory(unifiedFeaturedMatch, now) : null),
@@ -409,28 +338,9 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
   const aiView = extractAiView(dailyAI);
   const nearestDayLabel = recentMatches[0] ? getBeijingDayLabel(recentMatches[0].startTimeUtc) : '';
 
-  // 下一场未开赛的比赛倒计时
-  const nextUpcoming = useMemo(() => {
-    const upcoming = sortedMatches
-      .filter((m) => m.status === MatchStatus.NS && getKickoffTime(m) > now);
-    return upcoming[0] || null;
-  }, [sortedMatches, now]);
-
-  const countdownText = useMemo(() => {
-    if (!nextUpcoming) return null;
-    return formatCountdown(nextUpcoming.startTimeUtc, now);
-  }, [nextUpcoming, now]);
-
-  // AI 今日推荐 3 场
-  const aiRecommendations = useMemo(() => {
-    const upcoming = sortedMatches
-      .filter((m) => m.status === MatchStatus.NS && getKickoffTime(m) > now)
-      .slice(0, 3);
-    return upcoming;
-  }, [sortedMatches, now]);
   const countdownTarget = useMemo(
-    () => selectNextUpcomingHomeMatch(sortedMatches, now) || nextUpcoming,
-    [sortedMatches, now, nextUpcoming],
+    () => selectNextUpcomingHomeMatch(sortedMatches, now),
+    [sortedMatches, now],
   );
   const countdownTargetText = useMemo(() => {
     if (!countdownTarget) return null;

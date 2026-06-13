@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Info, LoaderCircle, X } from 'lucide-react';
+import { AlertTriangle, Bell, CheckCircle2, Info, LoaderCircle, Trophy, X } from 'lucide-react';
 
-type ToastTone = 'success' | 'error' | 'info' | 'loading';
+type ToastTone = 'success' | 'error' | 'info' | 'loading' | 'celebrate' | 'badge';
 
 type ToastItem = {
   id: string;
@@ -18,6 +18,8 @@ type ToastContextValue = {
   error: (message: string, description?: string) => string;
   info: (message: string, description?: string) => string;
   loading: (message: string, description?: string) => string;
+  celebrate: (message: string, description?: string) => string;
+  badge: (message: string, description?: string) => string;
 };
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -49,6 +51,18 @@ const TONE_META: Record<
     panel: 'border-slate-200 bg-white/95 text-slate-950',
     iconTone: 'text-slate-600',
     defaultDuration: 0,
+  },
+  celebrate: {
+    icon: <Trophy className="h-4.5 w-4.5" />,
+    panel: 'border-amber-100 bg-amber-50/95 text-amber-950',
+    iconTone: 'text-amber-600',
+    defaultDuration: 4000,
+  },
+  badge: {
+    icon: <Bell className="h-4.5 w-4.5" />,
+    panel: 'border-violet-100 bg-violet-50/95 text-violet-950',
+    iconTone: 'text-violet-600',
+    defaultDuration: 4000,
   },
 };
 
@@ -91,6 +105,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       error: (message, description) => showToast({ tone: 'error', message, description }),
       info: (message, description) => showToast({ tone: 'info', message, description }),
       loading: (message, description) => showToast({ tone: 'loading', message, description }),
+      celebrate: (message, description) => showToast({ tone: 'celebrate', message, description }),
+      badge: (message, description) => showToast({ tone: 'badge', message, description }),
     }),
     [dismissToast, showToast],
   );

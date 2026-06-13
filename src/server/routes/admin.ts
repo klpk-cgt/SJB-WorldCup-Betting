@@ -42,6 +42,7 @@ import { getSyncRuntimeState, getSyncPlan } from '../services/sync_scheduler_ser
 import { emitPointsAdjusted, emitUserJoined } from '../activity_service';
 import { evaluateAllBadges, syncAllTitles } from '../badge_service';
 import { initUserCardInventory, adjustUserCards, bootstrapAllCardInventories } from '../prediction_card_service';
+import logger from '../logger';
 
 const config = getRuntimeConfig();
 const router = Router();
@@ -313,7 +314,11 @@ router.post('/api/admin/users/create', (req: Request, res: Response) => {
   initUserCardInventory(userId);
 
   dbService.save();
-  console.log(`[Admin] 鍒涘缓璐﹀彿: ${name} (鐧诲綍鐮? ${code})`);
+  logger.admin('[Admin] Created user', {
+    displayName: name,
+    loginCode: code,
+    userId,
+  });
   res.json({
     success: true,
     user: serializeUserForClient(user),
@@ -352,7 +357,11 @@ router.delete('/api/admin/users/:id', (req: Request, res: Response) => {
   db.users.splice(userIndex, 1);
 
   dbService.save();
-  console.log(`[Admin] 鍒犻櫎璐﹀彿: ${user.displayName} (${user.loginCode})`);
+  logger.admin('[Admin] Deleted user', {
+    displayName: user.displayName,
+    loginCode: user.loginCode,
+    userId,
+  });
   res.json({
     success: true,
     message: `已删除用户 "${user.displayName}" 及其所有数据。`,
@@ -385,7 +394,10 @@ router.put('/api/admin/users/:id/avatar', (req: Request, res: Response) => {
 
   user.avatarUrl = avatarUrl;
   dbService.save();
-  console.log(`[Admin] 鏇存柊澶村儚: ${user.displayName}`);
+  logger.admin('[Admin] Updated avatar', {
+    displayName: user.displayName,
+    userId: user.id,
+  });
   res.json({
     success: true,
     message: '头像上传成功。',
@@ -433,7 +445,10 @@ router.post('/api/admin/users/:id/adjust-points', (req: Request, res: Response) 
         groupId: user.groupId,
       });
     } catch (e) {
-      console.error('触发调账动态失败。', e);
+      logger.admin('[Admin] Failed to emit points adjustment activity', {
+        error: e instanceof Error ? e.message : String(e),
+        userId: user.id,
+      });
     }
   }
 

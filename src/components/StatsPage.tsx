@@ -1,16 +1,19 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { BarChart3, PieChart as PieChartIcon } from 'lucide-react';
+import { BarChart3, PieChart as PieChartIcon, Target } from 'lucide-react';
 import { apiRequest } from '../utils/api';
 import { useScrollReveal } from '../animations';
 
 type ChartDatum = { label: string; value: number };
+
+type AccuracyDatum = { label: string; value: number; settled: number; won: number };
 
 type StatsSummary = {
   userPredictionDistribution: ChartDatum[];
   popularBetOptions: ChartDatum[];
   championPickDistribution: ChartDatum[];
   correctScoreHeat: ChartDatum[];
+  userAccuracyRank: AccuracyDatum[];
 };
 
 const PIE_COLORS = ['#10b981', '#8b5cf6', '#f59e0b', '#06b6d4', '#ef4444', '#64748b'];
@@ -115,6 +118,39 @@ export default function StatsPage() {
         </section>
         <ChartCard ref={section4Ref} title="比分选择热度" data={stats.correctScoreHeat} color="#f59e0b" />
       </section>
+
+      {/* 群内预测准确率排行 */}
+      {stats.userAccuracyRank && stats.userAccuracyRank.length > 0 && (
+        <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+          <div className="flex items-center gap-2">
+            <Target className="h-4.5 w-4.5 text-emerald-500" />
+            <h3 className="text-sm font-black text-slate-900">群内预测准确率</h3>
+          </div>
+          <p className="mt-1 text-xs text-slate-500">谁的眼光最准？按命中率排名，至少参与 1 场已结算竞猜。</p>
+          <div className="mt-4 space-y-2">
+            {stats.userAccuracyRank.map((item, idx) => (
+              <div key={item.label} className="flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3 ring-1 ring-slate-200">
+                <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-black ${
+                  idx === 0 ? 'bg-amber-100 text-amber-700' : idx === 1 ? 'bg-slate-200 text-slate-600' : idx === 2 ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-400'
+                }`}>{idx + 1}</span>
+                <span className="flex-1 text-sm font-bold text-slate-800">{item.label}</span>
+                <span className="text-xs text-slate-500">{item.won}/{item.settled} 中</span>
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-20 overflow-hidden rounded-full bg-slate-200">
+                    <div
+                      className={`h-full rounded-full ${item.value >= 60 ? 'bg-emerald-500' : item.value >= 40 ? 'bg-amber-500' : 'bg-rose-400'}`}
+                      style={{ width: `${item.value}%` }}
+                    />
+                  </div>
+                  <span className={`text-sm font-black ${item.value >= 60 ? 'text-emerald-600' : item.value >= 40 ? 'text-amber-600' : 'text-rose-500'}`}>
+                    {item.value}%
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

@@ -34,7 +34,8 @@ export type ActivityType =
   | 'BADGE_UNLOCKED'
   | 'TITLE_CHANGED'
   | 'TOURNAMENT_BET'
-  | 'JOINED';
+  | 'JOINED'
+  | 'HISTORY_VISIT';
 
 export interface Activity {
   id: string;
@@ -451,5 +452,24 @@ export function emitUserJoined(input: {
     avatarUrl: input.avatarUrl,
     groupId: input.groupId,
     message: `加入了群聊`,
+  });
+}
+
+/**
+ * 浏览历史长廊触发
+ */
+export function emitHistoryVisit(input: {
+  userId: string;
+  displayName: string;
+  avatarUrl?: string;
+  groupId?: string;
+}) {
+  return addActivity({
+    type: 'HISTORY_VISIT',
+    userId: input.userId,
+    displayName: input.displayName,
+    avatarUrl: input.avatarUrl,
+    groupId: input.groupId,
+    message: `浏览了历史长廊`,
   });
 }

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { BarChart3, Brain, Clock3, Flag, History, Info, MapPin, Shirt, Sparkles, Trophy, AlertTriangle, Users, Swords, Target, Zap } from 'lucide-react';
 import { Match, MatchStatus, Player, TeamHistoryResult, AIContent } from '../types';
-import type { TeamCompleteProfile } from '../types/worldcup';
+import type { TeamCompleteProfile, WorldCupHeadToHead } from '../types/worldcup';
 import { apiRequest, formatDate } from '../utils/api';
 import { resolvePlayerAvatar } from '../utils/playerAvatar';
 import FlagBadge from './home/FlagBadge';
@@ -66,9 +66,11 @@ export default function MatchDetailPage({
   const [awayPlayers, setAwayPlayers] = useState<Player[]>([]);
   const [homeHistory, setHomeHistory] = useState<TeamHistoryResult[]>([]);
   const [awayHistory, setAwayHistory] = useState<TeamHistoryResult[]>([]);
+  const [homeTeamMatches, setHomeTeamMatches] = useState<Match[]>([]);
+  const [awayTeamMatches, setAwayTeamMatches] = useState<Match[]>([]);
   const [homeStaticProfile, setHomeStaticProfile] = useState<TeamCompleteProfile | null>(null);
   const [awayStaticProfile, setAwayStaticProfile] = useState<TeamCompleteProfile | null>(null);
-  const [headToHead, setHeadToHead] = useState<import('../types/worldcup').WorldCupHeadToHead | null>(null);
+  const [headToHead, setHeadToHead] = useState<WorldCupHeadToHead | null>(null);
   const [aiContent, setAiContent] = useState<AIContent | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
 
@@ -104,6 +106,8 @@ export default function MatchDetailPage({
       setAwayPlayers(away.players || []);
       setHomeHistory(home.history || []);
       setAwayHistory(away.history || []);
+      setHomeTeamMatches(home.matches || []);
+      setAwayTeamMatches(away.matches || []);
       setHomeStaticProfile(home.staticProfile || null);
       setAwayStaticProfile(away.staticProfile || null);
     }).catch(() => {
@@ -111,6 +115,8 @@ export default function MatchDetailPage({
       setAwayPlayers([]);
       setHomeHistory([]);
       setAwayHistory([]);
+      setHomeTeamMatches([]);
+      setAwayTeamMatches([]);
       setHomeStaticProfile(null);
       setAwayStaticProfile(null);
     });
@@ -135,6 +141,43 @@ export default function MatchDetailPage({
       { label: `${match.awayTeam?.nameZh} 支持率`, value: sentiment.away, tone: 'bg-cyan-500' },
     ];
   }, [match]);
+
+  const effectiveHeadToHead = useMemo<WorldCupHeadToHead | null>(() => {
+    if (headToHead) return headToHead;
+    if (!match?.homeTeam?.id || !match?.awayTeam?.id) return null;
+
+    return {
+      teamA: match.homeTeam.id,
+      teamB: match.awayTeam.id,
+      worldCupMatches: [],
+      recentMatches: [],
+      worldCupSummary: `${match.homeTeam.nameZh} 与 ${match.awayTeam.nameZh} 暂无可靠历史交锋数据，当前先参考球队资料、近期状态和赔率快照。`,
+      source: {
+        name: 'Client fallback',
+        level: 'D',
+        date: new Date().toISOString().slice(0, 10),
+      },
+      accuracyLevel: 'summary_only',
+    };
+  }, [headToHead, match]);
+
+  const homeRecentMatches = useMemo(
+    () =>
+      homeTeamMatches
+        .filter((item) => item.id !== match?.id)
+        .sort((a, b) => new Date(b.startTimeUtc).getTime() - new Date(a.startTimeUtc).getTime())
+        .slice(0, 3),
+    [homeTeamMatches, match?.id],
+  );
+
+  const awayRecentMatches = useMemo(
+    () =>
+      awayTeamMatches
+        .filter((item) => item.id !== match?.id)
+        .sort((a, b) => new Date(b.startTimeUtc).getTime() - new Date(a.startTimeUtc).getTime())
+        .slice(0, 3),
+    [awayTeamMatches, match?.id],
+  );
 
   if (loading) {
     return (
@@ -244,9 +287,20 @@ export default function MatchDetailPage({
                 ))}
               </div>
 
+              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex items-center gap-2">
+                  <Zap className="h-4 w-4 text-amber-500" />
+                  <h4 className="text-sm font-black text-slate-900">赔率快照</h4>
+                </div>
+                <p className="mt-2 text-[11px] leading-5 text-slate-600">
+                  {match.odds?.h2h
+                    ? `当前可用胜平负赔率为 ${match.odds.h2h.homeWin} / ${match.odds.h2h.draw} / ${match.odds.h2h.awayWin}。若第三方盘口变化数据暂未同步，页面会先展示最新快照。`
+                    : '当前还没有可用赔率数据，后台同步后这里会优先显示最新赔率快照。'}
+                </p>
+              </div>
+
               {/* 球队静态数据对比 */}
-              {(homeStaticProfile || awayStaticProfile) && (
-                <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
                   <h4 className="text-sm font-black text-slate-900">球队资料对比</h4>
                   <div className="mt-3 space-y-2.5">
                     {/* 标签对比 */}
@@ -303,33 +357,35 @@ export default function MatchDetailPage({
                         </div>
                       </div>
                     )}
+                    {!homeStaticProfile && !awayStaticProfile && (
+                      <p className="text-[11px] leading-5 text-slate-500">
+                        当前没有命中到更完整的静态球队档案，页面会继续使用基础球队信息和赛程数据展示，不会整块空白。
+                      </p>
+                    )}
                   </div>
                 </div>
-              )}
 
               {/* 球队简介 */}
-              {(homeStaticProfile?.profile?.intro || awayStaticProfile?.profile?.intro) && (
-                <div className="grid gap-3 md:grid-cols-2">
-                  {homeStaticProfile?.profile?.intro && (
-                    <div className="rounded-3xl border border-slate-200 bg-white p-4">
-                      <div className="flex items-center gap-2">
-                        <FlagBadge flagCode={match.homeTeam?.code} size="sm" />
-                        <span className="text-xs font-black text-slate-900">{match.homeTeam?.nameZh}</span>
-                      </div>
-                      <p className="mt-2 text-[11px] leading-5 text-slate-600">{homeStaticProfile.profile.intro}</p>
-                    </div>
-                  )}
-                  {awayStaticProfile?.profile?.intro && (
-                    <div className="rounded-3xl border border-slate-200 bg-white p-4">
-                      <div className="flex items-center gap-2">
-                        <FlagBadge flagCode={match.awayTeam?.code} size="sm" />
-                        <span className="text-xs font-black text-slate-900">{match.awayTeam?.nameZh}</span>
-                      </div>
-                      <p className="mt-2 text-[11px] leading-5 text-slate-600">{awayStaticProfile.profile.intro}</p>
-                    </div>
-                  )}
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-3xl border border-slate-200 bg-white p-4">
+                  <div className="flex items-center gap-2">
+                    <FlagBadge flagCode={match.homeTeam?.code} size="sm" />
+                    <span className="text-xs font-black text-slate-900">{match.homeTeam?.nameZh}</span>
+                  </div>
+                  <p className="mt-2 text-[11px] leading-5 text-slate-600">
+                    {homeStaticProfile?.profile?.intro || `${match.homeTeam?.nameZh || '主队'} 的详细资料暂未补齐，当前先展示基础球队信息与近期赛程。`}
+                  </p>
                 </div>
-              )}
+                <div className="rounded-3xl border border-slate-200 bg-white p-4">
+                  <div className="flex items-center gap-2">
+                    <FlagBadge flagCode={match.awayTeam?.code} size="sm" />
+                    <span className="text-xs font-black text-slate-900">{match.awayTeam?.nameZh}</span>
+                  </div>
+                  <p className="mt-2 text-[11px] leading-5 text-slate-600">
+                    {awayStaticProfile?.profile?.intro || `${match.awayTeam?.nameZh || '客队'} 的详细资料暂未补齐，当前先展示基础球队信息与近期赛程。`}
+                  </p>
+                </div>
+              </div>
 
               {/* 战术分析对比 */}
               {(() => {
@@ -402,43 +458,50 @@ export default function MatchDetailPage({
               )}
 
               {/* 历史交锋 */}
-              {headToHead && (
+              <RecentFormPanel
+                homeTeam={match.homeTeam}
+                awayTeam={match.awayTeam}
+                homeMatches={homeRecentMatches}
+                awayMatches={awayRecentMatches}
+              />
+
+              {effectiveHeadToHead && (
                 <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
                   <div className="flex items-center justify-between">
                     <h4 className="text-sm font-black text-slate-900">历史交锋</h4>
-                    {headToHead.accuracyLevel && (
+                    {effectiveHeadToHead.accuracyLevel && (
                       <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ${
-                        headToHead.accuracyLevel === 'verified' ? 'bg-emerald-100 text-emerald-700' :
-                        headToHead.accuracyLevel === 'needs_review' ? 'bg-amber-100 text-amber-700' :
+                        effectiveHeadToHead.accuracyLevel === 'verified' ? 'bg-emerald-100 text-emerald-700' :
+                        effectiveHeadToHead.accuracyLevel === 'needs_review' ? 'bg-amber-100 text-amber-700' :
                         'bg-slate-100 text-slate-500'
                       }`}>
-                        {headToHead.accuracyLevel === 'verified' ? '已验证' : headToHead.accuracyLevel === 'needs_review' ? '待复核' : '摘要'}
+                        {effectiveHeadToHead.accuracyLevel === 'verified' ? '已验证' : effectiveHeadToHead.accuracyLevel === 'needs_review' ? '待复核' : '摘要'}
                       </span>
                     )}
                   </div>
-                  {headToHead.worldCupMatches.length > 0 && (() => {
-                    const aWins = headToHead.worldCupMatches.filter(m => m.winner === headToHead.teamA).length;
-                    const draws = headToHead.worldCupMatches.filter(m => m.winner === 'draw').length;
-                    const bWins = headToHead.worldCupMatches.filter(m => m.winner === headToHead.teamB).length;
+                  {effectiveHeadToHead.worldCupMatches.length > 0 && (() => {
+                    const aWins = effectiveHeadToHead.worldCupMatches.filter(m => m.winner === effectiveHeadToHead.teamA).length;
+                    const draws = effectiveHeadToHead.worldCupMatches.filter(m => m.winner === 'draw').length;
+                    const bWins = effectiveHeadToHead.worldCupMatches.filter(m => m.winner === effectiveHeadToHead.teamB).length;
                     return (
                       <div className="mt-2 flex items-center gap-2 text-[10px]">
-                        <span className="font-black text-emerald-600">{headToHead.teamA} {aWins}胜</span>
+                        <span className="font-black text-emerald-600">{match.homeTeam?.nameZh} {aWins}胜</span>
                         <span className="text-slate-400">{draws}平</span>
-                        <span className="font-black text-cyan-600">{bWins}胜 {headToHead.teamB}</span>
+                        <span className="font-black text-cyan-600">{bWins}胜 {match.awayTeam?.nameZh}</span>
                         <span className="text-slate-300">| 世界杯</span>
                       </div>
                     );
                   })()}
-                  <p className="mt-2 text-[11px] leading-5 text-slate-500">{headToHead.worldCupSummary}</p>
-                  {headToHead.worldCupMatches.length > 0 && (
+                  <p className="mt-2 text-[11px] leading-5 text-slate-500">{effectiveHeadToHead.worldCupSummary}</p>
+                  {effectiveHeadToHead.worldCupMatches.length > 0 && (
                     <div className="mt-3 space-y-2">
                       <p className="text-[9px] font-bold text-slate-400">世界杯交锋</p>
-                      {headToHead.worldCupMatches.map((m, i) => (
+                      {effectiveHeadToHead.worldCupMatches.map((m, i) => (
                         <div key={i} className="rounded-xl bg-white p-2.5">
                           <div className="flex items-center justify-between">
                             <span className="text-[10px] font-bold text-slate-700">{m.competition}</span>
                             <span className={`text-[10px] font-black ${
-                              m.winner === headToHead.teamA ? 'text-emerald-600' : m.winner === headToHead.teamB ? 'text-cyan-600' : 'text-slate-500'
+                              m.winner === effectiveHeadToHead.teamA ? 'text-emerald-600' : m.winner === effectiveHeadToHead.teamB ? 'text-cyan-600' : 'text-slate-500'
                             }`}>{m.score}</span>
                           </div>
                           {m.note && <p className="mt-1 text-[9px] text-slate-400">{m.note}</p>}
@@ -446,15 +509,15 @@ export default function MatchDetailPage({
                       ))}
                     </div>
                   )}
-                  {headToHead.recentMatches.length > 0 && (
+                  {effectiveHeadToHead.recentMatches.length > 0 && (
                     <div className="mt-3 space-y-2">
                       <p className="text-[9px] font-bold text-slate-400">近期交锋</p>
-                      {headToHead.recentMatches.slice(0, 3).map((m, i) => (
+                      {effectiveHeadToHead.recentMatches.slice(0, 3).map((m, i) => (
                         <div key={i} className="rounded-xl bg-white p-2.5">
                           <div className="flex items-center justify-between">
                             <span className="text-[10px] font-bold text-slate-700">{m.competition}</span>
                             <span className={`text-[10px] font-black ${
-                              m.winner === headToHead.teamA ? 'text-emerald-600' : m.winner === headToHead.teamB ? 'text-cyan-600' : 'text-slate-500'
+                              m.winner === effectiveHeadToHead.teamA ? 'text-emerald-600' : m.winner === effectiveHeadToHead.teamB ? 'text-cyan-600' : 'text-slate-500'
                             }`}>{m.score}</span>
                           </div>
                           {m.note && <p className="mt-1 text-[9px] text-slate-400">{m.note}</p>}
@@ -527,6 +590,84 @@ function InfoCard({ title, value, sub }: { title: string; value: string; sub: st
       <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">{title}</p>
       <p className="mt-2 text-sm font-black text-slate-900">{value}</p>
       <p className="mt-1 text-xs text-slate-500">{sub}</p>
+    </div>
+  );
+}
+
+function RecentFormPanel({
+  homeTeam,
+  awayTeam,
+  homeMatches,
+  awayMatches,
+}: {
+  homeTeam?: Match['homeTeam'];
+  awayTeam?: Match['awayTeam'];
+  homeMatches: Match[];
+  awayMatches: Match[];
+}) {
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      <RecentFormColumn team={homeTeam} matches={homeMatches} />
+      <RecentFormColumn team={awayTeam} matches={awayMatches} />
+    </div>
+  );
+}
+
+function RecentFormColumn({
+  team,
+  matches,
+}: {
+  team?: Match['homeTeam'];
+  matches: Match[];
+}) {
+  return (
+    <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+      <div className="flex items-center gap-2">
+        <FlagBadge flagCode={team?.code} size="sm" />
+        <h4 className="text-sm font-black text-slate-900">{team?.nameZh || '球队近期状态'}</h4>
+      </div>
+      {matches.length === 0 ? (
+        <p className="mt-3 text-[11px] leading-5 text-slate-500">
+          暂无可展示的近期比赛记录，等赛程同步或历史数据补齐后，这里会自动显示最近几场状态。
+        </p>
+      ) : (
+        <div className="mt-3 space-y-2">
+          {matches.map((item) => {
+            const isHome = item.homeTeamId === team?.id;
+            const opponent = isHome ? item.awayTeam : item.homeTeam;
+            const teamScore = isHome ? item.homeScore : item.awayScore;
+            const opponentScore = isHome ? item.awayScore : item.homeScore;
+            const hasScore = typeof teamScore === 'number' && typeof opponentScore === 'number';
+            const resultTone = hasScore
+              ? teamScore > opponentScore
+                ? 'text-emerald-600'
+                : teamScore < opponentScore
+                  ? 'text-rose-600'
+                  : 'text-slate-500'
+              : 'text-slate-500';
+
+            return (
+              <div key={item.id} className="rounded-xl bg-white p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-bold text-slate-500">{formatDate(item.startTimeUtc)}</span>
+                  <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold text-slate-500">
+                    {item.status}
+                  </span>
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <span className="truncate text-xs font-bold text-slate-800">
+                    vs {opponent?.nameZh || opponent?.name || '待同步对手'}
+                  </span>
+                  <span className={`shrink-0 text-xs font-black ${resultTone}`}>
+                    {hasScore ? `${teamScore} : ${opponentScore}` : 'VS'}
+                  </span>
+                </div>
+                <p className="mt-1 text-[10px] text-slate-400">{item.roundName || item.stage}</p>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,10 +1,25 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Eye, Flame, Sparkles, TrendingUp, ChevronDown, ChevronUp } from 'lucide-react';
 import FlagBadge from './home/FlagBadge';
 import { WATCH_GUIDE_2026 } from '../data/worldcup/watchGuide2026';
 import type { GroupAnalysis, MustWatchMatch, DebutTeam } from '../data/worldcup/watchGuide2026';
+import { apiRequest } from '../utils/api';
 
 type GuideSection = 'groups' | 'mustwatch' | 'debut' | 'prediction';
+
+type StandingRow = {
+  teamId: string;
+  name: string;
+  code: string;
+  played: number;
+  won: number;
+  drawn: number;
+  lost: number;
+  gf: number;
+  ga: number;
+  gd: number;
+  points: number;
+};
 
 const SECTION_META: Array<{
   key: GuideSection;
@@ -17,8 +32,10 @@ const SECTION_META: Array<{
   { key: 'prediction', label: '整体预测', icon: <TrendingUp className="h-3.5 w-3.5" /> },
 ];
 
-function GroupCard({ data }: { data: GroupAnalysis; key?: string }) {
+function GroupCard({ data, standings }: { data: GroupAnalysis; standings?: StandingRow[]; key?: string }) {
   const [expanded, setExpanded] = useState(false);
+
+  const hasStandings = standings && standings.length > 0 && standings.some((s) => s.played > 0);
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white shadow-[0_4px_16px_rgba(15,23,42,0.04)] overflow-hidden">
@@ -34,6 +51,9 @@ function GroupCard({ data }: { data: GroupAnalysis; key?: string }) {
           <div className="flex items-center gap-2">
             <span className="text-sm font-black text-slate-900">{data.group}组</span>
             <span className="text-[11px] font-medium text-slate-500">· {data.groupName}</span>
+            {hasStandings && (
+              <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700">实时积分</span>
+            )}
           </div>
           <div className="mt-1 flex items-center gap-1.5">
             {data.teams.map((code) => (
@@ -50,6 +70,50 @@ function GroupCard({ data }: { data: GroupAnalysis; key?: string }) {
 
       {expanded && (
         <div className="border-t border-slate-100 px-4 py-3.5 space-y-3">
+          {/* 实时积分榜 */}
+          {hasStandings && (
+            <div className="rounded-xl border border-slate-200 overflow-hidden">
+              <table className="w-full text-[10px]">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-500">
+                    <th className="px-2 py-1.5 text-left font-bold">#</th>
+                    <th className="px-2 py-1.5 text-left font-bold">球队</th>
+                    <th className="px-2 py-1.5 text-center font-bold">赛</th>
+                    <th className="px-2 py-1.5 text-center font-bold">胜</th>
+                    <th className="px-2 py-1.5 text-center font-bold">平</th>
+                    <th className="px-2 py-1.5 text-center font-bold">负</th>
+                    <th className="px-2 py-1.5 text-center font-bold">净胜</th>
+                    <th className="px-2 py-1.5 text-center font-bold">积分</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {standings!.map((row, idx) => (
+                    <tr key={row.teamId} className={`border-t border-slate-100 ${idx < 2 ? 'bg-emerald-50/50' : ''}`}>
+                      <td className="px-2 py-1.5 font-black text-slate-400">{idx + 1}</td>
+                      <td className="px-2 py-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <FlagBadge flagCode={row.code} size="sm" />
+                          <span className="font-bold text-slate-800">{row.name}</span>
+                        </div>
+                      </td>
+                      <td className="px-2 py-1.5 text-center">{row.played}</td>
+                      <td className="px-2 py-1.5 text-center font-bold text-emerald-600">{row.won}</td>
+                      <td className="px-2 py-1.5 text-center">{row.drawn}</td>
+                      <td className="px-2 py-1.5 text-center text-rose-500">{row.lost}</td>
+                      <td className={`px-2 py-1.5 text-center font-bold ${row.gd > 0 ? 'text-emerald-600' : row.gd < 0 ? 'text-rose-500' : 'text-slate-400'}`}>
+                        {row.gd > 0 ? '+' : ''}{row.gd}
+                      </td>
+                      <td className="px-2 py-1.5 text-center font-black text-slate-900">{row.points}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="px-3 py-1.5 bg-slate-50 text-[9px] text-slate-400">
+                前2名出线 · 绿色底色为出线区
+              </div>
+            </div>
+          )}
+
           <p className="text-xs leading-5 text-slate-600">{data.analysis}</p>
           {data.darkHorse && (
             <div className="flex items-start gap-2 rounded-xl bg-amber-50 border border-amber-100 px-3 py-2.5">
@@ -124,6 +188,13 @@ function DebutTeamCard({ data }: { data: DebutTeam; key?: string }) {
 
 export default function WatchGuidePage() {
   const [activeSection, setActiveSection] = useState<GuideSection>('groups');
+  const [standings, setStandings] = useState<Record<string, StandingRow[]>>({});
+
+  useEffect(() => {
+    apiRequest('/api/group-standings')
+      .then((data) => setStandings(data || {}))
+      .catch(() => setStandings({}));
+  }, []);
 
   return (
     <div className="space-y-5 pb-24">
@@ -181,7 +252,7 @@ export default function WatchGuidePage() {
             <span className="text-[10px] font-medium text-slate-400">点击展开详情</span>
           </div>
           {WATCH_GUIDE_2026.groupAnalyses.map((ga) => (
-            <GroupCard key={ga.group} data={ga} />
+            <GroupCard key={ga.group} data={ga} standings={standings[ga.group]} />
           ))}
         </section>
       )}

@@ -21,6 +21,7 @@ import SearchBar from './components/SearchBar';
 import AIRecommendations from './components/AIRecommendations';
 import { ADMIN_KEY_STORAGE, apiRequest, ROOM_SLUG_STORAGE, USER_CODE_STORAGE } from './utils/api';
 import { useWebSocket } from './hooks/useWebSocket';
+import { useToast } from './components/ToastProvider';
 import type { User, Wallet } from './types';
 
 type RootTab = 'home' | 'matches' | 'prediction' | 'leaderboard' | 'me' | 'admin';
@@ -52,6 +53,7 @@ export default function App() {
   const [navDrawerOpen, setNavDrawerOpen] = useState(false);
 
   const isAdmin = !!localStorage.getItem(ADMIN_KEY_STORAGE);
+  const toast = useToast();
 
   // WebSocket 实时推送
   const { connected: wsConnected } = useWebSocket({
@@ -62,14 +64,41 @@ export default function App() {
       if (selectedMatchId === data.matchId) {
         fetchUserProfileAndWallet();
       }
+      // 开赛/进球提醒
+      const home = (data.homeTeam as string) || '';
+      const away = (data.awayTeam as string) || '';
+      const homeScore = data.homeScore as number | undefined;
+      const awayScore = data.awayScore as number | undefined;
+      if (homeScore !== undefined && awayScore !== undefined) {
+        toast.info(`${home} ${homeScore} : ${awayScore} ${away}`, '比分更新');
+      }
     },
     onPredictionResult: (data) => {
       // 竞猜结果推送后刷新钱包
       fetchUserProfileAndWallet();
+      const won = data.won as boolean;
+      const profit = data.settledProfit as number | undefined;
+      if (won) {
+        toast.celebrate('竞猜命中！', profit ? `净赚 +${profit.toLocaleString()} 积分` : '恭喜！');
+      }
     },
-    onMatchSettled: () => {
+    onMatchSettled: (data) => {
       // 比赛结算后刷新数据
       fetchUserProfileAndWallet();
+      const home = (data.homeTeam as string) || '';
+      const away = (data.awayTeam as string) || '';
+      toast.info(`${home} vs ${away} 已结算`, '比赛结束');
+    },
+    onNotification: (data) => {
+      const msg = (data.message as string) || '';
+      const nType = (data.notificationType as string) || '';
+      if (nType === 'badge_unlocked') {
+        toast.badge('解锁新徽章！', msg);
+      } else if (nType === 'streak') {
+        toast.celebrate('连胜达成！', msg);
+      } else if (msg) {
+        toast.info(msg);
+      }
     },
   });
 
@@ -245,7 +274,7 @@ export default function App() {
             <PredictionTab user={user} wallet={wallet} focusedMatchId={selectedMatchId} onRefreshWallet={fetchUserProfileAndWallet} />
           )}
           {activeTab === 'leaderboard' && <LeaderboardTab user={user} />}
-          {activeTab === 'history-hall' && <HistoryHallPage />}
+          {activeTab === 'history-hall' && <HistoryHallPage user={user} />}
           {activeTab === 'bracket' && <BracketPage onOpenMatch={(matchId) => navigateTo('match-detail', matchId, 'overview')} />}
           {activeTab === 'stats' && <StatsPage />}
           {activeTab === 'watchguide' && <WatchGuidePage />}

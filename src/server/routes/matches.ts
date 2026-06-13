@@ -26,6 +26,7 @@ import { getUserTitle } from '../badge_service';
 import { getHeadToHead } from '../../data/worldcup/headToHead';
 import { mergeCorrectScoreOdds } from '../../utils/odds';
 import { getTeamProfile } from '../../data/worldcup/teams';
+import type { WorldCupHeadToHead } from '../../types/worldcup';
 import { runBusinessTransaction } from '../services/transaction_guard';
 import { placePrediction } from '../services/prediction_service';
 import {
@@ -38,6 +39,27 @@ import { adjustWalletBalance } from '../services/wallet_service';
 
 const config = getRuntimeConfig();
 const router = Router();
+
+function buildFallbackHeadToHead(match: ReturnType<typeof dbService.getMatches>[number]): WorldCupHeadToHead {
+  const homeTeam = dbService.getTeams().find((team) => team.id === match.homeTeamId);
+  const awayTeam = dbService.getTeams().find((team) => team.id === match.awayTeamId);
+  const homeName = homeTeam?.nameZh || homeTeam?.name || match.homeTeamId;
+  const awayName = awayTeam?.nameZh || awayTeam?.name || match.awayTeamId;
+
+  return {
+    teamA: match.homeTeamId,
+    teamB: match.awayTeamId,
+    worldCupMatches: [],
+    recentMatches: [],
+    worldCupSummary: `${homeName} vs ${awayName} 暂无可靠的历史交锋资料，当前详情页会优先展示球队资料、近期赛程和最新可用赔率快照。`,
+    source: {
+      name: 'Local fallback',
+      level: 'D',
+      date: new Date().toISOString().slice(0, 10),
+    },
+    accuracyLevel: 'summary_only',
+  };
+}
 
 // ─── 比赛列表 ───
 
@@ -123,7 +145,7 @@ router.get('/api/matches/:id', async (req: Request, res: Response) => {
     ...serializeMatch(match),
     homeStaticProfile: getTeamProfile(match.homeTeamId),
     awayStaticProfile: getTeamProfile(match.awayTeamId),
-    headToHead: getHeadToHead(match.homeTeamId, match.awayTeamId) || null,
+    headToHead: getHeadToHead(match.homeTeamId, match.awayTeamId) || buildFallbackHeadToHead(match),
     sentiment:
       totalPoints === 0
         ? { home: 45, draw: 10, away: 45 }
@@ -525,6 +547,75 @@ router.get('/api/leaderboards', (_req: Request, res: Response) => {
   });
 });
 
+// ─── 小组积分榜 ───
+
+router.get('/api/group-standings', (req: Request, res: Response) => {
+  const db = dbService.getData();
+  const groupMatches = db.matches.filter((m) => m.stage === 'Group Stage');
+  const teamMap = new Map(db.teams.map((t) => [t.id, t]));
+
+  // 按小组分组
+  const groups = new Map<string, Map<string, { teamId: string; name: string; code: string; played: number; won: number; drawn: number; lost: number; gf: number; ga: number; points: number }>>();
+
+  for (const match of groupMatches) {
+    const roundName = match.roundName || '';
+    const groupKey = roundName.replace(/^Group\s*/i, '').charAt(0).toUpperCase();
+    if (!groupKey || groupKey < 'A' || groupKey > 'L') continue;
+
+    if (!groups.has(groupKey)) groups.set(groupKey, new Map());
+
+    const groupData = groups.get(groupKey)!;
+
+    // 初始化球队
+    for (const teamId of [match.homeTeamId, match.awayTeamId]) {
+      if (!teamId || groupData.has(teamId)) continue;
+      const team = teamMap.get(teamId);
+      groupData.set(teamId, {
+        teamId,
+        name: team?.nameZh || team?.name || teamId,
+        code: team?.code || '',
+        played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, points: 0,
+      });
+    }
+
+    // 只统计已完赛的比赛
+    if (match.status !== 'FT' && match.status !== 'AET' && match.status !== 'PEN') continue;
+    if (match.homeScore == null || match.awayScore == null) continue;
+
+    const home = groupData.get(match.homeTeamId);
+    const away = groupData.get(match.awayTeamId);
+    if (!home || !away) continue;
+
+    home.played += 1;
+    away.played += 1;
+    home.gf += match.homeScore;
+    home.ga += match.awayScore;
+    away.gf += match.awayScore;
+    away.ga += match.homeScore;
+
+    if (match.homeScore > match.awayScore) {
+      home.won += 1; home.points += 3;
+      away.lost += 1;
+    } else if (match.homeScore < match.awayScore) {
+      away.won += 1; away.points += 3;
+      home.lost += 1;
+    } else {
+      home.drawn += 1; home.points += 1;
+      away.drawn += 1; away.points += 1;
+    }
+  }
+
+  // 转换为排序后的数组
+  const result: Record<string, Array<{ teamId: string; name: string; code: string; played: number; won: number; drawn: number; lost: number; gf: number; ga: number; gd: number; points: number }>> = {};
+  for (const [groupKey, teamMap2] of groups) {
+    result[groupKey] = Array.from(teamMap2.values())
+      .map((t) => ({ ...t, gd: t.gf - t.ga }))
+      .sort((a, b) => b.points - a.points || b.gd - a.gd || b.gf - a.gf);
+  }
+
+  res.json(result);
+});
+
 // ─── 统计 ───
 
 router.get('/api/stats/summary', (req: Request, res: Response) => {
@@ -570,6 +661,25 @@ router.get('/api/stats/summary', (req: Request, res: Response) => {
     popularBetOptions: topCounts(Array.from(popularBetMap.entries())),
     championPickDistribution: topCounts(Array.from(championMap.entries()), 10),
     correctScoreHeat: topCounts(Array.from(correctScoreMap.entries()), 10),
+    userAccuracyRank: (() => {
+      const userAccMap = new Map<string, { won: number; settled: number }>();
+      for (const p of predictions) {
+        if (p.status !== 'WON' && p.status !== 'LOST') continue;
+        const acc = userAccMap.get(p.userId) || { won: 0, settled: 0 };
+        acc.settled += 1;
+        if (p.status === 'WON') acc.won += 1;
+        userAccMap.set(p.userId, acc);
+      }
+      return users
+        .map((u) => {
+          const acc = userAccMap.get(u.id);
+          if (!acc || acc.settled < 1) return null;
+          return { label: u.displayName, value: Math.round((acc.won / acc.settled) * 100), settled: acc.settled, won: acc.won };
+        })
+        .filter(Boolean)
+        .sort((a, b) => (b?.value || 0) - (a?.value || 0))
+        .slice(0, 10);
+    })(),
   });
 });
 

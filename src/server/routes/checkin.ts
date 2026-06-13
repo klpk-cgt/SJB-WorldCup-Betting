@@ -17,6 +17,8 @@ import {
   hasCompletedQuizToday,
   getTodayQuiz,
   submitQuizAnswer,
+  generateAIQuizQuestions,
+  getAIQuizCache,
 } from '../services/quiz_service';
 
 const router = Router();
@@ -137,6 +139,33 @@ router.post('/api/quiz/answer', async (req: Request, res: Response) => {
     const status = message.includes('已完成') || message.includes('不存在') ? 400 : 500;
     res.status(status).json({ error: message });
   }
+});
+
+/**
+ * 管理端：触发 AI 生成今日新题
+ */
+router.post('/api/quiz/generate-ai', async (req: Request, res: Response) => {
+  const adminToken = req.headers['x-admin-token'];
+  const config = require('../config').getRuntimeConfig();
+  if (adminToken !== config.adminPassword) {
+    return res.status(403).json({ error: '需要管理员权限' });
+  }
+
+  try {
+    const result = await generateAIQuizQuestions();
+    res.json({ success: true, count: result.questions.length, provider: result.provider });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'AI 生成题目失败';
+    res.status(500).json({ error: message });
+  }
+});
+
+/**
+ * 获取 AI 生成题目缓存
+ */
+router.get('/api/quiz/ai-cache', (req: Request, res: Response) => {
+  const questions = getAIQuizCache();
+  res.json({ questions, count: questions.length });
 });
 
 export default router;

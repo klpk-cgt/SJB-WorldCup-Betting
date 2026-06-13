@@ -2,18 +2,30 @@ import React, { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { BracketState } from '../types';
 import { apiRequest } from '../utils/api';
+import { useWebSocket } from '../hooks/useWebSocket';
 import BracketBoard from './BracketBoard';
 
 export default function BracketPage({ onOpenMatch }: { onOpenMatch: (matchId?: string) => void }) {
   const [bracket, setBracket] = useState<BracketState | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const loadBracket = () => {
     apiRequest('/api/bracket')
       .then((data) => setBracket(data))
       .catch(() => setBracket(null))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadBracket();
   }, []);
+
+  // 比赛结算或比分更新时自动刷新对阵图
+  useWebSocket({
+    enabled: true,
+    onMatchSettled: () => loadBracket(),
+    onScoreUpdate: () => loadBracket(),
+  });
 
   if (loading) {
     return (

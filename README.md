@@ -2,6 +2,10 @@
 
 一个专为朋友群设计的世界杯竞猜娱乐平台，支持赛事竞猜、AI 分析、实时赔率、排行榜和管理后台。
 
+## 首页预览
+
+![首页预览](./docs/screenshots/homepage.png)
+
 ## 项目简介
 
 这是一个全栈 Web 应用，为 2026 年美加墨世界杯打造的观赛竞猜平台。支持 48 支参赛球队的完整数据展示、实时比分追踪、AI 智能分析、多维度竞猜玩法和社交排行榜功能。
@@ -49,8 +53,13 @@
 - **PWA 支持**：可安装为桌面应用，支持离线访问
 - **签到系统**：每日签到获得积分奖励
 - **道具卡系统**：使用翻倍卡、保险卡等道具增强竞猜体验
-- **淘汰赛对阵图**：可视化展示晋级路径和实时比分
-- **统计页面**：群聊投注热度分析、市场分布图表
+- **淘汰赛对阵图**：可视化展示晋级路径和实时比分，晋级/淘汰/进行中状态实时标记
+- **统计页面**：群聊投注热度分析、市场分布图表、群内预测准确率排行
+- **观赛攻略**：12 组深度分析、必看比赛推荐、实时小组积分榜
+- **每日问答**：100+ 题库 + AI 每日自动生成新题，答对赢积分
+- **分享战绩**：一键截图保存个人战绩卡片
+- **Toast 通知**：比分更新、竞猜命中、徽章解锁等实时弹窗提醒
+- **徽章系统**：历史学者、预言家、常胜将军等成就徽章，访问历史长廊可解锁
 
 ## 技术栈
 
@@ -60,6 +69,8 @@
 - **Tailwind CSS**：原子化 CSS 框架
 - **Motion (Framer Motion)**：流畅动画效果
 - **Recharts**：数据可视化图表
+- **html2canvas**：前端截图生成分享图片
+- **GSAP**：高性能动画引擎
 - **Socket.io Client**：WebSocket 实时通信
 - **Lucide React**：现代化图标库
 
@@ -121,8 +132,10 @@ SJB-WorldCup-Betting/
 │   │   ├── AdminPanel.tsx      # 管理后台
 │   │   ├── AdminDashboard.tsx  # 管理仪表盘
 │   │   ├── HistoryHallPage.tsx # 历史长廊
-│   │   ├── BracketPage.tsx     # 淘汰赛对阵图
-│   │   ├── StatsPage.tsx       # 统计页面
+│   │   ├── WatchGuidePage.tsx   # 观赛攻略（含实时积分榜）
+│   │   ├── BracketBoard.tsx     # 对阵图组件（晋级状态标记）
+│   │   ├── BracketPage.tsx      # 淘汰赛对阵图页
+│   │   ├── StatsPage.tsx       # 统计页面（含准确率排行）
 │   │   ├── AIRecommendations.tsx # AI 推荐
 │   │   ├── SearchBar.tsx       # 搜索栏
 │   │   ├── ActivityFeed.tsx    # 动态时间线
@@ -167,6 +180,8 @@ SJB-WorldCup-Betting/
 │   │   ├── activity_service.ts # 动态服务
 │   │   ├── badge_service.ts    # 徽章服务
 │   │   ├── prediction_card_service.ts # 竞猜卡片服务
+│   │   ├── quiz_service.ts     # 问答服务（含AI生成题目）
+│   │   ├── settlement_service.ts # 结算服务
 │   │   └── routes/             # API 路由
 │   │       ├── auth.ts         # 认证路由
 │   │       ├── users.ts        # 用户路由
@@ -210,6 +225,10 @@ SJB-WorldCup-Betting/
 │   └── nginx/
 │       ├── default.conf.template        # Nginx 配置模板
 │       └── default-ssl.conf.example     # SSL 配置示例
+│
+├── docs/                       # 文档与截图
+│   └── screenshots/
+│       └── homepage.png        # 首页预览截图
 │
 └── db.json                     # JSON 数据库文件（自动生成）
 ```
@@ -363,6 +382,22 @@ pm2 save
 - `POST /api/ai/predict` - AI 比赛预测
 - `POST /api/ai/review` - AI 赛后复盘
 - `POST /api/ai/recommend` - AI 推荐方案
+- `GET /api/home/ai-prediction-card` - 首页 AI 预测卡片
+
+### 统计与排行
+- `GET /api/stats/summary` - 群聊统计概览（含预测准确率排行）
+- `GET /api/group-standings` - 小组实时积分榜
+- `GET /api/bracket` - 淘汰赛对阵图
+
+### 问答系统
+- `GET /api/quiz/status` - 今日问答状态
+- `GET /api/quiz/daily` - 获取今日题目
+- `POST /api/quiz/answer` - 提交答案
+- `POST /api/quiz/generate-ai` - AI 生成新题（管理员）
+- `GET /api/quiz/ai-cache` - AI 生成题目缓存
+
+### 活动记录
+- `POST /api/activities/record` - 记录用户活动事件
 
 ## 数据库迁移
 

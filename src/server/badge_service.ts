@@ -213,13 +213,11 @@ const BADGE_DEFINITIONS: Record<BadgeId, BadgeDefinition> = {
     icon: '📚',
     tone: 'slate',
     evaluate: (userId) => {
-      // 群内动态里浏览历史长廊的次数
       const db = dbService.getData();
       const acts = (db as any).activities || [];
-      // 这里用 'HISTORY_VISIT' 暂未使用，先按占位实现
       const visits = acts.filter(
-        (a: any) => a.userId === userId && a.type === 'JOINED',
-      ).length; // 占位
+        (a: any) => a.userId === userId && a.type === 'HISTORY_VISIT',
+      ).length;
       return { unlocked: visits >= 3, progress: Math.min(visits, 3), target: 3 };
     },
   },

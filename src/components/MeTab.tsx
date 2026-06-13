@@ -3,14 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import html2canvas from 'html2canvas';
 import {
   Award,
   BadgeCheck,
   Coins,
+  Download,
   Flame,
   LogOut,
   RefreshCw,
+  Share2,
   Sparkles,
   Target,
   Ticket,
@@ -98,6 +101,29 @@ export default function MeTab({ user, wallet, onLogout, onAdminLogin }: MeTabPro
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [cardInventory, setCardInventory] = useState<any>(null);
+  const [sharing, setSharing] = useState(false);
+  const shareCardRef = useRef<HTMLDivElement>(null);
+
+  const handleShareCard = async () => {
+    if (!shareCardRef.current || sharing) return;
+    setSharing(true);
+    try {
+      const canvas = await html2canvas(shareCardRef.current, {
+        backgroundColor: '#0f172a',
+        scale: 2,
+        useCORS: true,
+        logging: false,
+      });
+      const link = document.createElement('a');
+      link.download = `世界杯战绩-${user?.displayName || 'player'}-${new Date().toISOString().slice(0, 10)}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    } catch (e) {
+      console.error('分享截图失败', e);
+    } finally {
+      setSharing(false);
+    }
+  };
 
   const loadProfileCenter = async (showRefreshing = false) => {
     if (showRefreshing) setRefreshing(true);
@@ -207,7 +233,7 @@ export default function MeTab({ user, wallet, onLogout, onAdminLogin }: MeTabPro
 
   return (
     <div className="space-y-5 pb-24">
-      <section className="overflow-hidden rounded-[30px] border border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-5 text-white shadow-[0_20px_48px_rgba(15,23,42,0.18)]">
+      <section ref={shareCardRef} className="overflow-hidden rounded-[30px] border border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-5 text-white shadow-[0_20px_48px_rgba(15,23,42,0.18)]">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-3">
             <SmartAvatar name={user?.displayName || '世界杯玩家'} src={user?.avatarUrl} size={54} className="ring-2 ring-white/15" />
@@ -230,6 +256,16 @@ export default function MeTab({ user, wallet, onLogout, onAdminLogin }: MeTabPro
             </div>
           </div>
           <div className="flex gap-2">
+            <button
+              onClick={handleShareCard}
+              disabled={sharing}
+              className="rounded-2xl border border-amber-500/30 bg-amber-500/20 px-3 py-2 text-xs font-black text-amber-300 transition hover:bg-amber-500/30 disabled:opacity-50"
+            >
+              <span className="inline-flex items-center gap-1.5">
+                {sharing ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                {sharing ? '生成中' : '保存战绩'}
+              </span>
+            </button>
             {onAdminLogin && (
               <button
                 onClick={onAdminLogin}

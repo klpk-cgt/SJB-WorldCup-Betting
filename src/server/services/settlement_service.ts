@@ -53,6 +53,15 @@ export async function settleMatchById(params: SettleMatchParams): Promise<Settle
     throw new Error('比分还不完整，不能开始结算。');
   }
 
+  logger.settlement('Starting match settlement', {
+    matchId: match.id,
+    source: params.source,
+    forceResettle: Boolean(params.forceResettle),
+    status: match.status,
+    homeScore: match.homeScore,
+    awayScore: match.awayScore,
+  });
+
   try {
     const backupResult = createBackup(`auto-before-settle-${match.id}`);
     if (!backupResult.ok) {
@@ -297,6 +306,14 @@ export async function settleMatchById(params: SettleMatchParams): Promise<Settle
   } catch {
     // Ignore websocket push failures.
   }
+
+  logger.settlement('Match settlement finished', {
+    matchId: match.id,
+    source: params.source,
+    forceResettle: Boolean(params.forceResettle),
+    settledPredictions: matchPredictions.length,
+    totalPayout,
+  });
 
   return {
     settledPredictions: matchPredictions.length,
