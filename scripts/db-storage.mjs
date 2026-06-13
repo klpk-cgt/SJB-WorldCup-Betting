@@ -51,7 +51,9 @@ function normalizeSnapshot(snapshot) {
         }))
       : [],
     teams: Array.isArray(snapshot.teams) ? snapshot.teams : [],
-    matches: Array.isArray(snapshot.matches) ? snapshot.matches : [],
+    matches: Array.isArray(snapshot.matches)
+      ? [...snapshot.matches].sort((a, b) => String(a.startTimeUtc || '').localeCompare(String(b.startTimeUtc || '')))
+      : [],
     matchOdds: snapshot.matchOdds && typeof snapshot.matchOdds === 'object' ? snapshot.matchOdds : {},
     predictions: Array.isArray(snapshot.predictions)
       ? snapshot.predictions.map((prediction) => ({
@@ -150,7 +152,11 @@ async function loadSnapshot() {
         tx.wallet.findMany(),
         tx.transaction.findMany(),
         tx.team.findMany(),
-        tx.match.findMany(),
+        tx.match.findMany({
+          orderBy: {
+            startTimeUtc: 'asc',
+          },
+        }),
         tx.matchOdds.findMany(),
         tx.prediction.findMany(),
         tx.tournamentBet.findMany(),

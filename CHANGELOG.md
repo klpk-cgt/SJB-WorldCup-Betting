@@ -1,5 +1,35 @@
 # 更新日志 (Changelog)
 
+## v2.1.3 - 2026-06-13
+
+### Bug 修复
+
+- **比赛列表排序**：`matches.ts` 比赛列表和今日比赛接口返回数据按开赛时间排序，新增 `sortMatchesByStartTime()` 工具函数
+- **竞猜锁定状态分类**：`PredictionTab.tsx` 新增 `LOCKED` 分类，已锁定比赛单独展示，不再混入可下注列表
+
+### 功能改进
+
+- **AI 预测卡片优化**：标题改为"今日 AI 娱乐预测"，变量命名规范化
+- **首页路由增强**：`home.ts` 大幅重构，AI 预测卡片接口支持多提供商降级、缓存、错误处理
+- **db-storage 脚本优化**：`db-storage.mjs` 读写操作增强 utf8mb4 字符集保障
+- **调试脚本**：新增 `scripts/debug-match-order.mjs`，`package.json` 添加 `ops:debug:matches` 命令
+
+### 部署支持
+
+- **PM2 生态配置**：新增 `ecosystem.config.cjs`，自动加载 `.env.production`
+- **.gitignore 修复**：排除 `src/assets/*.png`，修复构建时缺少球场背景图
+
+### 文件变更
+
+- 修改 `src/server/routes/matches.ts` - 比赛列表按开赛时间排序
+- 修改 `src/server/routes/home.ts` - AI 预测卡片接口重构
+- 修改 `src/server/helpers.ts` - 新增 sortMatchesByStartTime
+- 修改 `src/components/PredictionTab.tsx` - 新增 LOCKED 状态分类
+- 修改 `src/components/home/AIPredictionCard.tsx` - 标题和变量优化
+- 修改 `scripts/db-storage.mjs` - 字符集保障增强
+- 修改 `package.json` - 新增调试命令
+- 新增 `ecosystem.config.cjs` - PM2 配置
+
 ## v2.1.2 - 2026-06-13
 
 ### Bug 修复

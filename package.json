@@ -17,6 +17,7 @@
     "db:import:mysql": "node scripts/import-db-json-to-mysql.mjs",
     "db:verify:mysql": "node scripts/verify-mysql-import.mjs",
     "db:summary:mysql": "node scripts/db-storage.mjs summary",
+    "ops:debug:matches": "node scripts/debug-match-order.mjs",
     "ops:diagnose": "node scripts/production-diagnostics.mjs"
   },
   "dependencies": {

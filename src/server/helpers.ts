@@ -174,6 +174,10 @@ export function isMatchOnBeijingDate(match: Pick<Match, 'startTimeUtc'>, dateKey
   return toBeijingDateKey(match.startTimeUtc) === dateKey;
 }
 
+export function sortMatchesByStartTime<T extends Pick<Match, 'startTimeUtc'>>(matches: T[]) {
+  return [...matches].sort((a, b) => a.startTimeUtc.localeCompare(b.startTimeUtc));
+}
+
 // ─── ID Generation ───
 
 export function createId(prefix: string) {

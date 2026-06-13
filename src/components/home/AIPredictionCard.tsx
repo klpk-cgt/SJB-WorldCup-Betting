@@ -42,8 +42,8 @@ export default function AIPredictionCard() {
     setLoading(true);
     setError(false);
     try {
-      const resp = await apiRequest('/api/home/ai-prediction-card');
-      setData(resp);
+      const response = await apiRequest('/api/home/ai-prediction-card');
+      setData(response);
     } catch {
       setError(true);
     } finally {
@@ -68,10 +68,10 @@ export default function AIPredictionCard() {
       <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
         <div className="flex items-center gap-2">
           <Sparkles className="h-4.5 w-4.5 text-cyan-500" />
-          <h3 className="text-sm font-black text-slate-900">AI 预测</h3>
+          <h3 className="text-sm font-black text-slate-900">今日 AI 娱乐预测</h3>
         </div>
         <div className="mt-3 rounded-3xl bg-gradient-to-br from-cyan-50 via-white to-emerald-50 p-4 ring-1 ring-slate-100">
-          <p className="text-xs text-slate-600">AI预测数据暂时开小差了，稍后再来看看。</p>
+          <p className="text-xs text-slate-600">AI 预测暂时加载失败，请稍后刷新再试。</p>
         </div>
       </div>
     );
@@ -87,7 +87,7 @@ export default function AIPredictionCard() {
         <div className="mt-3 rounded-3xl bg-gradient-to-br from-cyan-50 via-white to-emerald-50 p-4 ring-1 ring-slate-100">
           <p className="text-xs text-slate-600">{data.summary}</p>
         </div>
-        <p className="mt-3 text-[9px] text-amber-600/70">AI预测仅供娱乐参考，不作为任何建议</p>
+        <p className="mt-3 text-[9px] text-amber-600/70">AI 预测仅供群内娱乐参考，不构成正式建议。</p>
       </div>
     );
   }
@@ -129,7 +129,7 @@ export default function AIPredictionCard() {
                 <div className="mt-1 text-xs font-black text-slate-900">{match.predictResult}</div>
               </div>
               <div>
-                <div className="text-[10px] font-bold text-slate-500">比分参考</div>
+                <div className="text-[10px] font-bold text-slate-500">参考比分</div>
                 <div className="mt-1 text-xs font-black text-slate-900">{match.predictScore}</div>
               </div>
             </div>
@@ -143,7 +143,7 @@ export default function AIPredictionCard() {
         ))}
       </div>
 
-      <p className="mt-3 text-[9px] text-amber-600/70">AI预测仅供娱乐参考，不作为任何建议</p>
+      <p className="mt-3 text-[9px] text-amber-600/70">AI 预测仅供群内娱乐参考，不构成正式建议。</p>
     </div>
   );
 }

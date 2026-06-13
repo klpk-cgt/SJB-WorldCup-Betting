@@ -33,7 +33,7 @@ interface PredictionTabProps {
 }
 
 type ModeFilter = 'H2H' | 'CORRECT_SCORE' | 'TOTAL_GOALS';
-type MatchCategory = 'BETTABLE' | 'WAITING_SETTLEMENT' | 'SETTLED';
+type MatchCategory = 'BETTABLE' | 'LOCKED' | 'WAITING_SETTLEMENT' | 'SETTLED';
 type BetSurface = 'single' | 'tournament';
 
 interface BetOption {
@@ -66,7 +66,15 @@ const STAKE_SUGGESTIONS = [200, 500, 1000, 2000];
 function getMatchCategory(match: Match): MatchCategory {
   if (match.operationalStatus === 'SETTLED') return 'SETTLED';
   if (match.operationalStatus === 'WAITING_SETTLEMENT') return 'WAITING_SETTLEMENT';
-  return 'BETTABLE';
+  if (match.operationalStatus === 'BETTABLE' || match.operationalStatus === 'LOCKING_SOON') {
+    return 'BETTABLE';
+  }
+  if (match.operationalStatus === 'LOCKED') return 'LOCKED';
+  return 'SETTLED';
+}
+
+function sortMatchesByKickoff(matches: Match[]) {
+  return [...matches].sort((a, b) => a.startTimeUtc.localeCompare(b.startTimeUtc));
 }
 
 function buildOptions(match: Match, mode: ModeFilter): BetOption[] {
@@ -148,10 +156,11 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
 
   const fetchMatches = async () => {
     const data = await apiRequest('/api/matches');
-    setMatches(data);
+    const sortedMatches = sortMatchesByKickoff(data);
+    setMatches(sortedMatches);
 
     if (focusedMatchId) {
-      const focus = data.find((match: Match) => match.id === focusedMatchId);
+      const focus = sortedMatches.find((match: Match) => match.id === focusedMatchId);
       if (focus) {
         if (getMatchCategory(focus) === 'BETTABLE') {
           setActiveCategory('BETTABLE');
@@ -203,7 +212,10 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
   }, [focusedMatchId, user]);
 
   const visibleMatches = useMemo(
-    () => matches.filter((match) => getMatchCategory(match) === activeCategory),
+    () =>
+      sortMatchesByKickoff(
+        matches.filter((match) => getMatchCategory(match) === activeCategory),
+      ),
     [activeCategory, matches],
   );
 

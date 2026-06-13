@@ -18,6 +18,7 @@ import {
   roundPoints,
   toBeijingDateKey,
   isMatchOnBeijingDate,
+  sortMatchesByStartTime,
 } from '../helpers';
 import { getRuntimeConfig } from '../config';
 import { emitTournamentBet } from '../activity_service';
@@ -41,12 +42,16 @@ const router = Router();
 // ─── 比赛列表 ───
 
 router.get('/api/matches', async (_req: Request, res: Response) => {
-  res.json(dbService.getMatches().map(serializeMatch));
+  res.json(sortMatchesByStartTime(dbService.getMatches()).map(serializeMatch));
 });
 
 router.get('/api/matches/today', async (_req: Request, res: Response) => {
   const today = toBeijingDateKey();
-  res.json(dbService.getMatches().filter((match) => isMatchOnBeijingDate(match, today)).map(serializeMatch));
+  res.json(
+    sortMatchesByStartTime(
+      dbService.getMatches().filter((match) => isMatchOnBeijingDate(match, today)),
+    ).map(serializeMatch),
+  );
 });
 
 // ─── 比赛搜索（必须在 :id 之前注册）───
@@ -55,7 +60,7 @@ router.get('/api/matches/search', async (req: Request, res: Response) => {
   const db = dbService.getData();
   const { q, status, from, to } = req.query as { q?: string; status?: string; from?: string; to?: string };
 
-  let matches = db.matches;
+  let matches = sortMatchesByStartTime(db.matches);
 
   // 按队名搜索（中文/英文）
   if (q && q.trim()) {
@@ -86,7 +91,7 @@ router.get('/api/matches/search', async (req: Request, res: Response) => {
 
   // 限制返回数量
   const limit = Math.min(Number(req.query.limit) || 50, 200);
-  const serialized = matches.slice(0, limit).map(serializeMatch);
+  const serialized = sortMatchesByStartTime(matches).slice(0, limit).map(serializeMatch);
 
   res.json({
     total: matches.length,
