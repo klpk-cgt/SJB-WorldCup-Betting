@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -10,6 +10,11 @@ import { AIContent, Match, MatchStatus } from '../types';
 import { apiRequest, formatDate } from '../utils/api';
 import { useStaggerReveal, useFadeIn } from '../animations';
 import { getBeijingDayLabel, getMatchesForNearestDay, sortMatchesByKickoff } from '../utils/matchDisplay';
+import {
+  getHomeMatchCategory,
+  selectFeaturedHomeMatch,
+  selectNextUpcomingHomeMatch,
+} from '../utils/homeMatchSelection';
 import FocusMatchCard from './home/FocusMatchCard';
 import AIPredictionCard from './home/AIPredictionCard';
 import { FocusMatch, FocusMatchStatus, TeamStats, mockFocusMatch } from './home/focusMatch';
@@ -140,10 +145,11 @@ function buildFocusMatch(match: Match | undefined, now: number): FocusMatch {
     return mockFocusMatch;
   }
 
+  const category = getHomeMatchCategory(match, now);
   const status: FocusMatchStatus =
-    match.status === MatchStatus.LIVE || match.status === MatchStatus.HT
+    category === 'live' || category === 'current_window'
       ? 'live'
-      : [MatchStatus.FT, MatchStatus.AET, MatchStatus.PEN].includes(match.status)
+      : category === 'finished'
         ? 'finished'
         : 'upcoming';
 
@@ -155,7 +161,7 @@ function buildFocusMatch(match: Match | undefined, now: number): FocusMatch {
     countdownText: status === 'upcoming' ? formatCountdown(match.startTimeUtc, now) : undefined,
     venue: match.venueCity,
     headlineTag: '2026 世界杯',
-    hotLabel: match.status === MatchStatus.LIVE ? '热战' : '热门',
+    hotLabel: status === 'live' ? '热战' : '热门',
     status,
     scoreText: status === 'upcoming' ? undefined : `${match.homeScore ?? 0} : ${match.awayScore ?? 0}`,
     homeTeam: {
@@ -394,7 +400,12 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
     // 兜底
     return matches[0];
   }, [matches, liveMatch, now]);
-  const focusMatch = useMemo(() => buildFocusMatch(featuredMatch, now), [featuredMatch, now]);
+  const unifiedFeaturedMatch = useMemo(() => selectFeaturedHomeMatch(sortedMatches, now), [sortedMatches, now]);
+  const unifiedFeaturedCategory = useMemo(
+    () => (unifiedFeaturedMatch ? getHomeMatchCategory(unifiedFeaturedMatch, now) : null),
+    [unifiedFeaturedMatch, now],
+  );
+  const focusMatch = useMemo(() => buildFocusMatch(unifiedFeaturedMatch, now), [unifiedFeaturedMatch, now]);
   const aiView = extractAiView(dailyAI);
   const nearestDayLabel = recentMatches[0] ? getBeijingDayLabel(recentMatches[0].startTimeUtc) : '';
 
@@ -417,6 +428,14 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
       .slice(0, 3);
     return upcoming;
   }, [sortedMatches, now]);
+  const countdownTarget = useMemo(
+    () => selectNextUpcomingHomeMatch(sortedMatches, now) || nextUpcoming,
+    [sortedMatches, now, nextUpcoming],
+  );
+  const countdownTargetText = useMemo(() => {
+    if (!countdownTarget) return null;
+    return formatCountdown(countdownTarget.startTimeUtc, now);
+  }, [countdownTarget, now]);
 
   if (loading) {
     return (
@@ -466,25 +485,29 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
       </section>
 
       {/* 下一场开赛倒计时 */}
-      {nextUpcoming && countdownText && (
+      {countdownTarget && countdownTargetText && (
         <section className="rounded-[28px] border border-emerald-200 bg-gradient-to-r from-emerald-50 via-white to-cyan-50 px-5 py-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Timer className="h-4 w-4 text-emerald-600" />
-              <span className="text-xs font-black text-emerald-800">下一场开赛倒计时</span>
+              <span className="text-xs font-black text-emerald-800">
+                {unifiedFeaturedCategory === 'live' || unifiedFeaturedCategory === 'current_window'
+                  ? '当前焦点战进行中 · 下一场倒计时'
+                  : '下一场开赛倒计时'}
+              </span>
             </div>
-            <span className="text-[10px] font-semibold text-slate-400">{formatBeijingTime(nextUpcoming.startTimeUtc)}</span>
+            <span className="text-[10px] font-semibold text-slate-400">{formatBeijingTime(countdownTarget.startTimeUtc)}</span>
           </div>
           <div className="mt-3 flex items-center gap-3">
             <div className="flex items-center gap-2 text-sm font-black text-slate-900">
-              <FlagBadge flagCode={nextUpcoming.homeTeam?.code} size="sm" />
-              <span className="truncate">{nextUpcoming.homeTeam?.nameZh}</span>
+              <FlagBadge flagCode={countdownTarget.homeTeam?.code} size="sm" />
+              <span className="truncate">{countdownTarget.homeTeam?.nameZh}</span>
               <span className="text-slate-400">vs</span>
-              <span className="truncate">{nextUpcoming.awayTeam?.nameZh}</span>
-              <FlagBadge flagCode={nextUpcoming.awayTeam?.code} size="sm" />
+              <span className="truncate">{countdownTarget.awayTeam?.nameZh}</span>
+              <FlagBadge flagCode={countdownTarget.awayTeam?.code} size="sm" />
             </div>
             <div className="ml-auto shrink-0 rounded-2xl bg-emerald-600 px-3 py-1.5 font-mono text-lg font-black tracking-wider text-white">
-              {countdownText}
+              {countdownTargetText}
             </div>
           </div>
         </section>
@@ -492,22 +515,22 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
 
       <FocusMatchCard
         match={focusMatch}
-        onPrimaryAction={() => onNavigate('prediction', featuredMatch?.id)}
-        onSecondaryAction={() => onNavigate('matches', featuredMatch?.id)}
+        onPrimaryAction={() => onNavigate('prediction', unifiedFeaturedMatch?.id)}
+        onSecondaryAction={() => onNavigate('matches', unifiedFeaturedMatch?.id)}
         onQuickNavigate={(target) => {
           if (target === 'lineup') {
-            onNavigate('match-detail', featuredMatch?.id, 'lineup');
+            onNavigate('match-detail', unifiedFeaturedMatch?.id, 'lineup');
             return;
           }
           if (target === 'score') {
-            onNavigate('match-detail', featuredMatch?.id, 'overview');
+            onNavigate('match-detail', unifiedFeaturedMatch?.id, 'overview');
             return;
           }
           if (target === 'leaderboard') {
             onNavigate('leaderboard');
             return;
           }
-          onNavigate('matches', featuredMatch?.id);
+          onNavigate('matches', unifiedFeaturedMatch?.id);
         }}
         onTeamClick={(teamCode) => {
           setTeamDetailId(teamCode);

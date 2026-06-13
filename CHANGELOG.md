@@ -1,5 +1,39 @@
 # 更新日志 (Changelog)
 
+## v2.1.6 - 2026-06-13
+
+### 功能改进
+
+- **AI 预测卡片 B+C 缓存策略**：启动时预热缓存 + 每3小时后台刷新 + 本地文件兜底（`runtime/prediction-data.json`），离线重启也能展示预测
+- **数据源改为 jsDelivr CDN**：`cdn.jsdelivr.net` 国内可直接访问，替代原 Vercel API 和 GitHub Raw
+- **比赛 ID 匹配**：data.json 通过 id 与本地比赛数据匹配（`m-1` → id:1），替代队名模糊匹配
+- **只显示1场焦点战预测**：优先焦点战 > 信心等级 > 开赛时间，卡片更聚焦
+- **预测数据丰富化**：新增进球预期（totalGoals）、半全场（htft）、赛果（result）字段展示
+- **管理面板增强**：系统状态卡片、一键运维、窗口同步、强制重算按钮
+- **焦点战选择逻辑重构**：统一 `homeMatchSelection` 工具函数，支持进行中/即将开赛/完赛
+
+### 新增文件
+
+- `src/server/services/home_ai_prediction_service.ts` - AI 预测服务层（独立模块）
+- `src/utils/homeMatchSelection.ts` - 首页焦点战选择逻辑
+- `scripts/check-home-ai-prediction.mjs` - AI 预测调试脚本
+- `vitest.config.ts` - 测试配置
+
+## v2.1.5 - 2026-06-13
+
+### 功能改进
+
+- **AI 预测卡片数据源重构**：新增 GitHub Pages 爬取作为主要数据源（国内服务器可访问），替代原 Vercel API
+- **三级降级策略**：GitHub Pages 爬取 → Vercel API → 本地赔率预测，确保任何网络环境都能展示
+- **丰富预测数据展示**：新增竞彩 SPF 赔率、伤停信息、比赛场馆、焦点战标记、标签（揭幕战/死亡之组）
+- **信心等级颜色区分**：铁胆(绿)、稳胆(青)、大概率(橙)、中等(灰)，视觉更直观
+- **队名智能匹配**：爬取数据与本地比赛数据通过中英文队名模糊匹配
+
+### 文件变更
+
+- 重写 `src/server/routes/home.ts` - 新增 HTML 爬取、解析、队名匹配逻辑
+- 重写 `src/components/home/AIPredictionCard.tsx` - 新增伤停/场馆/标签/赔率展示，信心等级颜色化
+
 ## v2.1.4 - 2026-06-13
 
 ### 功能改进

@@ -28,6 +28,11 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
   const [integrationStatus, setIntegrationStatus] = useState<any | null>(null);
   const [lastTestSyncResult, setLastTestSyncResult] = useState<any | null>(null);
   const [cardStats, setCardStats] = useState<any | null>(null);
+  const [systemStatus, setSystemStatus] = useState<any | null>(null);
+  const [syncRuntime, setSyncRuntime] = useState<any | null>(null);
+  const [syncWindowPastDays, setSyncWindowPastDays] = useState('1');
+  const [syncWindowFutureDays, setSyncWindowFutureDays] = useState('7');
+  const [opsStatusMsg, setOpsStatusMsg] = useState('');
 
   // User provisioning helpers
   const [pasteNames, setPasteNames] = useState('');
@@ -105,28 +110,37 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
     setErrorStr(message || '');
   };
 
+  const formatStatusTime = (value?: string | number | null) => {
+    if (!value) return 'Not available';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return date.toLocaleString('zh-CN', {
+      hour12: false,
+      timeZone: 'Asia/Shanghai',
+    });
+  };
+
   const loadAdminData = async () => {
     try {
-      const uData = await apiRequest('/api/admin/users');
+      const [uData, mData, logsData, statusData, systemData, syncStateData, csData] = await Promise.all([
+        apiRequest('/api/admin/users'),
+        apiRequest('/api/matches'),
+        apiRequest('/api/admin/sync-logs'),
+        apiRequest('/api/admin/integrations/status'),
+        apiRequest('/api/admin/system/status'),
+        apiRequest('/api/admin/sync-state'),
+        apiRequest('/api/admin/cards/stats').catch(() => null),
+      ]);
       setUsers(uData);
-
-      const mData = await apiRequest('/api/matches');
       setMatches(mData);
-
-      const logsData = await apiRequest('/api/admin/sync-logs');
       setSyncLogs(logsData);
-
-      const statusData = await apiRequest('/api/admin/integrations/status');
       setIntegrationStatus(statusData);
+      setSystemStatus(systemData);
+      setSyncRuntime(syncStateData);
+      setCardStats(csData);
+      setErrorStr('');
 
       // 卡牌统计（可选，失败不影响）
-      try {
-        const csData = await apiRequest('/api/admin/cards/stats');
-        setCardStats(csData);
-      } catch {
-        setCardStats(null);
-      }
-      setErrorStr('');
     } catch (e: any) {
       console.error(e);
       const message = e?.message || '未取得授权或网络读取错误，请重新登录。';
@@ -445,14 +459,67 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
     }
   };
 
+  const handleSettleSelectedMatch = async (forceResettle = false) => {
+    if (!selectedMatch) return;
+    setIsWorking(true);
+    setSettleStatusMsg(
+      forceResettle
+        ? '正在回滚并重算这场比赛的结算数据，请稍候...'
+        : '正在按当前比分结算这场比赛，请稍候...',
+    );
+    try {
+      const res = await apiRequest(`/api/admin/matches/${selectedMatch.id}/settle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(forceResettle ? { forceResettle: true } : {}),
+      });
+      setSettleStatusMsg(
+        forceResettle
+          ? `强制重算完成，已重新处理 ${res.count} 条竞猜记录。`
+          : `结算完成，已处理 ${res.count} 条竞猜记录。`,
+      );
+      await loadAdminData();
+    } catch (e: any) {
+      setSettleStatusMsg(`结算失败: ${e.message}`);
+    } finally {
+      setIsWorking(false);
+    }
+  };
+
   const syncFixturesAPI = async () => {
     setIsWorking(true);
     try {
       await apiRequest('/api/admin/sync/today', { method: 'POST' });
+      setOpsStatusMsg('Today sync completed.');
       toast.success('赛程同步完成', '本地赛程与缓存已重新构建。');
       await loadAdminData();
     } catch (e: any) {
       toast.error('赛程同步失败', e.message);
+    } finally {
+      setIsWorking(false);
+    }
+  };
+
+  const syncWindowAPI = async () => {
+    setIsWorking(true);
+    setOpsStatusMsg('Syncing recent fixture window...');
+    try {
+      const result = await apiRequest('/api/admin/sync/window', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pastDays: Number(syncWindowPastDays) || 1,
+          futureDays: Number(syncWindowFutureDays) || 7,
+        }),
+      });
+      setOpsStatusMsg(
+        `Window sync completed. Updated ${result.updatedMatches?.length || 0}, created ${result.createdMatches?.length || 0}.`,
+      );
+      toast.success('Window sync completed', `Updated ${result.updatedMatches?.length || 0}, created ${result.createdMatches?.length || 0}`);
+      await loadAdminData();
+    } catch (e: any) {
+      setOpsStatusMsg(`Window sync failed: ${e.message}`);
+      toast.error('Window sync failed', e.message);
     } finally {
       setIsWorking(false);
     }
@@ -463,6 +530,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
     try {
       const result = await apiRequest('/api/admin/integrations/test-sync', { method: 'POST' });
       setLastTestSyncResult(result);
+      setOpsStatusMsg(`Integration test finished for ${result.sampleDate || 'unknown date'}.`);
       await loadAdminData();
     } catch (e: any) {
       toast.error('同步校验失败', e.message || '请稍后重试。');
@@ -476,6 +544,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
     setIsWorking(true);
     try {
       await apiRequest(`/api/admin/sync/matches/${selectedMatch.id}`, { method: 'POST' });
+      setOpsStatusMsg(`Selected match synced: ${selectedMatch.id}`);
       toast.success('单场同步完成', '这场比赛已经重新同步。');
       await loadAdminData();
     } catch (e: any) {
@@ -808,6 +877,16 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
                     )}
                   </div>
 
+                  {selectedMatch && (selectedMatch.status === 'FT' || matchStatus === 'FT') && (
+                    <button
+                      onClick={() => handleSettleSelectedMatch(true)}
+                      disabled={isWorking}
+                      className="w-full bg-amber-500 hover:bg-amber-600 text-white text-xs font-black py-2.5 px-4 rounded-xl transition cursor-pointer"
+                    >
+                      强制重算本场结算
+                    </button>
+                  )}
+
                   {settleStatusMsg && (
                     <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs text-slate-600 font-bold leading-relaxed">
                       {settleStatusMsg}
@@ -825,7 +904,177 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
       )}
 
       {/* PROVISION AND WALLET ADJUST TAB */}
-      {activeTab === 'dashboard' && <AdminDashboard />}
+      {activeTab === 'dashboard' && (
+        <div className="space-y-4">
+          <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-2xs space-y-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h4 className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                    <BarChart3 className="w-4 h-4 text-emerald-500" />
+                    系统状态
+                  </h4>
+                  <p className="mt-1 text-[11px] text-slate-500 font-bold">
+                    快速确认存储模式、关键表数量和最近同步状态。
+                  </p>
+                </div>
+                <button
+                  onClick={loadAdminData}
+                  disabled={isWorking}
+                  className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  刷新状态
+                </button>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Storage</div>
+                  <div className="mt-2 text-sm font-black text-slate-900">{systemStatus?.storage?.mode || 'unknown'}</div>
+                  <div className={`mt-1 text-[11px] font-bold ${systemStatus?.storage?.databaseConnected ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {systemStatus?.storage?.databaseConnected ? 'Database connected' : 'Database unavailable'}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Data</div>
+                  <div className="mt-2 text-sm font-black text-slate-900">
+                    {systemStatus?.counts?.teams || 0} teams / {systemStatus?.counts?.matches || 0} matches
+                  </div>
+                  <div className="mt-1 text-[11px] font-bold text-slate-500">
+                    {systemStatus?.counts?.players || 0} players / {systemStatus?.counts?.teamHistory || 0} history
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Betting</div>
+                  <div className="mt-2 text-sm font-black text-slate-900">
+                    {systemStatus?.counts?.predictions || 0} predictions
+                  </div>
+                  <div className="mt-1 text-[11px] font-bold text-slate-500">
+                    {systemStatus?.counts?.wallets || 0} wallets / {systemStatus?.counts?.transactions || 0} transactions
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Match health</div>
+                  <div className="mt-2 text-sm font-black text-slate-900">
+                    {systemStatus?.matches?.joinedTeamMatches || 0} joined matches
+                  </div>
+                  <div className={`mt-1 text-[11px] font-bold ${(systemStatus?.matches?.orphanTeamRefs || 0) > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                    orphan refs: {systemStatus?.matches?.orphanTeamRefs || 0}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-3 lg:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-700">
+                  <div className="font-black text-slate-900">最近同步</div>
+                  <div className="mt-2 space-y-1.5">
+                    <div>Fixtures: {systemStatus?.sync?.latestFixtures?.status || 'N/A'}</div>
+                    <div>Fixtures time: {formatStatusTime(systemStatus?.sync?.latestFixtures?.createdAt || systemStatus?.sync?.latestFixtures?.lastRunAt)}</div>
+                    <div>Odds: {systemStatus?.sync?.latestOdds?.status || 'N/A'}</div>
+                    <div>Odds time: {formatStatusTime(systemStatus?.sync?.latestOdds?.createdAt || systemStatus?.sync?.latestOdds?.lastRunAt)}</div>
+                    <div>Latest log: {formatStatusTime(systemStatus?.sync?.latest?.createdAt)}</div>
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-700">
+                  <div className="font-black text-slate-900">调度状态</div>
+                  <div className="mt-2 space-y-1.5">
+                    <div>Priority: {syncRuntime?.state?.currentPriority || 'N/A'}</div>
+                    <div>Reason: {syncRuntime?.state?.currentReason || 'N/A'}</div>
+                    <div>Live sync interval: {syncRuntime?.plan?.liveScoreIntervalMs ? `${Math.round(syncRuntime.plan.liveScoreIntervalMs / 1000)}s` : 'disabled'}</div>
+                    <div>Fixtures interval: {syncRuntime?.plan?.fixturesIntervalMs ? `${Math.round(syncRuntime.plan.fixturesIntervalMs / 60000)}m` : 'disabled'}</div>
+                    <div>Match dates: {syncRuntime?.plan?.fixturesDates?.length || 0}</div>
+                  </div>
+                </div>
+              </div>
+
+              {systemStatus?.matches?.dateRange && (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-700">
+                  <div className="font-black text-slate-900">比赛覆盖范围</div>
+                  <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1">
+                    <span>First: {formatStatusTime(systemStatus.matches.dateRange.first)}</span>
+                    <span>Last: {formatStatusTime(systemStatus.matches.dateRange.last)}</span>
+                    <span>With scores: {systemStatus.matches.withScores || 0}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-2xs space-y-4">
+              <div>
+                <h4 className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                  <Database className="w-4 h-4 text-rose-500" />
+                  一键运维
+                </h4>
+                <p className="mt-1 text-[11px] text-slate-500 font-bold">
+                  不用上服务器敲命令，直接在这里做同步和自检。
+                </p>
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-2">
+                <button
+                  onClick={syncFixturesAPI}
+                  disabled={isWorking}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-xs font-black text-white transition hover:bg-slate-800 disabled:opacity-60"
+                >
+                  <Database className="h-3.5 w-3.5" />
+                  同步今天赛程
+                </button>
+                <button
+                  onClick={runIntegrationTestSync}
+                  disabled={isWorking}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+                >
+                  <Play className="h-3.5 w-3.5" />
+                  运行同步校验
+                </button>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 space-y-3">
+                <div className="text-[11px] font-black text-slate-700">窗口同步</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="text-[10px] font-bold text-slate-500">
+                    往前天数
+                    <input
+                      type="number"
+                      min="0"
+                      value={syncWindowPastDays}
+                      onChange={(e) => setSyncWindowPastDays(e.target.value)}
+                      className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 focus:outline-none focus:border-rose-400"
+                    />
+                  </label>
+                  <label className="text-[10px] font-bold text-slate-500">
+                    往后天数
+                    <input
+                      type="number"
+                      min="1"
+                      value={syncWindowFutureDays}
+                      onChange={(e) => setSyncWindowFutureDays(e.target.value)}
+                      className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 focus:outline-none focus:border-rose-400"
+                    />
+                  </label>
+                </div>
+                <button
+                  onClick={syncWindowAPI}
+                  disabled={isWorking}
+                  className="w-full rounded-2xl bg-emerald-500 px-4 py-3 text-xs font-black text-white transition hover:bg-emerald-600 disabled:opacity-60"
+                >
+                  同步近期赛程窗口
+                </button>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+                <div className="font-black text-slate-900">操作反馈</div>
+                <div className="mt-2 leading-relaxed">
+                  {opsStatusMsg || '还没有执行新的运维操作。'}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <AdminDashboard />
+        </div>
+      )}
 
       {activeTab === 'users' && (
         <div className="space-y-6">
