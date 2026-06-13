@@ -1,5 +1,18 @@
 # 更新日志 (Changelog)
 
+## v2.1.4 - 2026-06-13
+
+### 功能改进
+
+- **焦点战智能选择**：`HomeTab.tsx` 重构焦点战匹配逻辑，优先级：进行中比赛 > 当前比赛窗口(3h内) > 即将开赛 > 最近完赛，不再依赖固定数据
+- **比赛状态分类**：新增 `FINISHED_STATUSES`/`LIVE_STATUSES` 集合，精确区分完赛/进行中/未开赛
+- **倒计时格式化**：新增 `formatCountdown()` 和 `formatBeijingTime()` 工具函数
+- **阶段中文标签**：新增 `stageLabel()` 映射比赛阶段为中文
+
+### 文件变更
+
+- 修改 `src/components/HomeTab.tsx` - 焦点战智能选择逻辑重构
+
 ## v2.1.3 - 2026-06-13
 
 ### Bug 修复
