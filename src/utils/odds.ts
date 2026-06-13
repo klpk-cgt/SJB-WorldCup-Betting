@@ -1,4 +1,5 @@
 import { MatchOdds } from '../types';
+import { calculateExpectedGoals } from './elo';
 
 // ─── 比分分组定义 ───
 
@@ -100,26 +101,31 @@ export function mergeCorrectScoreOdds(
 }
 
 export function generateDefaultOdds(matchId: string, homeRank?: number, awayRank?: number): MatchOdds {
-  // 基于 FIFA 排名的差异化赔率（与 sync.ts 统一）
+  // 基于 Elo + xG 的差异化赔率（与 sync.ts 统一）
   let hw = 2.20, d = 3.20, aw = 3.10;
   if (homeRank && awayRank) {
-    const diff = awayRank - homeRank; // 正值=主队排名更高
+    const diff = awayRank - homeRank;
     hw = Math.max(1.10, 2.20 - diff * 0.05);
     aw = Math.max(1.10, 3.10 + diff * 0.05);
     d = Math.max(2.50, 3.20 - Math.abs(diff) * 0.02);
   }
   const h2h = { homeWin: Math.round(hw * 100) / 100, draw: Math.round(d * 100) / 100, awayWin: Math.round(aw * 100) / 100 };
 
+  // Poisson + Elo xG 生成比分赔率（兜底时无场地信息，用基础计算）
+  const xg = calculateExpectedGoals(homeRank, awayRank);
+  const correctScore = generateCorrectScoreOddsFromXG(xg.homeXG, xg.awayXG);
+
   return {
     matchId,
     h2h,
-    correctScore: scaleCorrectScoreOdds(DEFAULT_CORRECT_SCORE_OPTIONS, h2h).map(({ score, odds }) => ({ score, odds })),
+    correctScore,
     totalGoals: { over25: 1.9, under25: 1.9 },
     lastUpdated: new Date().toISOString(),
     source: 'MANUAL',
     syncStatus: 'MANUAL_FALLBACK',
+    correctScoreSource: 'MANUAL',
     lastSyncedAt: new Date().toISOString(),
-  };
+  } as MatchOdds;
 }
 
 /**
@@ -175,4 +181,150 @@ export function parseScoreLabel(score: string) {
   }
 
   return { home, away };
+}
+
+// ─── Poisson Score Matrix ───
+// Based on adapted model: https://github.com/awei4004/world-cup-for-math
+
+const MAX_GOALS = 6; // Max goals per team for probability matrix
+const BOOKMAKER_MARGIN = 0.08; // 8% margin
+
+/** Single-term Poisson PMF: probability of exactly k goals */
+function poissonPMF(k: number, lambda: number): number {
+  if (lambda <= 0) return k === 0 ? 1 : 0;
+  return (Math.pow(lambda, k) * Math.exp(-lambda)) / factorial(k);
+}
+
+function factorial(n: number): number {
+  if (n <= 1) return 1;
+  let result = 1;
+  for (let i = 2; i <= n; i++) result *= i;
+  return result;
+}
+
+/**
+ * Generate 7×7 score probability matrix using independent Poisson
+ * with Dixon-Coles low-score correction (rho=-0.13).
+ */
+export function poissonScoreMatrix(
+  homeXG: number,
+  awayXG: number,
+): Map<string, number> {
+  const rho = -0.13;
+  const matrix = new Map<string, number>();
+
+  for (let h = 0; h <= MAX_GOALS; h++) {
+    for (let a = 0; a <= MAX_GOALS; a++) {
+      let prob = poissonPMF(h, homeXG) * poissonPMF(a, awayXG);
+
+      // Dixon-Coles low-score correction
+      if (h === 0 && a === 0) prob *= 1 + rho * homeXG * awayXG;
+      else if (h === 0 && a === 1) prob *= 1 - rho * awayXG;
+      else if (h === 1 && a === 0) prob *= 1 - rho * homeXG;
+      else if (h === 1 && a === 1) prob *= 1 + rho;
+
+      matrix.set(`${h}-${a}`, Math.max(prob, 0));
+    }
+  }
+
+  // Normalize
+  let total = 0;
+  for (const p of matrix.values()) total += p;
+  if (total > 0) {
+    for (const [key, p] of matrix) matrix.set(key, p / total);
+  }
+
+  return matrix;
+}
+
+/** Aggregate score matrix into total goals distribution for over/under */
+export function totalGoalsFromMatrix(
+  matrix: Map<string, number>,
+): { over25: number; under25: number } {
+  let under = 0;
+  let over = 0;
+  for (const [score, prob] of matrix) {
+    const [h, a] = score.split('-').map(Number);
+    if (h + a > 2.5) over += prob;
+    else under += prob;
+  }
+  if (!under && !over) return { over25: 1.9, under25: 1.9 };
+  return {
+    over25: round2(1 / over * (1 - BOOKMAKER_MARGIN)),
+    under25: round2(1 / under * (1 - BOOKMAKER_MARGIN)),
+  };
+}
+
+/**
+ * Convert Poisson score matrix to odds for display.
+ * Selected high-probability scores + OTHER catch-all per group.
+ */
+export function generateCorrectScoreOddsFromXG(
+  homeXG: number,
+  awayXG: number,
+): ScoreOption[] {
+  const matrix = poissonScoreMatrix(homeXG, awayXG);
+
+  // Sort scores by probability descending
+  const sorted = [...matrix.entries()].sort((a, b) => b[1] - a[1]);
+
+  const seen = new Set<string>();
+  const result: ScoreOption[] = [];
+
+  // Track group accumulators for OTHER catch-all
+  let homeProbSum = 0;
+  let drawProbSum = 0;
+  let awayProbSum = 0;
+
+  const scoredScores = new Set<string>();
+
+  for (const [score, prob] of sorted) {
+    const [h, a] = score.split('-').map(Number);
+    let group: ScoreGroup;
+
+    if (h > a) {
+      group = 'HOME_WIN';
+      homeProbSum += prob;
+    } else if (h === a) {
+      group = 'DRAW';
+      drawProbSum += prob;
+    } else {
+      group = 'AWAY_WIN';
+      awayProbSum += prob;
+    }
+
+    // Include top scores (limit total to ~18 entries + 3 OTHER)
+    if (result.length < 18 && !seen.has(group + '_top')) {
+      result.push({
+        score,
+        odds: round2(1 / Math.max(prob, 0.001) * (1 - BOOKMAKER_MARGIN)),
+        group,
+      });
+      scoredScores.add(score);
+    }
+  }
+
+  // Add OTHER fallback for groups that need coverage
+  const homeOtherProb = homeProbSum - [...result.filter(r => r.group === 'HOME_WIN')]
+    .reduce((s, r) => s + (1 / r.odds / (1 - BOOKMAKER_MARGIN)), 0);
+
+  if (homeOtherProb > 0.005) {
+    result.push({
+      score: 'HOME_OTHER',
+      odds: round2(Math.max(1.05, 1 / Math.max(homeOtherProb, 0.001) * (1 - BOOKMAKER_MARGIN))),
+      group: 'HOME_WIN',
+    });
+  }
+
+  // Sort by group
+  result.sort((a, b) => {
+    const order = { HOME_WIN: 0, DRAW: 1, AWAY_WIN: 2 };
+    return (order[a.group] ?? 0) - (order[b.group] ?? 0);
+  });
+
+  return result;
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
 }

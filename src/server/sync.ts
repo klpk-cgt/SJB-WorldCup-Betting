@@ -1,6 +1,7 @@
 import { DatabaseSchema } from '../db/db_service';
 import { Match, MatchOdds, MatchStatus, SyncLog, SyncProvider, SyncStatus, SyncType, Team } from '../types';
-import { generateDefaultOdds, mergeCorrectScoreOdds, scaleCorrectScoreOdds, DEFAULT_CORRECT_SCORE_OPTIONS } from '../utils/odds';
+import { generateDefaultOdds, mergeCorrectScoreOdds, scaleCorrectScoreOdds, DEFAULT_CORRECT_SCORE_OPTIONS, generateCorrectScoreOddsFromXG } from '../utils/odds';
+import { calculateExpectedGoals } from '../utils/elo';
 import { broadcastScoreUpdate, broadcastOddsChange } from './websocket';
 
 // ── 默认赔率生成（委托给 utils/odds.ts 统一版本） ──
@@ -521,11 +522,16 @@ export async function syncOddsForMatches(params: {
       const oldOdds = db.matchOdds[match.id];
       const newH2h = { homeWin, draw, awayWin };
 
-      // 基于新 h2h 赔率重新缩放比分赔率（API 不支持 correct_score，用强弱队推算）
-      const scaledCorrectScore = scaleCorrectScoreOdds(
-        DEFAULT_CORRECT_SCORE_OPTIONS,
-        newH2h,
+      // 基于 Poisson + Elo xG 生成比分赔率（API 不支持 correct_score）
+      const homeTeam = db.teams.find(t => t.id === match.homeTeamId);
+      const awayTeam = db.teams.find(t => t.id === match.awayTeamId);
+      const xg = calculateExpectedGoals(
+        homeTeam?.fifaRank, awayTeam?.fifaRank,
+        homeTeam?.confederation === 'CONCACAF',
+        homeTeam?.code || '', match.venueCity || '',
+        homeTeam?.confederation || '',
       );
+      const poissonCorrectScore = generateCorrectScoreOddsFromXG(xg.homeXG, xg.awayXG);
 
       db.matchOdds[match.id] = {
         matchId: match.id,
@@ -535,7 +541,7 @@ export async function syncOddsForMatches(params: {
           under25: under25 || db.matchOdds[match.id]?.totalGoals.under25 || 1.9,
         },
         correctScore: mergeCorrectScoreOdds(
-          scaledCorrectScore,
+          poissonCorrectScore,
           DEFAULT_CORRECT_SCORE_OPTIONS,
         ).map(({ score, odds }) => ({ score, odds })),
         qualify: db.matchOdds[match.id]?.qualify,
