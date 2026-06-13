@@ -84,5 +84,11 @@ export function initScheduler() {
   // 启动所有任务
   startAllTasks();
 
+  // 启动后立即执行一次初始同步（不等待 cron 的下一分钟 tick）
+  logger.info('[Scheduler] Running initial sync tick...');
+  runDynamicSyncTick()
+    .then(() => logger.info('[Scheduler] Initial sync tick completed'))
+    .catch((error) => logger.error('[Scheduler] Initial sync tick failed', { error: error instanceof Error ? error.message : String(error) }));
+
   logger.info('[Scheduler] All tasks initialized');
 }

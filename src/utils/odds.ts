@@ -99,15 +99,69 @@ export function mergeCorrectScoreOdds(
   return [...merged, ...remaining.map((r) => ({ ...r, group: getScoreGroup(r.score) }))];
 }
 
-export function generateDefaultOdds(matchId: string): MatchOdds {
+export function generateDefaultOdds(matchId: string, homeRank?: number, awayRank?: number): MatchOdds {
+  // 基于 FIFA 排名的差异化赔率（与 sync.ts 统一）
+  let hw = 2.20, d = 3.20, aw = 3.10;
+  if (homeRank && awayRank) {
+    const diff = awayRank - homeRank; // 正值=主队排名更高
+    hw = Math.max(1.10, 2.20 - diff * 0.05);
+    aw = Math.max(1.10, 3.10 + diff * 0.05);
+    d = Math.max(2.50, 3.20 - Math.abs(diff) * 0.02);
+  }
+  const h2h = { homeWin: Math.round(hw * 100) / 100, draw: Math.round(d * 100) / 100, awayWin: Math.round(aw * 100) / 100 };
+
   return {
     matchId,
-    h2h: { homeWin: 2.2, draw: 3.2, awayWin: 3.1 },
-    correctScore: mergeCorrectScoreOdds().map(({ score, odds }) => ({ score, odds })),
+    h2h,
+    correctScore: scaleCorrectScoreOdds(DEFAULT_CORRECT_SCORE_OPTIONS, h2h).map(({ score, odds }) => ({ score, odds })),
     totalGoals: { over25: 1.9, under25: 1.9 },
     lastUpdated: new Date().toISOString(),
     source: 'MANUAL',
+    syncStatus: 'MANUAL_FALLBACK',
+    lastSyncedAt: new Date().toISOString(),
   };
+}
+
+/**
+ * 根据 h2h 隐含概率缩放 correctScore 模板赔率
+ * 核心思路：强队主胜比分赔率降低，弱队客胜比分赔率升高
+ */
+export function scaleCorrectScoreOdds(
+  template: ScoreOption[],
+  h2h: { homeWin: number; draw: number; awayWin: number },
+): ScoreOption[] {
+  // 基准隐含概率（模板 h2h: 2.20/3.20/3.10）
+  const BASE_IMPLIED = {
+    HOME_WIN: 1 / 2.20,   // 0.4545
+    DRAW: 1 / 3.20,       // 0.3125
+    AWAY_WIN: 1 / 3.10,   // 0.3226
+  };
+
+  // 实际隐含概率
+  const actualImplied = {
+    HOME_WIN: 1 / h2h.homeWin,
+    DRAW: 1 / h2h.draw,
+    AWAY_WIN: 1 / h2h.awayWin,
+  };
+
+  return template.map((option) => {
+    const groupKey = option.group;
+    const baseProb = BASE_IMPLIED[groupKey];
+    const actualProb = actualImplied[groupKey];
+
+    if (!baseProb || !actualProb) return option;
+
+    // 缩放因子：实际概率/基准概率
+    const scaleFactor = actualProb / baseProb;
+
+    // 赔率调整：odds_new = odds_base / scaleFactor（概率越高赔率越低）
+    const adjustedOdds = Math.max(1.05, option.odds / scaleFactor);
+
+    return {
+      ...option,
+      odds: Math.round(adjustedOdds * 100) / 100,
+    };
+  });
 }
 
 export function parseScoreLabel(score: string) {

@@ -50,7 +50,14 @@ export async function settleMatchById(params: SettleMatchParams): Promise<Settle
   }
 
   if (match.homeScore === undefined || match.awayScore === undefined) {
-    throw new Error('比分还不完整，不能开始结算。');
+    logger.warn('结算被阻止：比分不完整（可能是降级模式下的无真实比分比赛）', {
+      matchId: match.id,
+      homeScore: match.homeScore,
+      awayScore: match.awayScore,
+      status: match.status,
+      source: params.source,
+    });
+    throw new Error('比分还不完整，不能开始结算。降级模式下无比分的比赛需管理员手动录入比分后才能结算。');
   }
 
   logger.settlement('Starting match settlement', {

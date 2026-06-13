@@ -38,10 +38,11 @@ import {
 import { runBusinessTransaction } from '../services/transaction_guard';
 import { settleMatchById } from '../services/settlement_service';
 import { regeneratePostMatchReport } from '../services/post_match_report_service';
-import { getSyncRuntimeState, getSyncPlan } from '../services/sync_scheduler_service';
+import { getSyncRuntimeState, getSyncPlan, getSyncHealthStatus } from '../services/sync_scheduler_service';
 import { emitPointsAdjusted, emitUserJoined } from '../activity_service';
 import { evaluateAllBadges, syncAllTitles } from '../badge_service';
 import { initUserCardInventory, adjustUserCards, bootstrapAllCardInventories } from '../prediction_card_service';
+import { createBackup, listBackups, restoreFromBackup } from '../backup';
 import logger from '../logger';
 
 const config = getRuntimeConfig();
@@ -961,13 +962,111 @@ router.get('/api/admin/sync-logs', (req: Request, res: Response) => {
   res.json(logs);
 });
 
+// ─── 备份管理 ───
+
+// 列出所有备份
+router.get('/api/admin/backups', (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const backups = listBackups();
+  res.json({ backups });
+});
+
+// 手动创建备份
+router.post('/api/admin/backups', (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const reason = String(req.body?.reason || 'admin-manual');
+  const result = createBackup(reason);
+  res.json(result);
+});
+
+// 从备份恢复（支持全量恢复和精确恢复单个用户）
+router.post('/api/admin/backups/restore', (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const { backupFileName, mode, targetUserId } = req.body;
+
+  if (!backupFileName) {
+    return res.status(400).json({ error: '请指定备份文件名。' });
+  }
+  if (!mode || !['full', 'user'].includes(mode)) {
+    return res.status(400).json({ error: '模式必须是 "full"（全量恢复）或 "user"（恢复单个用户）。' });
+  }
+  if (mode === 'user' && !targetUserId) {
+    return res.status(400).json({ error: '恢复单个用户时必须提供 targetUserId。' });
+  }
+
+  // 全量恢复前先创建当前数据库的备份
+  if (mode === 'full') {
+    const preRestoreBackup = createBackup('pre-restore-safety');
+    if (!preRestoreBackup.ok) {
+      return res.status(500).json({ error: '恢复前自动备份失败，中止操作。' });
+    }
+  }
+
+  const result = restoreFromBackup(backupFileName, { mode, targetUserId } as any);
+
+  if (result.ok) {
+    logger.admin('[Admin] Backup restored', {
+      backupFileName,
+      mode,
+      targetUserId,
+      result,
+    });
+  }
+
+  res.json(result);
+});
+
+// 从备份中列出可恢复的用户（用于前端选择）
+router.get('/api/admin/backups/:fileName/users', (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const backupDir = process.env.APP_DATA_DIR
+      ? path.resolve(process.cwd(), process.env.APP_DATA_DIR)
+      : process.cwd();
+    const backupPath = path.join(backupDir, 'backups', req.params.fileName);
+    if (!fs.existsSync(backupPath)) {
+      return res.status(404).json({ error: '备份文件不存在。' });
+    }
+    const backupData = JSON.parse(fs.readFileSync(backupPath, 'utf-8'));
+    const users = (backupData.users || []).map((u: any) => {
+      const wallet = (backupData.wallets || []).find((w: any) => w.userId === u.id);
+      const predictionCount = (backupData.predictions || []).filter((p: any) => p.userId === u.id).length;
+      return {
+        id: u.id,
+        displayName: u.displayName,
+        loginCode: u.loginCode,
+        status: u.status,
+        balance: wallet?.balance ?? 0,
+        predictionCount,
+      };
+    });
+    res.json({ users, totalUsers: users.length });
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : '读取备份失败。' });
+  }
+});
+
 // ─── 同步运行状态 ───
 
 router.get('/api/admin/sync-state', (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
   const state = getSyncRuntimeState();
   const plan = getSyncPlan();
-  res.json({ state, plan });
+  const health = getSyncHealthStatus();
+  res.json({ state, plan, health });
+});
+
+// ─── 同步健康检查（无需管理员认证，供监控系统使用） ───
+
+router.get('/api/health/sync', (_req: Request, res: Response) => {
+  const health = getSyncHealthStatus();
+  const isHealthy = health.fixtures.isHealthy && health.odds.isHealthy && health.liveScore.isHealthy;
+  res.status(isHealthy ? 200 : 503).json({
+    status: isHealthy ? 'healthy' : 'degraded',
+    ...health,
+  });
 });
 
 // 鈹€鈹€鈹€ 绔炵寽璁板綍鏌ヨ 鈹€鈹€鈹€

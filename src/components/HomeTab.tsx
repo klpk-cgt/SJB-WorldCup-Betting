@@ -29,6 +29,8 @@ interface HomeTabProps {
   wallet: any;
   onRefreshWallet: () => void;
   onNavigate: (tab: string, matchId?: string, detailTab?: string) => void;
+  wsScoreUpdate?: { matchId: string; homeScore: number; awayScore: number; status: string } | null;
+  wsOddsChange?: { matchId: string; market: string; changes: Record<string, unknown> } | null;
 }
 
 interface QuizQuestion {
@@ -123,7 +125,7 @@ function buildFocusMatch(match: Match | undefined, now: number): FocusMatch {
     headlineTag: '2026 世界杯',
     hotLabel: status === 'live' ? '热战' : '热门',
     status,
-    scoreText: status === 'upcoming' ? undefined : `${match.homeScore ?? 0} : ${match.awayScore ?? 0}`,
+    scoreText: status === 'upcoming' ? undefined : (match.scoreUnknown ? '比分待确认' : `${match.homeScore ?? 0} : ${match.awayScore ?? 0}`),
     homeTeam: {
       name: match.homeTeam.nameZh,
       flagCode: match.homeTeam.code,
@@ -202,7 +204,7 @@ function ColdAlerts() {
   );
 }
 
-export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: HomeTabProps) {
+export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate, wsScoreUpdate, wsOddsChange }: HomeTabProps) {
   const [matches, setMatches] = useState<Match[]>([]);
   const [dailyAI, setDailyAI] = useState<AIContent | null>(null);
   const [loading, setLoading] = useState(true);
@@ -264,6 +266,33 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
 
     initHome();
   }, [user]);
+
+  // WebSocket 实时比分更新：局部更新本地 matches 状态，无需重新请求全量
+  useEffect(() => {
+    if (!wsScoreUpdate || matches.length === 0) return;
+    setMatches(prev => prev.map(m => {
+      if (m.id !== wsScoreUpdate.matchId) return m;
+      return {
+        ...m,
+        homeScore: wsScoreUpdate.homeScore,
+        awayScore: wsScoreUpdate.awayScore,
+        status: wsScoreUpdate.status as any,
+      };
+    }));
+  }, [wsScoreUpdate]);
+
+  // WebSocket 赔率变动：局部更新赔率
+  useEffect(() => {
+    if (!wsOddsChange || matches.length === 0) return;
+    setMatches(prev => prev.map(m => {
+      if (m.id !== wsOddsChange.matchId) return m;
+      const currentOdds = m.odds || {};
+      if (wsOddsChange.market === 'h2h' && wsOddsChange.changes) {
+        return { ...m, odds: { ...currentOdds, h2h: { ...currentOdds.h2h, ...wsOddsChange.changes } } };
+      }
+      return m;
+    }));
+  }, [wsOddsChange]);
 
   const startQuiz = async () => {
     if (quizFinishedToday) return;
@@ -524,7 +553,9 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate }: H
 
                   <div className="mt-2.5 flex items-center justify-between">
                     {isLive || isFinished ? (
-                      <span className="text-sm font-black text-slate-900">{match.homeScore ?? 0} : {match.awayScore ?? 0}</span>
+                      <span className="text-sm font-black text-slate-900">
+                        {(match as any).scoreUnknown ? '待确认' : `${match.homeScore ?? 0} : ${match.awayScore ?? 0}`}
+                      </span>
                     ) : (
                       <span className="text-[10px] font-bold text-emerald-600">{formatBeijingTime(match.startTimeUtc)}</span>
                     )}

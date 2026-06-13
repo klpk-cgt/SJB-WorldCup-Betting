@@ -266,10 +266,13 @@ export const SEED_MATCHES: Match[] = [
   makeMatch(7, 20, '03:00', 'Final', '决赛', 'TBD', 'TBD', 'MetLife体育场'),
 ];
 
-// 为小组赛生成默认赔率
+// 为小组赛生成默认赔率（基于 FIFA 排名差异化）
 export const SEED_ODDS: Record<string, MatchOdds> = {};
+const seedTeamMap = new Map(SEED_TEAMS.map(t => [t.id, t]));
 for (const match of SEED_MATCHES) {
   if (match.homeTeamId !== 'TBD' && match.awayTeamId !== 'TBD') {
-    SEED_ODDS[match.id] = generateDefaultOdds(match.id);
+    const home = seedTeamMap.get(match.homeTeamId);
+    const away = seedTeamMap.get(match.awayTeamId);
+    SEED_ODDS[match.id] = generateDefaultOdds(match.id, home?.fifaRank, away?.fifaRank);
   }
 }

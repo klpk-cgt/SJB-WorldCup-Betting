@@ -460,6 +460,10 @@ export function serializeMatch(match: Match) {
     venueCity: match.venueCity || '',
     homeScore: typeof match.homeScore === 'number' ? match.homeScore : null,
     awayScore: typeof match.awayScore === 'number' ? match.awayScore : null,
+    scoreUnknown: Boolean((match as any).scoreUnknown),
+    oddsSyncStatus: rawOdds?.syncStatus || null,
+    oddsSource: rawOdds?.source || null,
+    oddsLastSyncedAt: rawOdds?.lastSyncedAt || null,
     homeTeam,
     awayTeam,
     odds,
@@ -645,6 +649,15 @@ export async function autoSettleFinishedMatches(db: ReturnType<typeof dbService.
       match.homeScore === undefined ||
       match.awayScore === undefined
     ) {
+      // 降级模式下 scoreUnknown 标记的比赛，记录日志提醒管理员手动录入
+      if ((match as any).scoreUnknown && FINISHED_MATCH_STATUSES.has(match.status)) {
+        logger.warn(`[AutoSettle] 比赛已结束但比分未知，需管理员手动录入: ${match.id}`, {
+          matchId: match.id,
+          status: match.status,
+          homeTeamId: match.homeTeamId,
+          awayTeamId: match.awayTeamId,
+        });
+      }
       continue;
     }
     // 检查是否过了锁定时间（确保不是进行中的比赛）

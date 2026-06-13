@@ -99,6 +99,68 @@ let runtimeState: SyncRuntimeState = {
   currentReason: '初始化',
 };
 
+// ─── 同步失败计数与健康状态 ───
+
+let consecutiveFixturesFailures = 0;
+let consecutiveOddsFailures = 0;
+let consecutiveLiveScoreFailures = 0;
+const MAX_CONSECUTIVE_FAILURES = 3;
+
+function resetFixturesFailures() { consecutiveFixturesFailures = 0; }
+function resetOddsFailures() { consecutiveOddsFailures = 0; }
+function resetLiveScoreFailures() { consecutiveLiveScoreFailures = 0; }
+
+function recordFixturesFailure() {
+  consecutiveFixturesFailures += 1;
+  if (consecutiveFixturesFailures === MAX_CONSECUTIVE_FAILURES) {
+    logger.error(`[SyncScheduler] ⚠️ 赛程同步连续失败 ${MAX_CONSECUTIVE_FAILURES} 次，请检查 API_FOOTBALL_KEY 配置和网络连接！`);
+    try { const { broadcastNotification } = require('../websocket'); broadcastNotification('赛程同步连续失败，请管理员检查 API Key 配置', 'warn'); } catch {}
+  }
+}
+
+function recordOddsFailure() {
+  consecutiveOddsFailures += 1;
+  if (consecutiveOddsFailures === MAX_CONSECUTIVE_FAILURES) {
+    logger.error(`[SyncScheduler] ⚠️ 赔率同步连续失败 ${MAX_CONSECUTIVE_FAILURES} 次，请检查 THE_ODDS_API_KEY 配置！`);
+    try { const { broadcastNotification } = require('../websocket'); broadcastNotification('赔率同步连续失败，请管理员检查 API Key 配置', 'warn'); } catch {}
+  }
+}
+
+function recordLiveScoreFailure() {
+  consecutiveLiveScoreFailures += 1;
+  if (consecutiveLiveScoreFailures === MAX_CONSECUTIVE_FAILURES) {
+    logger.error(`[SyncScheduler] ⚠️ 比分同步连续失败 ${MAX_CONSECUTIVE_FAILURES} 次！`);
+  }
+}
+
+/**
+ * 获取同步健康状态（供 API 端点使用）
+ */
+export function getSyncHealthStatus() {
+  const config = getRuntimeConfig();
+  return {
+    fixtures: {
+      hasApiKey: hasProviderKey(config.apiFootballKey),
+      consecutiveFailures: consecutiveFixturesFailures,
+      isHealthy: consecutiveFixturesFailures < MAX_CONSECUTIVE_FAILURES,
+      lastSyncAt: runtimeState.lastFixturesSyncAt ? new Date(runtimeState.lastFixturesSyncAt).toISOString() : null,
+    },
+    odds: {
+      hasApiKey: hasProviderKey(config.theOddsApiKey),
+      consecutiveFailures: consecutiveOddsFailures,
+      isHealthy: consecutiveOddsFailures < MAX_CONSECUTIVE_FAILURES,
+      lastSyncAt: runtimeState.lastOddsSyncAt ? new Date(runtimeState.lastOddsSyncAt).toISOString() : null,
+    },
+    liveScore: {
+      consecutiveFailures: consecutiveLiveScoreFailures,
+      isHealthy: consecutiveLiveScoreFailures < MAX_CONSECUTIVE_FAILURES,
+      lastSyncAt: runtimeState.lastLiveScoreSyncAt ? new Date(runtimeState.lastLiveScoreSyncAt).toISOString() : null,
+    },
+    currentPriority: runtimeState.currentPriority,
+    currentReason: runtimeState.currentReason,
+  };
+}
+
 // ─── 防重入锁 ───
 
 const syncLocks = new Set<string>();
@@ -325,9 +387,11 @@ export async function runDynamicSyncTick() {
         });
         appendSyncLog(result.log);
         markFixturesSynced();
+        resetFixturesFailures();
         dbService.save();
         logger.info(`[SyncScheduler] Fixtures synced: ${result.log.responseSummary}`);
       } catch (error) {
+        recordFixturesFailure();
         logger.error('[SyncScheduler] Fixtures sync failed', {
           error: error instanceof Error ? error.message : String(error),
         });
@@ -352,9 +416,11 @@ export async function runDynamicSyncTick() {
         });
         appendSyncLog(result.log);
         markOddsSynced();
+        resetOddsFailures();
         dbService.save();
         logger.info(`[SyncScheduler] Odds synced: ${result.log.responseSummary}`);
       } catch (error) {
+        recordOddsFailure();
         logger.error('[SyncScheduler] Odds sync failed', {
           error: error instanceof Error ? error.message : String(error),
         });
@@ -400,12 +466,14 @@ export async function runDynamicSyncTick() {
         }
 
         markLiveScoreSynced();
+        resetLiveScoreFailures();
         if (changed) {
           dbService.refreshBracketState();
           dbService.save();
         }
         logger.info(`[SyncScheduler] Live score synced for ${liveDates.length} dates`);
       } catch (error) {
+        recordLiveScoreFailure();
         logger.error('[SyncScheduler] Live score sync failed', {
           error: error instanceof Error ? error.message : String(error),
         });
@@ -437,16 +505,26 @@ export async function runDynamicSyncTick() {
               match.status = MatchStatus.LIVE;
               match.operationalStatus = 'LOCKED';
               changed = true;
-              logger.info(`[SyncScheduler] Fallback: ${match.id} → LIVE (started ${Math.round(elapsed / MS_PER_MINUTE)}min ago)`);
-              broadcastScoreUpdate(match.id, match.homeScore ?? 0, match.awayScore ?? 0, MatchStatus.LIVE);
+              logger.info(`[SyncScheduler] Fallback: ${match.id} → LIVE (started ${Math.round(elapsed / MS_PER_MINUTE)}min ago, score unknown)`);
+              // 降级模式下不广播虚假比分，只在有真实比分时广播
+              if (match.homeScore !== undefined && match.awayScore !== undefined) {
+                broadcastScoreUpdate(match.id, match.homeScore, match.awayScore, MatchStatus.LIVE);
+              }
             }
-            // NS → FT：开赛超过 2h
+            // NS → FT：开赛超过 2h（无真实比分时标记为 scoreUnknown）
             else if (elapsed >= 2 * MS_PER_HOUR) {
               match.status = MatchStatus.FT;
               match.operationalStatus = 'WAITING_SETTLEMENT';
+              // 标记比分未知，防止自动结算以 0:0 结算
+              if (match.homeScore === undefined || match.awayScore === undefined) {
+                (match as any).scoreUnknown = true;
+              }
               changed = true;
-              logger.info(`[SyncScheduler] Fallback: ${match.id} → FT (started ${Math.round(elapsed / MS_PER_HOUR)}h ago)`);
-              broadcastScoreUpdate(match.id, match.homeScore ?? 0, match.awayScore ?? 0, MatchStatus.FT);
+              logger.info(`[SyncScheduler] Fallback: ${match.id} → FT (started ${Math.round(elapsed / MS_PER_HOUR)}h ago, score ${match.homeScore !== undefined ? 'known' : 'UNKNOWN'})`);
+              // 降级模式下不广播虚假比分
+              if (match.homeScore !== undefined && match.awayScore !== undefined) {
+                broadcastScoreUpdate(match.id, match.homeScore, match.awayScore, MatchStatus.FT);
+              }
             }
           } else if ((match.status === MatchStatus.LIVE || match.status === MatchStatus.FT) && elapsed < 0) {
             // 回退修正：比赛还没开始但被标记为 LIVE/FT → 回退为 NS
@@ -455,6 +533,7 @@ export async function runDynamicSyncTick() {
             match.operationalStatus = 'BETTABLE';
             match.homeScore = undefined;
             match.awayScore = undefined;
+            (match as any).scoreUnknown = undefined;
             match.isPredictionLocked = false;
             match.predictionLockedAt = undefined;
             match.isOddsFrozen = false;

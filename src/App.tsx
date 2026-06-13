@@ -51,6 +51,8 @@ export default function App() {
   const [loginPin, setLoginPin] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [wsScoreUpdate, setWsScoreUpdate] = useState<{ matchId: string; homeScore: number; awayScore: number; status: string } | null>(null);
+  const [wsOddsChange, setWsOddsChange] = useState<{ matchId: string; market: string; changes: Record<string, unknown> } | null>(null);
 
   const isAdmin = !!localStorage.getItem(ADMIN_KEY_STORAGE);
   const toast = useToast();
@@ -64,11 +66,16 @@ export default function App() {
       if (selectedMatchId === data.matchId) {
         fetchUserProfileAndWallet();
       }
+      // 更新 HomeTab 的比分状态
+      const homeScore = data.homeScore as number | undefined;
+      const awayScore = data.awayScore as number | undefined;
+      const status = data.status as string | undefined;
+      if (data.matchId && homeScore !== undefined && awayScore !== undefined && status) {
+        setWsScoreUpdate({ matchId: data.matchId as string, homeScore, awayScore, status });
+      }
       // 开赛/进球提醒
       const home = (data.homeTeam as string) || '';
       const away = (data.awayTeam as string) || '';
-      const homeScore = data.homeScore as number | undefined;
-      const awayScore = data.awayScore as number | undefined;
       if (homeScore !== undefined && awayScore !== undefined) {
         toast.info(`${home} ${homeScore} : ${awayScore} ${away}`, '比分更新');
       }
@@ -98,6 +105,21 @@ export default function App() {
         toast.celebrate('连胜达成！', msg);
       } else if (msg) {
         toast.info(msg);
+      }
+    },
+    onOddsChange: (data) => {
+      // 赔率变动提醒（仅在查看对应比赛时提示）
+      const matchId = data.matchId as string;
+      const market = data.market as string;
+      const changes = data.changes as Record<string, number> | undefined;
+      if (matchId && market && changes) {
+        setWsOddsChange({ matchId, market, changes });
+      }
+      if (selectedMatchId === matchId && changes) {
+        const changeKeys = Object.keys(changes);
+        if (changeKeys.length > 0) {
+          toast.info(`${market === 'h2h' ? '胜平负' : market} 赔率已更新`, '赔率变动');
+        }
       }
     },
   });
@@ -259,7 +281,7 @@ export default function App() {
           style={{ paddingBottom: 'calc(7.25rem + env(safe-area-inset-bottom, 0px))' }}
         >
           {activeTab === 'home' && (
-            <HomeTab user={user} wallet={wallet} onRefreshWallet={fetchUserProfileAndWallet} onNavigate={navigateTo} />
+            <HomeTab user={user} wallet={wallet} onRefreshWallet={fetchUserProfileAndWallet} onNavigate={navigateTo} wsScoreUpdate={wsScoreUpdate} wsOddsChange={wsOddsChange} />
           )}
           {activeTab === 'matches' && <MatchesTab onNavigate={navigateTo} selectedMatchId={selectedMatchId} isAdmin={isAdmin} />}
           {activeTab === 'match-detail' && (

@@ -1,29 +1,10 @@
 import { DatabaseSchema } from '../db/db_service';
 import { Match, MatchOdds, MatchStatus, SyncLog, SyncProvider, SyncStatus, SyncType, Team } from '../types';
-import { mergeCorrectScoreOdds } from '../utils/odds';
-import { broadcastScoreUpdate } from './websocket';
+import { generateDefaultOdds, mergeCorrectScoreOdds, scaleCorrectScoreOdds } from '../utils/odds';
+import { broadcastScoreUpdate, broadcastOddsChange } from './websocket';
 
-// ── 默认赔率生成 ──
-export function generateDefaultOdds(matchId: string, homeRank?: number, awayRank?: number): MatchOdds {
-  // 基于FIFA排名的差异化赔率
-  let hw = 2.20, d = 3.20, aw = 3.10;
-  if (homeRank && awayRank) {
-    const diff = awayRank - homeRank; // 正值=主队排名更高
-    hw = Math.max(1.10, 2.20 - diff * 0.05);
-    aw = Math.max(1.10, 3.10 + diff * 0.05);
-    d = Math.max(2.50, 3.20 - Math.abs(diff) * 0.02);
-  }
-  return {
-    matchId,
-    h2h: { homeWin: Math.round(hw * 100) / 100, draw: Math.round(d * 100) / 100, awayWin: Math.round(aw * 100) / 100 },
-    correctScore: mergeCorrectScoreOdds().map(({ score, odds }) => ({ score, odds })),
-    totalGoals: { over25: 1.90, under25: 1.90 },
-    lastUpdated: new Date().toISOString(),
-    source: 'MANUAL',
-    syncStatus: 'MANUAL_FALLBACK',
-    lastSyncedAt: new Date().toISOString(),
-  };
-}
+// ── 默认赔率生成（委托给 utils/odds.ts 统一版本） ──
+export { generateDefaultOdds };
 
 /** 为所有缺少赔率的已确定比赛生成默认赔率 */
 export function ensureDefaultOdds(db: DatabaseSchema): string[] {
@@ -505,9 +486,13 @@ export async function syncOddsForMatches(params: {
         continue;
       }
 
+      // 记录旧赔率用于 WebSocket 推送对比
+      const oldOdds = db.matchOdds[match.id];
+      const newH2h = { homeWin, draw, awayWin };
+
       db.matchOdds[match.id] = {
         matchId: match.id,
-        h2h: { homeWin, draw, awayWin },
+        h2h: newH2h,
         totalGoals: {
           over25: over25 || db.matchOdds[match.id]?.totalGoals.over25 || 1.9,
           under25: under25 || db.matchOdds[match.id]?.totalGoals.under25 || 1.9,
@@ -532,6 +517,18 @@ export async function syncOddsForMatches(params: {
         lastOddsSyncAt: new Date().toISOString(),
       };
       updatedMatchIds.push(match.id);
+
+      // 赔率变动推送：仅在实际赔率变化超过阈值时推送
+      if (oldOdds?.h2h) {
+        const h2hChanges: Record<string, unknown> = {};
+        const threshold = 0.05;
+        if (Math.abs(homeWin - oldOdds.h2h.homeWin) >= threshold) h2hChanges.homeWin = homeWin;
+        if (Math.abs(draw - oldOdds.h2h.draw) >= threshold) h2hChanges.draw = draw;
+        if (Math.abs(awayWin - oldOdds.h2h.awayWin) >= threshold) h2hChanges.awayWin = awayWin;
+        if (Object.keys(h2hChanges).length > 0) {
+          broadcastOddsChange(match.id, 'h2h', h2hChanges);
+        }
+      }
     }
 
     return {

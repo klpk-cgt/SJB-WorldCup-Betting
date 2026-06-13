@@ -1,5 +1,43 @@
 # 更新日志 (Changelog)
 
+## v2.3.0 - 2026-06-13
+
+### 赔率同步修复与降级安全增强
+
+- **赔率API同步失败根因定位**：`.env` 中 `API_FOOTBALL_KEY` 和 `THE_ODDS_API_KEY` 均为空，导致所有同步走降级逻辑，赔率全部使用兜底模板。需管理员填入有效 API Key 后才能启用实时赔率同步
+- **统一两套 `generateDefaultOdds`**：删除 `sync.ts` 中的重复版本，统一使用 `utils/odds.ts` 中基于 FIFA 排名差异化的版本
+- **新增 `scaleCorrectScoreOdds` 算法**：根据 h2h 隐含概率缩放 correctScore 模板赔率，强队主胜比分赔率降低，弱队客胜比分赔率升高
+- **赔率 WebSocket 推送接通**：`syncOddsForMatches` 更新赔率后自动触发 `broadcastOddsChange`，变化超过 0.05 阈值时推送
+- **前端 WebSocket 实时刷新**：HomeTab 新增 `wsScoreUpdate`/`wsOddsChange` props，比分和赔率变动时局部更新本地状态，无需重新请求全量
+- **比分未知标识**：降级模式下 FT 比赛不再广播虚假 0:0 比分，新增 `scoreUnknown` 标记，前端显示"待确认"
+
+### 结算安全防护
+
+- **结算服务无比分保护**：`settlement_service` 中无比分比赛结算时明确提示"降级模式下需管理员手动录入比分"，不再以 0:0 错误结算
+- **降级逻辑不再广播虚假比分**：`sync_scheduler_service` 中 FT 状态无比分时标记 `scoreUnknown: true`，不广播 0:0
+- **自动结算跳过 scoreUnknown 比赛**：`autoSettleFinishedMatches` 对比分未知的 FT 比赛记录管理员提醒日志
+
+### 备份恢复功能
+
+- **新增管理端备份恢复 API**：
+  - `GET /api/admin/backups` — 列出所有备份
+  - `POST /api/admin/backups` — 手动创建备份
+  - `POST /api/admin/backups/restore` — 从备份恢复（支持全量恢复和精确恢复单个用户）
+  - `GET /api/admin/backups/:fileName/users` — 从备份中列出可恢复的用户
+- **精确用户恢复**：支持从备份中提取单个用户及其关联数据（钱包、交易、预测、卡牌、徽章、称号），不影响其他用户数据
+- **全量恢复安全保护**：全量恢复前自动创建当前数据库备份
+
+### 同步健康监控
+
+- **新增 `GET /api/health/sync` 端点**：无需管理员认证，返回各同步模块健康状态（healthy/degraded）
+- **连续失败告警**：赛程/赔率/比分同步连续失败 3 次时记录 ERROR 日志并推送系统通知
+- **启动时立即执行初始同步**：服务启动后立即执行一次同步 tick，不等待 cron 下一分钟
+
+### 其他
+
+- `serializeMatch` 新增 `scoreUnknown`、`oddsSyncStatus`、`oddsSource`、`oddsLastSyncedAt` 字段
+- `initial_data.ts` 赔率初始化使用基于 FIFA 排名的差异化版本
+
 ## v2.2.0 - 2026-06-13
 
 ### 阶段一：基础修复与通知系统
