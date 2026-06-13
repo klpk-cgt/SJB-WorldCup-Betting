@@ -160,6 +160,7 @@ export interface Match extends MatchLifecycle {
   };
   events?: MatchEvent[];
   providerMeta?: MatchProviderMeta;
+  scoreUnknown?: boolean;
 }
 
 export interface MatchOdds {
@@ -183,8 +184,9 @@ export interface MatchOdds {
   };
   lastUpdated: string;
   source?: 'API-Football' | 'The Odds API' | 'MANUAL';
-  syncStatus?: 'SYNCED' | 'PARTIAL' | 'MANUAL_FALLBACK' | 'FAILED';
+  syncStatus?: 'SYNCED' | 'PARTIAL' | 'MANUAL_FALLBACK' | 'FAILED' | 'UNSYNCED';
   lastSyncedAt?: string;
+  correctScoreSource?: 'MANUAL' | 'INFERRED_FROM_H2H' | 'THIRD_PARTY';
 }
 
 export interface GroupRoom {

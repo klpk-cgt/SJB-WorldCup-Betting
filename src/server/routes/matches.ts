@@ -12,7 +12,7 @@ import {
   getAuthenticatedUser,
   serializeMatch,
   deriveOperationalStatus,
-  resolveOddsSnapshot,
+  normalizePredictionMarket,
   getTournamentMarketConfig,
   serializeTournamentBet,
   roundPoints,
@@ -33,7 +33,6 @@ import {
   getPostMatchReport,
   getShareCardData,
   getRecentReports,
-  regeneratePostMatchReport,
 } from '../services/post_match_report_service';
 import { adjustWalletBalance } from '../services/wallet_service';
 
@@ -217,7 +216,13 @@ router.get('/api/predictions/snapshot/:matchId', async (req: Request, res: Respo
   if (!match) return res.status(404).json({ error: '未找到比赛。' });
   const rawOdds = db.matchOdds[match.id] || null;
   const odds = rawOdds
-    ? { ...rawOdds, correctScore: mergeCorrectScoreOdds(rawOdds.correctScore).map(({ score, odds }) => ({ score, odds })) }
+    ? {
+        ...rawOdds,
+        correctScoreSource:
+          rawOdds.correctScoreSource ||
+          (rawOdds.source === 'The Odds API' ? 'INFERRED_FROM_H2H' : 'MANUAL'),
+        correctScore: mergeCorrectScoreOdds(rawOdds.correctScore).map(({ score, odds }) => ({ score, odds })),
+      }
     : null;
   res.json({
     matchId: match.id,
@@ -266,13 +271,18 @@ router.post('/api/predictions', async (req: Request, res: Response) => {
     return res.status(400).json({ error: '请完整选择玩法、选项和积分。' });
   }
 
+  const normalizedMarket = normalizePredictionMarket(market);
+  if (!normalizedMarket) {
+    return res.status(400).json({ error: 'Unsupported prediction market.' });
+  }
+
   try {
     const result = await runBusinessTransaction('placePrediction', () => {
       return placePrediction({
         userId: user.id,
         groupId: user.groupId,
         matchId,
-        market,
+        market: normalizedMarket,
         optionKey,
         optionLabel,
         stakePoints: Number(stakePoints),
@@ -487,6 +497,7 @@ router.get('/api/leaderboards', (_req: Request, res: Response) => {
     const predictions = predictionMap.get(user.id) || [];
 
     let totalCount = 0;
+    let settledCount = 0;
     let wonCount = 0;
     let biggestWin = 0;
     let todayProfit = 0;
@@ -496,12 +507,14 @@ router.get('/api/leaderboards', (_req: Request, res: Response) => {
     for (const p of predictions) {
       totalCount++;
       if (p.status === 'WON') {
+        settledCount++;
         wonCount++;
         const profit = p.settledProfit || 0;
         if (profit > biggestWin) biggestWin = profit;
         totalWonProfit += profit;
         completed.push(p);
       } else if (p.status === 'LOST') {
+        settledCount++;
         completed.push(p);
       }
       if (p.settledAt && anchorTime - new Date(p.settledAt).getTime() <= oneDay) {
@@ -509,7 +522,7 @@ router.get('/api/leaderboards', (_req: Request, res: Response) => {
       }
     }
 
-    const rate = totalCount === 0 ? 0 : Math.round((wonCount / totalCount) * 100);
+    const rate = settledCount === 0 ? 0 : Math.round((wonCount / settledCount) * 100);
     const netProfit = wallet.balance - (wallet.initialPoints || 10000);
 
     // 按结算时间排序后计算连胜
@@ -557,6 +570,7 @@ router.get('/api/leaderboards', (_req: Request, res: Response) => {
       netProfit,
       rate,
       totalCount,
+      settledCount,
       wonCount,
       biggestWin,
       todayProfit,

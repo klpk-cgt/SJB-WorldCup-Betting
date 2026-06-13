@@ -18,7 +18,6 @@ if (!process.env.DATABASE_URL) {
 }
 import express from 'express';
 import { createServer as createHttpServer } from 'http';
-import path from 'path';
 import cors from 'cors';
 import { createServer as createViteServer } from 'vite';
 import { dbService } from './src/db/db_service';

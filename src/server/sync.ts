@@ -413,13 +413,21 @@ export async function syncOddsForMatches(params: {
   apiKey: string;
   db: DatabaseSchema;
   targetMatchId?: string;
-}): Promise<{ updatedMatchIds: string[]; oddsMap: Record<string, MatchOdds>; log: SyncLog }> {
+}): Promise<{
+  updatedMatchIds: string[];
+  unsyncedMatchIds: string[];
+  unsyncedReasons: Record<string, string>;
+  oddsMap: Record<string, MatchOdds>;
+  log: SyncLog;
+}> {
   const { apiKey, db, targetMatchId } = params;
   const startedAt = new Date().toISOString();
 
   if (!apiKey) {
     return {
       updatedMatchIds: [],
+      unsyncedMatchIds: [],
+      unsyncedReasons: {},
       oddsMap: db.matchOdds,
       log: buildLog({
         source: 'The Odds API',
@@ -458,8 +466,31 @@ export async function syncOddsForMatches(params: {
     }>;
 
     const updatedMatchIds: string[] = [];
+    const unsyncedMatchIds: string[] = [];
+    const unsyncedReasons: Record<string, string> = {};
     let unmatchedEvents = 0;
     let incompleteMarkets = 0;
+    const candidateMatches = db.matches.filter((match) => {
+      if (targetMatchId && match.id !== targetMatchId) return false;
+      return match.homeTeamId !== 'TBD' && match.awayTeamId !== 'TBD';
+    });
+
+    const markMatchUnsynced = (matchId: string, reason: string) => {
+      if (!unsyncedReasons[matchId]) {
+        unsyncedReasons[matchId] = reason;
+        unsyncedMatchIds.push(matchId);
+      }
+
+      const existing = db.matchOdds[matchId];
+      if (!existing) return;
+
+      existing.syncStatus = 'UNSYNCED';
+      existing.lastSyncedAt = new Date().toISOString();
+      existing.correctScoreSource =
+        existing.correctScoreSource ||
+        (existing.source === 'The Odds API' ? 'INFERRED_FROM_H2H' : 'MANUAL');
+    };
+
     for (const item of payload || []) {
       const match = matchByTeams(db, item.home_team, item.away_team);
       if (!match) {
@@ -512,6 +543,7 @@ export async function syncOddsForMatches(params: {
         source: 'The Odds API',
         syncStatus: buildOddsSyncStatus(Boolean(scoreMarket?.outcomes?.length), Boolean(over25 && under25)),
         lastSyncedAt: new Date().toISOString(),
+        correctScoreSource: 'INFERRED_FROM_H2H',
       };
       match.providerMeta = {
         ...(match.providerMeta || {}),
@@ -533,8 +565,18 @@ export async function syncOddsForMatches(params: {
       }
     }
 
+    for (const match of candidateMatches) {
+      if (updatedMatchIds.includes(match.id)) continue;
+      const reason = db.matchOdds[match.id]
+        ? 'No matching event or complete market found from The Odds API for this local fixture.'
+        : 'No local odds snapshot is available and The Odds API did not match this fixture.';
+      markMatchUnsynced(match.id, reason);
+    }
+
     return {
       updatedMatchIds,
+      unsyncedMatchIds,
+      unsyncedReasons,
       oddsMap: db.matchOdds,
       log: buildLog({
         source: 'The Odds API',
@@ -542,7 +584,7 @@ export async function syncOddsForMatches(params: {
         syncType: 'odds',
         status: updatedMatchIds.length > 0 ? 'SUCCESS' : 'PARTIAL',
         requestSummary: 'GET /v4/sports/soccer_fifa_world_cup/odds',
-        responseSummary: `Odds payload ${payload.length}, updated ${updatedMatchIds.length}, unmatched ${unmatchedEvents}, incomplete markets ${incompleteMarkets}.`,
+        responseSummary: `Odds payload ${payload.length}, updated ${updatedMatchIds.length}, unmatched ${unmatchedEvents}, incomplete markets ${incompleteMarkets}, unsynced local matches ${unsyncedMatchIds.length}.`,
         targetMatchId,
         startedAt,
       }),
@@ -550,6 +592,8 @@ export async function syncOddsForMatches(params: {
   } catch (error) {
     return {
       updatedMatchIds: [],
+      unsyncedMatchIds: [],
+      unsyncedReasons: {},
       oddsMap: db.matchOdds,
       log: buildLog({
         source: 'The Odds API',

@@ -29,9 +29,10 @@ import {
   AdminSessionRecord,
   CheckinLogRecord,
   QuizLogRecord,
+  PredictionMarket,
 } from '../types';
 import { SEED_ROOMS, THE_TEAMS, PRESEEDED_USERS, SEED_MATCHES, SEED_ODDS } from './initial_data';
-import { SEED_PLAYERS, SEED_TEAM_HISTORY } from './team_details_seed';
+import { SEED_TEAM_HISTORY } from './team_details_seed';
 import { SQUAD_PLAYERS, TEAM_META } from '../data/squads';
 
 export interface DatabaseSchema {
@@ -71,6 +72,7 @@ const DATA_DIR = process.env.APP_DATA_DIR
 const DB_FILE_PATH = path.join(DATA_DIR, 'db.json');
 const STORAGE_SCRIPT_PATH = path.join(process.cwd(), 'scripts', 'db-storage.mjs');
 const MYSQL_STORAGE_MODE = 'mysql';
+const STORAGE_SCRIPT_MAX_BUFFER = 16 * 1024 * 1024;
 
 class DatabaseService {
   private cache: DatabaseSchema | null = null;
@@ -551,6 +553,132 @@ class DatabaseService {
     }));
   }
 
+  private normalizePredictionMarketValue(market: string | null | undefined): PredictionMarket | null {
+    const normalized = String(market || '')
+      .trim()
+      .toUpperCase()
+      .replace(/[\s-]+/g, '_');
+
+    switch (normalized) {
+      case 'H2H':
+        return 'H2H';
+      case 'CORRECT_SCORE':
+      case 'CORRECTSCORE':
+        return 'CORRECT_SCORE';
+      case 'TOTAL_GOALS':
+      case 'TOTALGOALS':
+        return 'TOTAL_GOALS';
+      case 'QUALIFY':
+        return 'QUALIFY';
+      default:
+        return null;
+    }
+  }
+
+  private resolvePredictionOddsDecimal(db: DatabaseSchema, prediction: Prediction): number | null {
+    const odds = db.matchOdds[prediction.matchId];
+    const market = this.normalizePredictionMarketValue(prediction.market);
+    if (!odds || !market) return null;
+
+    const optionKey = String(prediction.optionKey || '');
+    const optionKeyLower = optionKey.toLowerCase();
+
+    if (market === 'H2H') {
+      if (optionKeyLower === 'home') return odds.h2h.homeWin;
+      if (optionKeyLower === 'draw') return odds.h2h.draw;
+      if (optionKeyLower === 'away') return odds.h2h.awayWin;
+      return null;
+    }
+
+    if (market === 'TOTAL_GOALS') {
+      if (optionKeyLower === 'over_2_5') return odds.totalGoals.over25;
+      if (optionKeyLower === 'under_2_5') return odds.totalGoals.under25;
+      return null;
+    }
+
+    if (market === 'CORRECT_SCORE') {
+      const normalizedScoreKey = optionKeyLower.replace('correctscore_', '').replace(/_/g, '-');
+      const score = odds.correctScore.find((item) => {
+        const rawScore = String(item.score || '').toLowerCase();
+        return rawScore === optionKeyLower || rawScore === normalizedScoreKey;
+      });
+      return score?.odds || null;
+    }
+
+    if (market === 'QUALIFY') {
+      if (optionKeyLower === 'homequalify') return odds.qualify?.homeQualify || null;
+      if (optionKeyLower === 'awayqualify') return odds.qualify?.awayQualify || null;
+    }
+
+    return null;
+  }
+
+  private normalizeCoreBusinessState(db: DatabaseSchema) {
+    let changed = false;
+
+    for (const match of db.matches) {
+      const missingScore = typeof match.homeScore !== 'number' || typeof match.awayScore !== 'number';
+      if ((match.status === 'FT' || match.status === 'AET' || match.status === 'PEN') && missingScore) {
+        if (!match.scoreUnknown) {
+          match.scoreUnknown = true;
+          changed = true;
+        }
+        if (match.isSettled) {
+          const hasSettledPredictions = db.predictions.some(
+            (prediction) =>
+              prediction.matchId === match.id &&
+              (prediction.status === 'WON' || prediction.status === 'LOST'),
+          );
+          if (!hasSettledPredictions) {
+            match.isSettled = false;
+            delete match.settledAt;
+            match.settlementStatus = 'WAITING_SETTLEMENT';
+            match.operationalStatus = 'WAITING_SETTLEMENT';
+            changed = true;
+          }
+        }
+      } else if (match.scoreUnknown && !missingScore) {
+        delete match.scoreUnknown;
+        changed = true;
+      }
+    }
+
+    for (const prediction of db.predictions) {
+      const normalizedMarket = this.normalizePredictionMarketValue(prediction.market);
+      if (normalizedMarket && prediction.market !== normalizedMarket) {
+        prediction.market = normalizedMarket;
+        changed = true;
+      }
+
+      if (prediction.oddsSnapshot && normalizedMarket && prediction.oddsSnapshot.market !== normalizedMarket) {
+        prediction.oddsSnapshot.market = normalizedMarket;
+        changed = true;
+      }
+
+      const isRepairableOpenPrediction =
+        prediction.status === 'PENDING' || prediction.status === 'LOCKED';
+      if (!isRepairableOpenPrediction || prediction.oddsDecimal > 1) {
+        continue;
+      }
+
+      const repairedOdds = this.resolvePredictionOddsDecimal(db, prediction);
+      if (!repairedOdds || repairedOdds <= 1) {
+        continue;
+      }
+
+      prediction.oddsDecimal = repairedOdds;
+      prediction.potentialReturn = this.roundPoints(prediction.stakePoints * repairedOdds);
+      if (prediction.oddsSnapshot) {
+        prediction.oddsSnapshot.oddsDecimal = repairedOdds;
+      }
+      changed = true;
+    }
+
+    if (changed) {
+      this.saveAsync();
+    }
+  }
+
   private readMySqlSnapshot(): DatabaseSchema | null {
     if (!fs.existsSync(STORAGE_SCRIPT_PATH)) {
       throw new Error(`MySQL storage script not found: ${STORAGE_SCRIPT_PATH}`);
@@ -559,6 +687,7 @@ class DatabaseService {
       cwd: process.cwd(),
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'pipe'],
+      maxBuffer: STORAGE_SCRIPT_MAX_BUFFER,
     });
     const parsed = JSON.parse(raw) as DatabaseSchema;
     return parsed;
@@ -575,6 +704,7 @@ class DatabaseService {
         cwd: process.cwd(),
         encoding: 'utf-8',
         stdio: ['ignore', 'pipe', 'pipe'],
+        maxBuffer: STORAGE_SCRIPT_MAX_BUFFER,
       });
     } finally {
       if (fs.existsSync(tempFile)) {
@@ -587,6 +717,7 @@ class DatabaseService {
     if (!this.cache) return;
     this.normalizeSingleRoomData(this.cache);
     this.normalizePointState(this.cache);
+    this.normalizeCoreBusinessState(this.cache);
     if (!Array.isArray(this.cache.tournamentBets)) {
       this.cache.tournamentBets = [];
     }
@@ -609,21 +740,23 @@ class DatabaseService {
       for (let i = 0; i < this.cache.players.length; i++) {
         if (used.has(i)) continue;
         const pi = this.cache.players[i];
+        const piNameZh = pi.nameZh || '';
         let best = pi;
         let bestIdx = i;
         for (let j = i + 1; j < this.cache.players.length; j++) {
           if (used.has(j)) continue;
           const pj = this.cache.players[j];
+          const pjNameZh = pj.nameZh || '';
           if (pi.teamId !== pj.teamId) continue;
           // 检查 nameZh 是否是包含关系
-          if (pi.nameZh.includes(pj.nameZh) || pj.nameZh.includes(pi.nameZh)) {
+          if ((piNameZh && pjNameZh) && (piNameZh.includes(pjNameZh) || pjNameZh.includes(piNameZh))) {
             // 优先保留 nameZh 更长的（全名），或 avatarUrl 存在的
             const iHasAvatar = !!(best as any).avatarUrl;
             const jHasAvatar = !!(pj as any).avatarUrl;
             if (jHasAvatar && !iHasAvatar) {
               best = pj;
               bestIdx = j;
-            } else if (pj.nameZh.length > best.nameZh.length && iHasAvatar === jHasAvatar) {
+            } else if (pjNameZh.length > (best.nameZh || '').length && iHasAvatar === jHasAvatar) {
               best = pj;
               bestIdx = j;
             }

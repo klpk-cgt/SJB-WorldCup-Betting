@@ -11,16 +11,15 @@ import { dbService } from '../db/db_service';
 import { THE_TEAMS } from '../db/initial_data';
 import {
   AIContent,
-  BracketState,
   Match,
   MatchOdds,
   MatchStatus,
   Prediction,
+  PredictionMarket,
   SyncLog,
   TournamentBet,
   TournamentBetOption,
   User,
-  Wallet,
 } from '../types';
 import { getRuntimeConfig, summarizeProviderConfig } from './config';
 import {
@@ -33,12 +32,8 @@ import {
 
 export { deriveOperationalStatus, deriveSettlementStatus };
 import { invalidateAIContent } from './ai';
-import { createBackup } from './backup';
 import logger, { getLogDirectory } from './logger';
-import { emitBigWin, emitPredictionLost, emitPredictionWon, emitStreakHit } from './activity_service';
 import { quizQuestionPool, QUIZ_POINTS_PER_CORRECT } from './quiz_data';
-import { evaluateUserBadges, syncUserTitle } from './badge_service';
-import { applyCardToSettlement, getCardDefinition } from './prediction_card_service';
 import { mergeCorrectScoreOdds } from '../utils/odds';
 
 const config = getRuntimeConfig();
@@ -165,6 +160,28 @@ function resolveTimeValue(input: string | number | Date) {
 
 export function roundPoints(value: number) {
   return Number.isFinite(value) ? Math.round(value) : 0;
+}
+
+export function normalizePredictionMarket(input: string | null | undefined): PredictionMarket | null {
+  const normalized = String(input || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, '_');
+
+  switch (normalized) {
+    case 'H2H':
+      return 'H2H';
+    case 'CORRECT_SCORE':
+    case 'CORRECTSCORE':
+      return 'CORRECT_SCORE';
+    case 'TOTAL_GOALS':
+    case 'TOTALGOALS':
+      return 'TOTAL_GOALS';
+    case 'QUALIFY':
+      return 'QUALIFY';
+    default:
+      return null;
+  }
 }
 
 export function toBeijingDateKey(input: string | number | Date = Date.now()) {
@@ -436,7 +453,7 @@ export function serializeUserForClient(user: User) {
 }
 
 /** 将外部 GitHub raw 头像 URL 转为本地 /player-avatars/ 路径，ui-avatars.com 等外部服务返回 null */
-export function toLocalAvatarUrl(url: string): string | null {
+export function toLocalAvatarUrl(url?: string | null): string | null {
   if (!url) return null;
   const match = url.match(/\/assets\/players\/([a-z0-9_-]+\.jpg)$/i);
   if (match) return `/player-avatars/${match[1]}`;
@@ -451,7 +468,13 @@ export function serializeMatch(match: Match) {
   const rawOdds = db.matchOdds[match.id] || null;
   // 合并完整比分选项，确保前端拿到所有32个选项
   const odds = rawOdds
-    ? { ...rawOdds, correctScore: mergeCorrectScoreOdds(rawOdds.correctScore).map(({ score, odds }) => ({ score, odds })) }
+    ? {
+        ...rawOdds,
+        correctScoreSource:
+          rawOdds.correctScoreSource ||
+          (rawOdds.source === 'The Odds API' ? 'INFERRED_FROM_H2H' : 'MANUAL'),
+        correctScore: mergeCorrectScoreOdds(rawOdds.correctScore).map(({ score, odds }) => ({ score, odds })),
+      }
     : null;
   return {
     ...enrichMatchLifecycle(match, config.predictionLockMinutes),
@@ -600,7 +623,8 @@ export function resolveOddsSnapshot(matchId: string, market: Prediction['market'
   const odds: MatchOdds | undefined = db.matchOdds[matchId];
   if (!odds) return null;
 
-  const marketUpper = (market || '').toUpperCase() as Prediction['market'];
+  const marketUpper = normalizePredictionMarket(market);
+  if (!marketUpper) return null;
   let oddsDecimal = 1;
   if (marketUpper === 'H2H') {
     oddsDecimal = optionKey === 'home' ? odds.h2h.homeWin : optionKey === 'draw' ? odds.h2h.draw : odds.h2h.awayWin;
@@ -648,8 +672,8 @@ export async function autoSettleFinishedMatches(db: ReturnType<typeof dbService.
     if (
       match.isSettled ||
       !FINISHED_MATCH_STATUSES.has(match.status) ||
-      match.homeScore === undefined ||
-      match.awayScore === undefined
+      typeof match.homeScore !== 'number' ||
+      typeof match.awayScore !== 'number'
     ) {
       // 降级模式下 scoreUnknown 标记的比赛，记录日志提醒管理员手动录入
       if ((match as any).scoreUnknown && FINISHED_MATCH_STATUSES.has(match.status)) {

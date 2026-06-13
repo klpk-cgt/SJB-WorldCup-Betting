@@ -184,6 +184,7 @@ async function loadSnapshot() {
             awayWin: row.h2hAwayWin,
           },
           correctScore: row.correctScore || [],
+          correctScoreSource: row.correctScoreSource ?? undefined,
           totalGoals: {
             over25: row.totalGoalsOver25,
             under25: row.totalGoalsUnder25,
@@ -245,6 +246,7 @@ async function saveSnapshot(snapshot) {
     h2hDraw: item.h2h.draw,
     h2hAwayWin: item.h2h.awayWin,
     correctScore: item.correctScore,
+    correctScoreSource: item.correctScoreSource ?? null,
     totalGoalsOver25: item.totalGoals.over25,
     totalGoalsUnder25: item.totalGoals.under25,
     qualifyHome: item.qualify?.homeQualify ?? null,

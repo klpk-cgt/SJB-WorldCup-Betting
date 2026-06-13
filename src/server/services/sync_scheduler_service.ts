@@ -138,23 +138,52 @@ function recordLiveScoreFailure() {
  */
 export function getSyncHealthStatus() {
   const config = getRuntimeConfig();
+  const syncLogs = dbService.getSyncLogs();
+  const latestSuccessTimestamp = (syncType: string) => {
+    const runtimeValue =
+      syncType === 'fixtures'
+        ? runtimeState.lastFixturesSyncAt
+        : syncType === 'odds'
+          ? runtimeState.lastOddsSyncAt
+          : runtimeState.lastLiveScoreSyncAt;
+
+    if (runtimeValue > 0) {
+      return new Date(runtimeValue).toISOString();
+    }
+
+    const latestLog = syncLogs.find((log) => log.syncType === syncType && log.status === 'SUCCESS');
+    return latestLog?.finishedAt || latestLog?.createdAt || null;
+  };
+
+  const fixturesConfigured = hasProviderKey(config.apiFootballKey);
+  const oddsConfigured = hasProviderKey(config.theOddsApiKey);
+  const fixturesHealthy = fixturesConfigured && consecutiveFixturesFailures < MAX_CONSECUTIVE_FAILURES;
+  const oddsHealthy = oddsConfigured && consecutiveOddsFailures < MAX_CONSECUTIVE_FAILURES;
+  const liveScoreHealthy = fixturesConfigured && consecutiveLiveScoreFailures < MAX_CONSECUTIVE_FAILURES;
+
   return {
     fixtures: {
-      hasApiKey: hasProviderKey(config.apiFootballKey),
+      hasApiKey: fixturesConfigured,
       consecutiveFailures: consecutiveFixturesFailures,
-      isHealthy: consecutiveFixturesFailures < MAX_CONSECUTIVE_FAILURES,
-      lastSyncAt: runtimeState.lastFixturesSyncAt ? new Date(runtimeState.lastFixturesSyncAt).toISOString() : null,
+      isHealthy: fixturesHealthy,
+      status: fixturesConfigured ? (fixturesHealthy ? 'healthy' : 'degraded') : 'disabled',
+      reason: fixturesConfigured ? null : 'API_FOOTBALL_KEY missing',
+      lastSyncAt: latestSuccessTimestamp('fixtures'),
     },
     odds: {
-      hasApiKey: hasProviderKey(config.theOddsApiKey),
+      hasApiKey: oddsConfigured,
       consecutiveFailures: consecutiveOddsFailures,
-      isHealthy: consecutiveOddsFailures < MAX_CONSECUTIVE_FAILURES,
-      lastSyncAt: runtimeState.lastOddsSyncAt ? new Date(runtimeState.lastOddsSyncAt).toISOString() : null,
+      isHealthy: oddsHealthy,
+      status: oddsConfigured ? (oddsHealthy ? 'healthy' : 'degraded') : 'disabled',
+      reason: oddsConfigured ? null : 'THE_ODDS_API_KEY missing',
+      lastSyncAt: latestSuccessTimestamp('odds'),
     },
     liveScore: {
       consecutiveFailures: consecutiveLiveScoreFailures,
-      isHealthy: consecutiveLiveScoreFailures < MAX_CONSECUTIVE_FAILURES,
-      lastSyncAt: runtimeState.lastLiveScoreSyncAt ? new Date(runtimeState.lastLiveScoreSyncAt).toISOString() : null,
+      isHealthy: liveScoreHealthy,
+      status: fixturesConfigured ? (liveScoreHealthy ? 'healthy' : 'degraded') : 'disabled',
+      reason: fixturesConfigured ? null : 'API_FOOTBALL_KEY missing',
+      lastSyncAt: latestSuccessTimestamp('livescore'),
     },
     currentPriority: runtimeState.currentPriority,
     currentReason: runtimeState.currentReason,
@@ -195,7 +224,6 @@ function releaseLock(lockKey: string) {
 export function getSyncPlan(): SyncPlan {
   const db = dbService.getData();
   const now = Date.now();
-  const config = getRuntimeConfig();
   const matches = db.matches || [];
 
   const fixturesDates = new Set<string>();
@@ -206,7 +234,6 @@ export function getSyncPlan(): SyncPlan {
   let hasMatchWithin24h = false;
   let hasMatchWithin2h = false;
   let hasLiveMatch = false;
-  let hasFinishedUnsettled = false;
 
   for (const match of matches) {
     const startTime = new Date(match.startTimeUtc).getTime();
@@ -224,7 +251,6 @@ export function getSyncPlan(): SyncPlan {
 
     // 已结束未结算
     if (FINISHED_STATUSES.has(match.status) && !match.isSettled) {
-      hasFinishedUnsettled = true;
       settlementMatchIds.push(match.id);
       continue;
     }
@@ -338,7 +364,20 @@ export function markAiRefreshed() {
  * 获取当前运行状态（后台展示用）
  */
 export function getSyncRuntimeState(): SyncRuntimeState {
-  return { ...runtimeState };
+  const syncLogs = dbService.getSyncLogs();
+  const resolveLastAt = (value: number, syncType: string) => {
+    if (value > 0) return value;
+    const latestLog = syncLogs.find((log) => log.syncType === syncType && log.status === 'SUCCESS');
+    const isoValue = latestLog?.finishedAt || latestLog?.createdAt;
+    return isoValue ? new Date(isoValue).getTime() : 0;
+  };
+
+  return {
+    ...runtimeState,
+    lastFixturesSyncAt: resolveLastAt(runtimeState.lastFixturesSyncAt, 'fixtures'),
+    lastOddsSyncAt: resolveLastAt(runtimeState.lastOddsSyncAt, 'odds'),
+    lastLiveScoreSyncAt: resolveLastAt(runtimeState.lastLiveScoreSyncAt, 'livescore'),
+  };
 }
 
 /**

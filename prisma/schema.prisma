@@ -115,6 +115,7 @@ model Match {
   lineups              Json?
   events               Json?
   providerMeta         Json?
+  scoreUnknown         Boolean?
   operationalStatus    String? @db.VarChar(64)
   settlementStatus     String? @db.VarChar(64)
   autoLockAt           String? @db.VarChar(64)
@@ -131,6 +132,7 @@ model MatchOdds {
   h2hDraw         Float?
   h2hAwayWin      Float?
   correctScore    Json?
+  correctScoreSource String? @db.VarChar(64)
   totalGoalsOver25 Float?
   totalGoalsUnder25 Float?
   qualifyHome     Float?

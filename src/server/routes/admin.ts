@@ -25,7 +25,6 @@ import {
   requireAdmin,
   serializeUserForClient,
   serializeMatch,
-  runScheduledMaintenance,
   ensureLifecycleForAllMatches,
   markMatchAiStale,
   markRoomLeaderboardAiStale,
@@ -33,13 +32,18 @@ import {
   getIntegrationStatusPayload,
   getSystemStatusPayload,
   pickNearestMatchDay,
-  getPinyinInitials,
 } from '../helpers';
 import { runBusinessTransaction } from '../services/transaction_guard';
 import { settleMatchById } from '../services/settlement_service';
 import { regeneratePostMatchReport } from '../services/post_match_report_service';
-import { getSyncRuntimeState, getSyncPlan, getSyncHealthStatus } from '../services/sync_scheduler_service';
-import { emitPointsAdjusted, emitUserJoined } from '../activity_service';
+import {
+  getSyncRuntimeState,
+  getSyncPlan,
+  getSyncHealthStatus,
+  markFixturesSynced,
+  markOddsSynced,
+} from '../services/sync_scheduler_service';
+import { emitPointsAdjusted } from '../activity_service';
 import { evaluateAllBadges, syncAllTitles } from '../badge_service';
 import { initUserCardInventory, adjustUserCards, bootstrapAllCardInventories } from '../prediction_card_service';
 import { createBackup, listBackups, restoreFromBackup } from '../backup';
@@ -47,6 +51,17 @@ import logger from '../logger';
 
 const config = getRuntimeConfig();
 const router = Router();
+
+interface SyncSampleOddsResult {
+  matchId: string;
+  homeTeam: string;
+  awayTeam: string;
+  synced: boolean;
+  syncStatus: string;
+  source: string;
+  lastSyncedAt: string | null;
+  unsyncedReason?: string | null;
+}
 
 function generateUniqueLoginCode(existingCodes: Set<string>) {
   for (let attempt = 0; attempt < 30; attempt += 1) {
@@ -132,7 +147,7 @@ router.post('/api/admin/integrations/test-sync', async (req: Request, res: Respo
     .filter((match) => match.startTimeUtc.slice(0, 10) === date)
     .slice(0, 3);
 
-  const oddsResults = [];
+  const oddsResults: SyncSampleOddsResult[] = [];
   for (const match of sampleMatches) {
     const oddsResult = await syncOddsForMatches({
       apiKey: config.theOddsApiKey,
@@ -151,6 +166,7 @@ router.post('/api/admin/integrations/test-sync', async (req: Request, res: Respo
       syncStatus: db.matchOdds[match.id]?.syncStatus || 'FAILED',
       source: db.matchOdds[match.id]?.source || 'MANUAL',
       lastSyncedAt: db.matchOdds[match.id]?.lastSyncedAt || null,
+      unsyncedReason: oddsResult.unsyncedReasons[match.id] || null,
     });
   }
 
@@ -673,6 +689,9 @@ router.post('/api/admin/sync/fixtures', async (req: Request, res: Response) => {
         db,
       });
   appendSyncLog(result.log);
+  if (result.log.status !== 'FAILED') {
+    markFixturesSynced();
+  }
   ensureLifecycleForAllMatches();
   [...result.updatedMatches, ...result.createdMatches].forEach((item) => markMatchAiStale(item.id));
   dbService.refreshBracketState();
@@ -697,6 +716,9 @@ router.post('/api/admin/sync/window', async (req: Request, res: Response) => {
   });
 
   appendSyncLog(result.log);
+  if (result.log.status !== 'FAILED') {
+    markFixturesSynced();
+  }
   ensureLifecycleForAllMatches();
   [...result.updatedMatches, ...result.createdMatches].forEach((item) => markMatchAiStale(item.id));
   dbService.refreshBracketState();
@@ -724,6 +746,12 @@ router.post('/api/admin/sync/today', async (req: Request, res: Response) => {
   });
   appendSyncLog(fixturesResult.log);
   appendSyncLog(oddsResult.log);
+  if (fixturesResult.log.status !== 'FAILED') {
+    markFixturesSynced();
+  }
+  if (oddsResult.log.status !== 'FAILED') {
+    markOddsSynced();
+  }
   ensureLifecycleForAllMatches();
   [...fixturesResult.updatedMatches, ...fixturesResult.createdMatches].forEach((item) => markMatchAiStale(item.id));
   oddsResult.updatedMatchIds.forEach((item) => markMatchAiStale(item));
@@ -762,6 +790,12 @@ router.post('/api/admin/sync/matches/:id', async (req: Request, res: Response) =
     ...oddsResult.log,
     targetMatchId: match.id,
   });
+  if (fixturesResult.log.status !== 'FAILED') {
+    markFixturesSynced();
+  }
+  if (oddsResult.log.status !== 'FAILED') {
+    markOddsSynced();
+  }
   ensureLifecycleForAllMatches();
   [...fixturesResult.updatedMatches, ...fixturesResult.createdMatches].forEach((item) => markMatchAiStale(item.id));
   oddsResult.updatedMatchIds.forEach((item) => markMatchAiStale(item));
@@ -788,6 +822,9 @@ router.post('/api/admin/sync/odds', async (req: Request, res: Response) => {
   const startedAt = Date.now();
   const result = await syncOddsForMatches({ apiKey: cfg.theOddsApiKey, db });
   appendSyncLog(result.log);
+  if (result.log.status !== 'FAILED') {
+    markOddsSynced();
+  }
   result.updatedMatchIds.forEach((id) => markMatchAiStale(id));
   dbService.save();
 
@@ -797,6 +834,9 @@ router.post('/api/admin/sync/odds', async (req: Request, res: Response) => {
     errorDetail: result.log.errorMessage || null,
     updatedCount: result.updatedMatchIds.length,
     updatedMatchIds: result.updatedMatchIds.slice(0, 20),
+    unsyncedCount: result.unsyncedMatchIds.length,
+    unsyncedMatchIds: result.unsyncedMatchIds.slice(0, 20),
+    unsyncedReasons: Object.fromEntries(Object.entries(result.unsyncedReasons).slice(0, 20)),
     durationMs: Date.now() - startedAt,
   });
 });
@@ -1115,13 +1155,19 @@ router.get('/api/admin/predictions', (req: Request, res: Response) => {
   const items = result.slice((page - 1) * pageSize, page * pageSize).map((p) => {
     const user = db.users.find((u) => u.id === p.userId);
     const match = db.matches.find((m) => m.id === p.matchId);
+    const homeTeamName = match
+      ? db.teams.find((team) => team.id === match.homeTeamId)?.nameZh || match.homeTeamId
+      : null;
+    const awayTeamName = match
+      ? db.teams.find((team) => team.id === match.awayTeamId)?.nameZh || match.awayTeamId
+      : null;
     return {
       id: p.id,
       userId: p.userId,
       userName: user?.displayName || '鏈煡',
       userLoginCode: user?.loginCode,
       matchId: p.matchId,
-      matchLabel: match ? `${match.homeTeam?.nameZh || ''} vs ${match.awayTeam?.nameZh || ''}` : p.matchId,
+      matchLabel: match ? `${homeTeamName} vs ${awayTeamName}` : p.matchId,
       market: p.market,
       optionLabel: p.optionLabel,
       oddsDecimal: p.oddsDecimal,

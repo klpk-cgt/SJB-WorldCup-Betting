@@ -6,9 +6,9 @@
 import { dbService } from '../../db/db_service';
 import { Match, Prediction } from '../../types';
 import { adjustWalletBalance } from './wallet_service';
-import { createId, roundPoints } from '../helpers';
+import { createId, roundPoints, normalizePredictionMarket } from '../helpers';
 import { applyCardToSettlement } from '../prediction_card_service';
-import { FINISHED_MATCH_STATUSES } from '../operations';
+import { FINISHED_MATCH_STATUSES, hasResolvableScore } from '../operations';
 import {
   emitBigWin,
   emitPredictionLost,
@@ -49,7 +49,7 @@ export async function settleMatchById(params: SettleMatchParams): Promise<Settle
     throw new Error('比赛尚未正式结束，暂时不能结算。');
   }
 
-  if (match.homeScore === undefined || match.awayScore === undefined) {
+  if (!hasResolvableScore(match)) {
     logger.warn('结算被阻止：比分不完整（可能是降级模式下的无真实比分比赛）', {
       matchId: match.id,
       homeScore: match.homeScore,
@@ -104,8 +104,8 @@ export async function settleMatchById(params: SettleMatchParams): Promise<Settle
     }
   }
 
-  const hScore = match.homeScore;
-  const aScore = match.awayScore;
+  const hScore = match.homeScore as number;
+  const aScore = match.awayScore as number;
   let totalPayout = 0;
 
   for (const prediction of matchPredictions) {
@@ -333,8 +333,18 @@ function judgePrediction(prediction: Prediction, match: Match): boolean {
   const hScore = match.homeScore!;
   const aScore = match.awayScore!;
   const key = prediction.optionKey.toLowerCase();
+  const market = normalizePredictionMarket(prediction.market);
 
-  if (prediction.market === 'H2H') {
+  if (!market) {
+    logger.warn('Skipping settlement for prediction with unsupported market', {
+      predictionId: prediction.id,
+      market: prediction.market,
+      matchId: prediction.matchId,
+    });
+    return false;
+  }
+
+  if (market === 'H2H') {
     return (
       (key === 'home' && hScore > aScore) ||
       (key === 'draw' && hScore === aScore) ||
@@ -342,7 +352,7 @@ function judgePrediction(prediction: Prediction, match: Match): boolean {
     );
   }
 
-  if (prediction.market === 'TOTAL_GOALS') {
+  if (market === 'TOTAL_GOALS') {
     const totalGoals = hScore + aScore;
     return (
       (key === 'over_2_5' && totalGoals > 2.5) ||
@@ -350,7 +360,7 @@ function judgePrediction(prediction: Prediction, match: Match): boolean {
     );
   }
 
-  if (prediction.market === 'CORRECT_SCORE') {
+  if (market === 'CORRECT_SCORE') {
     const normalizedKey = key.replace('correctscore_', '').replace('_', '-');
     const actualScore = `${hScore}-${aScore}`;
 
@@ -429,7 +439,7 @@ function judgePrediction(prediction: Prediction, match: Match): boolean {
     return normalizedKey === actualScore;
   }
 
-  if (prediction.market === 'QUALIFY' && match.winnerTeamId) {
+  if (market === 'QUALIFY' && match.winnerTeamId) {
     return (
       (key === 'homequalify' && match.winnerTeamId === match.homeTeamId) ||
       (key === 'awayqualify' && match.winnerTeamId === match.awayTeamId)

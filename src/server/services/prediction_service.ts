@@ -11,6 +11,7 @@ import {
   roundPoints,
   deriveOperationalStatus,
   resolveOddsSnapshot,
+  normalizePredictionMarket,
 } from '../helpers';
 import { getRuntimeConfig } from '../config';
 import { consumeCard, userHasCard } from '../prediction_card_service';
@@ -37,7 +38,12 @@ interface PlacePredictionResult {
 
 export function placePrediction(params: PlacePredictionParams): PlacePredictionResult {
   const db = dbService.getData();
-  const { userId, groupId, matchId, market, optionKey, optionLabel, stakePoints, usedCard } = params;
+  const { userId, groupId, matchId, optionKey, optionLabel, stakePoints, usedCard } = params;
+  const market = normalizePredictionMarket(params.market);
+
+  if (!market) {
+    throw new Error('Unsupported prediction market.');
+  }
 
   const match = db.matches.find((item) => item.id === matchId);
   if (!match) {
