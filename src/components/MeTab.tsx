@@ -20,15 +20,15 @@ import {
   TrendingUp,
   Trophy,
 } from 'lucide-react';
-import { AchievementBadgeSummary, Prediction, TournamentBet, Transaction } from '../types';
+import { AchievementBadgeSummary, Prediction, TournamentBet, Transaction, User, Wallet } from '../types';
 import { apiRequest, formatDate } from '../utils/api';
 import { buildUserProfileSummary } from '../utils/achievements';
 import SmartAvatar from './SmartAvatar';
 import FlagBadge from './home/FlagBadge';
 
 interface MeTabProps {
-  user: any;
-  wallet: any;
+  user: User | null;
+  wallet: Wallet | null;
   onLogout: () => void;
   onAdminLogin?: () => void;
 }

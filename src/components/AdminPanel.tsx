@@ -141,9 +141,8 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
       setErrorStr('');
 
       // 卡牌统计（可选，失败不影响）
-    } catch (e: any) {
-      console.error(e);
-      const message = e?.message || '未取得授权或网络读取错误，请重新登录。';
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message || '未取得授权或网络读取错误，请重新登录。';
       if (message.includes('权限') || message.includes('登录已失效')) {
         clearAdminSession('管理员登录已失效，请重新登录。');
         return;
@@ -200,7 +199,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
         setIsAuthed(true);
         setErrorStr('');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setErrorStr(err.message || '管理员账号或密码错误。');
     }
   };
@@ -225,7 +224,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
       setUserMsg(`🎉 成功批量创建了 ${res.createdUsers.length} 个账号闲置槽位！分配身份代码完毕。`);
       setPasteNames('');
       await loadAdminData();
-    } catch (e: any) {
+    } catch (e: unknown) {
       setUserMsg(`❌ 导入程序出错: ${e.message}`);
     } finally {
       setIsWorking(false);
@@ -257,7 +256,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
       setSingleName('');
       setSingleLoginCode('');
       await loadAdminData();
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast.error('创建失败', e.message);
     } finally {
       setIsWorking(false);
@@ -274,7 +273,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
       toast.success('删除成功', res.message);
       setDeleteConfirmUserId(null);
       await loadAdminData();
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast.error('删除失败', e.message);
     } finally {
       setIsWorking(false);
@@ -316,7 +315,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
         setAvatarUploadUserId(null);
         setAvatarPreview('');
         await loadAdminData();
-      } catch (err: any) {
+      } catch (err: unknown) {
         toast.error('上传失败', err.message);
       } finally {
         setIsWorking(false);
@@ -341,7 +340,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
       setAdjustTargetUser(null);
       await loadAdminData();
       toast.success('调整成功', '用户积分已经更新。');
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast.error('调整积分失败', e.message);
     } finally {
       setIsWorking(false);
@@ -359,7 +358,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
       });
       await loadAdminData();
       toast.success('卡牌已更新');
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast.error('调整卡牌失败', e.message);
     } finally {
       setIsWorking(false);
@@ -378,7 +377,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
       });
       toast.success('补卡完成', `已为 ${res.count || 0} 位用户补齐初始卡牌`);
       await loadAdminData();
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast.error('补卡失败', e.message);
     } finally {
       setIsWorking(false);
@@ -435,7 +434,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
       toast.success('比赛数据已保存', '比分与赔率修改已经生效。');
       setSelectedMatch(null);
       await loadAdminData();
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast.error('更新比赛失败', e.message);
     } finally {
       setIsWorking(false);
@@ -452,7 +451,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
       });
       setSettleStatusMsg(`🎉 派派结算打款完毕！共对 ${res.count} 条群 predictions 记录判定并进行了增扣记录流水。`);
       await loadAdminData();
-    } catch (e: any) {
+    } catch (e: unknown) {
       setSettleStatusMsg(`❌ 结算打款挂账出错: ${e.message}`);
     } finally {
       setIsWorking(false);
@@ -479,7 +478,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
           : `结算完成，已处理 ${res.count} 条竞猜记录。`,
       );
       await loadAdminData();
-    } catch (e: any) {
+    } catch (e: unknown) {
       setSettleStatusMsg(`结算失败: ${e.message}`);
     } finally {
       setIsWorking(false);
@@ -493,7 +492,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
       setOpsStatusMsg('Today sync completed.');
       toast.success('赛程同步完成', '本地赛程与缓存已重新构建。');
       await loadAdminData();
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast.error('赛程同步失败', e.message);
     } finally {
       setIsWorking(false);
@@ -517,7 +516,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
       );
       toast.success('Window sync completed', `Updated ${result.updatedMatches?.length || 0}, created ${result.createdMatches?.length || 0}`);
       await loadAdminData();
-    } catch (e: any) {
+    } catch (e: unknown) {
       setOpsStatusMsg(`Window sync failed: ${e.message}`);
       toast.error('Window sync failed', e.message);
     } finally {
@@ -532,7 +531,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
       setLastTestSyncResult(result);
       setOpsStatusMsg(`Integration test finished for ${result.sampleDate || 'unknown date'}.`);
       await loadAdminData();
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast.error('同步校验失败', e.message || '请稍后重试。');
     } finally {
       setIsWorking(false);
@@ -547,7 +546,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
       setOpsStatusMsg(`Selected match synced: ${selectedMatch.id}`);
       toast.success('单场同步完成', '这场比赛已经重新同步。');
       await loadAdminData();
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast.error('单场同步失败', e.message);
     } finally {
       setIsWorking(false);
@@ -1398,7 +1397,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
                 </div>
                 {cardStats.recentUses && cardStats.recentUses.length > 0 && (
                   <div className="mt-2 max-h-32 overflow-y-auto rounded-lg bg-white p-2 text-[10px]">
-                    {cardStats.recentUses.slice(0, 8).map((use: any, idx: number) => (
+                    {cardStats.recentUses.slice(0, 8).map((use: Record<string, unknown>, idx: number) => (
                       <div key={idx} className="flex justify-between items-center py-1 border-b border-slate-50 last:border-0">
                         <span>
                           <span className="font-black text-amber-700">{use.userName}</span>
@@ -1467,7 +1466,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
                   <div className="mt-1">赛程状态: {lastTestSyncResult.fixtures?.status}</div>
                   <div className="mt-1">赛程结果: {lastTestSyncResult.fixtures?.responseSummary}</div>
                   <div className="mt-3 space-y-2">
-                    {(lastTestSyncResult.odds || []).map((item: any) => (
+                    {(lastTestSyncResult.odds || []).map((item: Record<string, unknown>) => (
                       <div key={item.matchId} className="rounded-xl border border-slate-200 bg-white px-3 py-2">
                         <div className="font-bold text-slate-900">
                           {item.homeTeam} vs {item.awayTeam}

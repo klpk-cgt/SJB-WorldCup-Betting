@@ -427,23 +427,52 @@ router.get('/api/leaderboards', (_req: Request, res: Response) => {
   const db = dbService.getData();
   const groupId = (_req.query.groupId as string) || dbService.getPrimaryRoomId();
   const users = db.users.filter((item) => item.groupId === groupId);
-
-  const settledTimes = db.predictions.filter((item) => item.settledAt).map((item) => new Date(item.settledAt!).getTime());
-  const anchorTime = settledTimes.length > 0 ? Math.max(...settledTimes) : Date.now();
   const oneDay = 24 * 60 * 60 * 1000;
-  const currentWalletMap = new Map(
-    users.map((user) => [
-      user.id,
-      (db.wallets.find((item) => item.userId === user.id) || { balance: 10000, initialPoints: 10000 }).balance,
-    ]),
-  );
-  const previousBalanceMap = new Map<string, number>();
 
+  // ── 预聚合：单次遍历构建索引 Map (O(P+T+W+B) vs 原来的 O(U×(P+T+W+B))) ──
+  const predictionMap = new Map<string, typeof db.predictions>();
+  const walletMap = new Map<string, typeof db.wallets[number]>();
+  const transactionMap = new Map<string, typeof db.transactions>();
+  const tournamentBetMap = new Map<string, typeof db.tournamentBets>();
+  let anchorTime = Date.now();
+
+  for (const p of db.predictions) {
+    if (!predictionMap.has(p.userId)) predictionMap.set(p.userId, []);
+    predictionMap.get(p.userId)!.push(p);
+    if (p.settledAt) {
+      const t = new Date(p.settledAt).getTime();
+      if (t > anchorTime) anchorTime = t;
+    }
+  }
+  for (const w of db.wallets) {
+    walletMap.set(w.userId, w);
+  }
+  for (const tx of db.transactions) {
+    if (!transactionMap.has(tx.userId)) transactionMap.set(tx.userId, []);
+    transactionMap.get(tx.userId)!.push(tx);
+  }
+  for (const tb of db.tournamentBets) {
+    if (!tournamentBetMap.has(tb.userId)) tournamentBetMap.set(tb.userId, []);
+    tournamentBetMap.get(tb.userId)!.push(tb);
+  }
+
+  // ── 钱包与历史排名 ──
+  const currentWalletMap = new Map<string, number>();
+  const previousBalanceMap = new Map<string, number>();
   for (const user of users) {
-    const latestTransaction = db.transactions
-      .filter((item) => item.userId === user.id)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
-    previousBalanceMap.set(user.id, latestTransaction ? latestTransaction.balanceBefore : currentWalletMap.get(user.id) || 10000);
+    const w = walletMap.get(user.id);
+    const bal = w ? w.balance : 10000;
+    currentWalletMap.set(user.id, bal);
+
+    const txs = transactionMap.get(user.id) || [];
+    const latestTx = txs.length > 0
+      ? txs.reduce((latest, tx) => {
+          const a = new Date(latest.createdAt).getTime();
+          const b = new Date(tx.createdAt).getTime();
+          return b > a ? tx : latest;
+        })
+      : null;
+    previousBalanceMap.set(user.id, latestTx ? latestTx.balanceBefore : bal);
   }
 
   const previousRankMap = new Map(
@@ -452,23 +481,40 @@ router.get('/api/leaderboards', (_req: Request, res: Response) => {
       .map((user, index) => [user.id, index + 1]),
   );
 
+  // ── 构建排行榜 ──
   const leaderboard = users.map((user) => {
-    const wallet = db.wallets.find((item) => item.userId === user.id) || { userId: user.id, balance: 10000, initialPoints: 10000 };
-    const predictions = db.predictions.filter((item) => item.userId === user.id);
-    const totalCount = predictions.length;
-    const wonCount = predictions.filter((item) => item.status === 'WON').length;
+    const wallet = walletMap.get(user.id) || { userId: user.id, balance: 10000, initialPoints: 10000 };
+    const predictions = predictionMap.get(user.id) || [];
+
+    let totalCount = 0;
+    let wonCount = 0;
+    let biggestWin = 0;
+    let todayProfit = 0;
+    let totalWonProfit = 0;
+    const completed: typeof predictions = [];
+
+    for (const p of predictions) {
+      totalCount++;
+      if (p.status === 'WON') {
+        wonCount++;
+        const profit = p.settledProfit || 0;
+        if (profit > biggestWin) biggestWin = profit;
+        totalWonProfit += profit;
+        completed.push(p);
+      } else if (p.status === 'LOST') {
+        completed.push(p);
+      }
+      if (p.settledAt && anchorTime - new Date(p.settledAt).getTime() <= oneDay) {
+        todayProfit += p.settledProfit || 0;
+      }
+    }
+
     const rate = totalCount === 0 ? 0 : Math.round((wonCount / totalCount) * 100);
     const netProfit = wallet.balance - (wallet.initialPoints || 10000);
-    const biggestWin = predictions.filter((item) => item.status === 'WON').reduce((max, item) => Math.max(max, item.settledProfit || 0), 0);
-    const todayPredictions = predictions.filter(
-      (item) => item.settledAt && anchorTime - new Date(item.settledAt).getTime() <= oneDay,
-    );
-    const todayProfit = todayPredictions.reduce((sum, item) => sum + (item.settledProfit || 0), 0);
-    const totalWonProfit = predictions.filter((item) => item.status === 'WON').reduce((sum, item) => sum + (item.settledProfit || 0), 0);
 
-    const completed = predictions
-      .filter((item) => item.status === 'WON' || item.status === 'LOST')
-      .sort((a, b) => new Date(a.settledAt || a.placedAt).getTime() - new Date(b.settledAt || b.placedAt).getTime());
+    // 按结算时间排序后计算连胜
+    completed.sort((a, b) =>
+      new Date(a.settledAt || a.placedAt).getTime() - new Date(b.settledAt || b.placedAt).getTime());
 
     let maxStreak = 0;
     let currentStreak = 0;
@@ -497,8 +543,8 @@ router.get('/api/leaderboards', (_req: Request, res: Response) => {
     const profileSummary = buildUserProfileSummary({
       userId: user.id,
       predictions,
-      tournamentBets: db.tournamentBets.filter((item) => item.userId === user.id),
-      transactions: db.transactions.filter((item) => item.userId === user.id),
+      tournamentBets: tournamentBetMap.get(user.id) || [],
+      transactions: transactionMap.get(user.id) || [],
       wallet,
       persistedTitle: getUserTitle(user.id),
     });

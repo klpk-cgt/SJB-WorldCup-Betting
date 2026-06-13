@@ -73,8 +73,9 @@ export default function AIRecommendations({ onNavigate }: { onNavigate: (tab: st
       toast.success('跟投成功', `已跟投 ${rec.optionLabel}，${rec.suggestedStake} 积分`);
 
       onNavigate('predictions');
-    } catch (e: any) {
-      toast.error('跟投失败', e.message || '请稍后重试');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : undefined;
+      toast.error('跟投失败', msg || '请稍后重试');
     } finally {
       setFollowing(null);
     }

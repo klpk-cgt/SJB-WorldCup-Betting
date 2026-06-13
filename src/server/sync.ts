@@ -437,7 +437,7 @@ export async function syncOddsForMatches(params: {
 
   try {
     const response = await fetchWithRetry(
-      'https://api.the-odds-api.com/v4/sports/soccer_fifa_world_cup/odds/?regions=eu&markets=h2h,totals,correct_score&oddsFormat=decimal&apiKey=' +
+      'https://api.the-odds-api.com/v4/sports/soccer_fifa_world_cup/odds/?regions=eu&markets=h2h,totals&oddsFormat=decimal&apiKey=' +
         encodeURIComponent(apiKey),
       {},
     );

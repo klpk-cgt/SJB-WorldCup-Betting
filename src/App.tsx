@@ -3,22 +3,28 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Award, BarChart3, Calendar, Eye, GitBranch, History, Home, Menu, Settings, Sparkles, Trophy, UserRound, X } from 'lucide-react';
-import AdminPanel from './components/AdminPanel';
-import BracketPage from './components/BracketPage';
-import HistoryHallPage from './components/HistoryHallPage';
+
+// 首屏核心组件 - 静态导入（底部导航栏 tab，高频访问）
 import HomeTab from './components/HomeTab';
-import LeaderboardTab from './components/LeaderboardTab';
-import MatchDetailPage from './components/MatchDetailPage';
 import MatchesTab from './components/MatchesTab';
-import MeTab from './components/MeTab';
 import PredictionTab from './components/PredictionTab';
-import StatsPage from './components/StatsPage';
-import WatchGuidePage from './components/WatchGuidePage';
+import LeaderboardTab from './components/LeaderboardTab';
+import MeTab from './components/MeTab';
+
+// 非首屏页面 - 懒加载
+const AdminPanel = React.lazy(() => import('./components/AdminPanel'));
+const BracketPage = React.lazy(() => import('./components/BracketPage'));
+const HistoryHallPage = React.lazy(() => import('./components/HistoryHallPage'));
+const MatchDetailPage = React.lazy(() => import('./components/MatchDetailPage'));
+const StatsPage = React.lazy(() => import('./components/StatsPage'));
+const WatchGuidePage = React.lazy(() => import('./components/WatchGuidePage'));
+const AIRecommendations = React.lazy(() => import('./components/AIRecommendations'));
+
+// 首屏小工具 - 静态导入
 import SearchBar from './components/SearchBar';
-import AIRecommendations from './components/AIRecommendations';
 import { ADMIN_KEY_STORAGE, apiRequest, ROOM_SLUG_STORAGE, USER_CODE_STORAGE } from './utils/api';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useToast } from './components/ToastProvider';
@@ -165,8 +171,9 @@ export default function App() {
         await fetchUserProfileAndWallet();
         setActiveTab('home');
       }
-    } catch (err: any) {
-      setErrorMsg(err.message || '登录失败，请检查身份码和 PIN。');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : undefined;
+      setErrorMsg(msg || '登录失败，请检查身份码和 PIN。');
     }
   };
 
@@ -239,11 +246,19 @@ export default function App() {
     );
   }
 
+  const SuspenseFallback = (
+    <div className="flex items-center justify-center py-20">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-emerald-500" />
+    </div>
+  );
+
   if (activeTab === 'admin') {
     return (
       <div className="min-h-screen bg-slate-100 px-4 py-6 md:px-8">
         <div className="mx-auto max-w-4xl">
-          <AdminPanel onBackToApp={() => setActiveTab(user ? 'me' : 'home')} />
+          <Suspense fallback={SuspenseFallback}>
+            <AdminPanel onBackToApp={() => setActiveTab(user ? 'me' : 'home')} />
+          </Suspense>
         </div>
       </div>
     );
@@ -280,6 +295,7 @@ export default function App() {
           className="flex-1 overflow-y-auto px-4 py-4"
           style={{ paddingBottom: 'calc(7.25rem + env(safe-area-inset-bottom, 0px))' }}
         >
+          <Suspense fallback={SuspenseFallback}>
           {activeTab === 'home' && (
             <HomeTab user={user} wallet={wallet} onRefreshWallet={fetchUserProfileAndWallet} onNavigate={navigateTo} wsScoreUpdate={wsScoreUpdate} wsOddsChange={wsOddsChange} />
           )}
@@ -377,6 +393,7 @@ export default function App() {
                 </div>
               </div>
             ))}
+          </Suspense>
         </main>
       </div>
 

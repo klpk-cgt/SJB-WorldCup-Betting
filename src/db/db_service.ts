@@ -333,6 +333,8 @@ class DatabaseService {
   public getPrimaryRoomId() {
     const rooms = this.getRooms();
     const room = rooms.find((item) => item.isActive) || rooms[0];
+    // NOTE: 'room-1' is the seed room from initial_data.ts.
+    // Multi-room deployments should ensure rooms exist before this fallback triggers.
     return room?.id || 'room-1';
   }
 

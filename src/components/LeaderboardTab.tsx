@@ -6,12 +6,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Award, BarChart2, Coins, Flame, Medal, RefreshCw, Sparkles, Star, TrendingDown, TrendingUp, Trophy, Zap } from 'lucide-react';
 import { CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { User } from '../types';
 import { apiRequest } from '../utils/api';
 import SmartAvatar from './SmartAvatar';
 import { useStaggerReveal, useScrollReveal } from '../animations';
 
 interface LeaderboardTabProps {
-  user: any;
+  user: User | null;
 }
 
 type LeaderboardKey = 'total' | 'today' | 'rate' | 'streak' | 'wonProfit';

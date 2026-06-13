@@ -777,6 +777,30 @@ router.post('/api/admin/sync/matches/:id', async (req: Request, res: Response) =
 
 // 鈹€鈹€鈹€ AI 绠＄悊 鈹€鈹€鈹€
 
+router.post('/api/admin/sync/odds', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const cfg = getRuntimeConfig();
+  const db = dbService.getData();
+  if (!cfg.theOddsApiKey) {
+    return res.status(400).json({ error: 'THE_ODDS_API_KEY 未配置。请在 .env 中设置。' });
+  }
+
+  const startedAt = Date.now();
+  const result = await syncOddsForMatches({ apiKey: cfg.theOddsApiKey, db });
+  appendSyncLog(result.log);
+  result.updatedMatchIds.forEach((id) => markMatchAiStale(id));
+  dbService.save();
+
+  res.json({
+    success: result.log.status !== 'FAILED',
+    message: result.log.responseSummary,
+    errorDetail: result.log.errorMessage || null,
+    updatedCount: result.updatedMatchIds.length,
+    updatedMatchIds: result.updatedMatchIds.slice(0, 20),
+    durationMs: Date.now() - startedAt,
+  });
+});
+
 router.post('/api/admin/ai/match/:id/pre', async (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
   const db = dbService.getData();

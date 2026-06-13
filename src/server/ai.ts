@@ -80,7 +80,8 @@ type BetShareParams = {
 
 function resolveRoomId(db: DatabaseSchema, roomId?: string) {
   if (roomId) return roomId;
-  return db.rooms.find((item) => item.isActive)?.id || db.rooms[0]?.id || 'room-1';
+  const config = getRuntimeConfig();
+  return db.rooms.find((item) => item.isActive)?.id || db.rooms[0]?.id || config.defaultRoomId;
 }
 
 export function getCachedAIContent(db: DatabaseSchema, cacheKey: string, now = Date.now()) {

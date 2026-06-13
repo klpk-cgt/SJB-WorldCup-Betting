@@ -6,7 +6,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Brain, Calendar, CheckCircle2, ChevronRight, Coins, Sparkles, Timer, XCircle, Zap } from 'lucide-react';
-import { AIContent, Match, MatchStatus } from '../types';
+import { AIContent, Match, MatchStatus, User, Wallet } from '../types';
 import { apiRequest, formatDate } from '../utils/api';
 import { useStaggerReveal, useFadeIn } from '../animations';
 import { getBeijingDayLabel, getMatchesForNearestDay, sortMatchesByKickoff } from '../utils/matchDisplay';
@@ -25,8 +25,8 @@ import { useToast } from './ToastProvider';
 import ActivityFeed, { ActivityItem } from './ActivityFeed';
 
 interface HomeTabProps {
-  user: any;
-  wallet: any;
+  user: User | null;
+  wallet: Wallet | null;
   onRefreshWallet: () => void;
   onNavigate: (tab: string, matchId?: string, detailTab?: string) => void;
   wsScoreUpdate?: { matchId: string; homeScore: number; awayScore: number; status: string } | null;
@@ -307,8 +307,9 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate, wsS
     try {
       const data = await apiRequest('/api/quiz/daily');
       setQuizQuestions(data.questions);
-    } catch (error: any) {
-      toast.error('获取今日问答失败', error.message || '请稍后重试。');
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : undefined;
+      toast.error('获取今日问答失败', msg || '请稍后重试。');
       setShowQuizModal(false);
     } finally {
       setQuizLoading(false);

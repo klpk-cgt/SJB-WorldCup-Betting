@@ -23,6 +23,7 @@ export interface RuntimeConfig {
   syncIntervalMinutes: number;
   activityMaxEntries: number;
   activityArchiveFile: string;
+  defaultRoomId: string;
 }
 
 function readEnv(name: string, fallback = '') {
@@ -55,6 +56,7 @@ export function getRuntimeConfig(): RuntimeConfig {
     syncIntervalMinutes: Number(process.env.SYNC_INTERVAL_MINUTES || 5),
     activityMaxEntries: Math.max(100, Number(process.env.ACTIVITY_MAX_ENTRIES || 1000)),
     activityArchiveFile: readEnv('ACTIVITY_ARCHIVE_FILE', 'db.activities.archive.json'),
+    defaultRoomId: readEnv('DEFAULT_ROOM_ID', 'room-1'),
   };
 }
 

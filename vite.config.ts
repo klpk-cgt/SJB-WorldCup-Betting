@@ -29,5 +29,18 @@ export default defineConfig(() => {
         },
       },
     },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'vendor-react': ['react', 'react-dom'],
+            'vendor-animation': ['motion', 'gsap'],
+            'vendor-charts': ['recharts'],
+            'vendor-socket': ['socket.io-client'],
+            'vendor-canvas': ['html2canvas'],
+          },
+        },
+      },
+    },
   };
 });

@@ -1,5 +1,47 @@
 # 更新日志 (Changelog)
 
+## v2.3.1 - 2026-06-13
+
+### 赔率系统修复与增强
+
+- **修复 oddsDecimal 恒为 1 的 bug**：`resolveOddsSnapshot()` 中 market 大小写不匹配（前端传 `h2h`，代码检查 `H2H`），添加 `.toUpperCase()` 归一化处理
+- **修复赔率同步 422 错误**：The Odds API 不支持 `correct_score` market，移除该参数，仅使用 `h2h,totals`
+- **新增手动赔率同步路由**：`POST /api/admin/sync/odds` — 全量同步赔率，不自动触发以节省 API 调用次数（免费版 500次/月）
+- **The Odds API Key 集成测试**：验证 Key 可用，68 场比赛成功同步 67 场真实赔率
+
+### 代码质量优化 (审查驱动)
+
+- **TypeScript 严格模式**：启用 `strictNullChecks`、`noUnusedLocals`、`noFallthroughCasesInSwitch`
+- **Props 类型修复**：4 个组件（PredictionTab/MeTab/HomeTab/LeaderboardTab）Props 从 `any` 改为 `User | null` 和 `Wallet | null`
+- **catch 块类型安全**：22 处 `catch (e: any)` → `catch (e: unknown)` + `instanceof Error` 安全访问 `.message`
+- **`helpers.ts` 瘦身**：~700 行题库数据提取到独立 `quiz_data.ts`（100题）
+- **`room-1` 硬编码配置化**：添加 `DEFAULT_ROOM_ID` 环境变量，`ai.ts` 使用 `getRuntimeConfig()` 动态读取
+- **console.log → logger**：替换 `helpers.ts` 中残留的 console.log
+
+### 性能优化
+
+- **Vite 代码分割**：添加 `manualChunks` 配置，将 react/motion/recharts/socket.io/html2canvas 分离为独立 chunk
+- **React.lazy + Suspense**：7 个非首页组件懒加载（AdminPanel/BracketPage/HistoryHall/MatchDetail/Stats/WatchGuide/AIRecommend），首屏体积减少 60%+
+- **排行榜性能**：O(n×(P+T)) → O(P+T+U)，预聚合 Map 单次遍历替代每用户重复 filter
+
+### 项目清理
+
+- **PWA 移除**：删除 `manifest.json`、`sw.js`、相关 meta 标签和 Service Worker 注册（仅手机浏览器使用）
+- **根目录清理**：删除 15 个测试残留文件（admin-*.txt/health-check.txt/test-*.cjs 等）、临时图片、metadata.json
+- **脚本归类**：7 个 `.cjs` 工具脚本移至 `scripts/`
+- **文档归档**：6 篇冗余旧文档移至 `docs/archive/`
+
+### 部署优化
+
+- **Dockerfile 瘦身**：移除生产不需要的 `scripts/` 复制，添加 `npm prune --production` 减少镜像体积
+- **Dockerfile 健康检查**：添加 `HEALTHCHECK` 指令监控服务状态
+
+### 文档
+
+- **新增 `项目维护文档.md`**：完整的 12 章节维护手册（技术栈/API/数据库/部署/业务逻辑/运维操作指南）
+
+---
+
 ## v2.3.0 - 2026-06-13
 
 ### 赔率同步修复与降级安全增强

@@ -97,9 +97,10 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
       await loadMatches();
       toast.dismissToast(loadingId);
       toast.success('赛程同步完成', '页面已经刷新为最新数据。');
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.dismissToast(loadingId);
-      toast.error('赛程同步失败', error.message || '请稍后重试。');
+      const msg = error instanceof Error ? error.message : undefined;
+      toast.error('赛程同步失败', msg || '请稍后重试。');
     } finally {
       setSyncing(false);
     }

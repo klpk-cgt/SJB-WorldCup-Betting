@@ -18,7 +18,7 @@ import {
   Trophy,
   X,
 } from 'lucide-react';
-import { Match, MatchOdds, MatchOperationalStatus, Prediction, TournamentBet, TournamentBetOption, TournamentBetType } from '../types';
+import { Match, MatchOdds, MatchOperationalStatus, Prediction, TournamentBet, TournamentBetOption, TournamentBetType, User, Wallet } from '../types';
 import { apiRequest, formatDate } from '../utils/api';
 import { SCORE_GROUP_META, getScoreGroup, getScoreDisplayLabel, isOtherScoreKey } from '../utils/odds';
 import type { ScoreGroup } from '../utils/odds';
@@ -26,8 +26,8 @@ import FlagBadge from './home/FlagBadge';
 import { useToast } from './ToastProvider';
 
 interface PredictionTabProps {
-  user: any;
-  wallet: any;
+  user: User | null;
+  wallet: Wallet | null;
   onRefreshWallet: () => void;
   focusedMatchId?: string;
 }
@@ -297,8 +297,9 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
       });
       closeModal();
       await Promise.all([fetchMatches(), fetchHistory(), onRefreshWallet()]);
-    } catch (error: any) {
-      setMessage({ type: 'error', text: error.message || '提交失败，请稍后重试。' });
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : undefined;
+      setMessage({ type: 'error', text: msg || '提交失败，请稍后重试。' });
     } finally {
       setSubmitting(false);
     }
@@ -328,8 +329,9 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
       });
       closeModal();
       await Promise.all([fetchTournamentData(), fetchHistory(), onRefreshWallet()]);
-    } catch (error: any) {
-      setMessage({ type: 'error', text: error.message || '提交失败，请稍后重试。' });
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : undefined;
+      setMessage({ type: 'error', text: msg || '提交失败，请稍后重试。' });
     } finally {
       setSubmitting(false);
     }
