@@ -33,15 +33,46 @@ async function main() {
   const existingIds = new Set(existingUsers.map(u => u.id));
   console.log(`[DB] Existing users: ${existingUsers.map(u => u.displayName).join(', ') || '(none)'}`);
 
-  // 3. 恢复 users
+  // 3. 删除与备份冲突的现有测试用户（loginCode 冲突）
+  const backupLoginCodes = new Set(backupUsers.map(u => u.loginCode));
+  for (const eu of existingUsers) {
+    if (!backupUserIds.has(eu.id)) {
+      // 现有用户不在备份中，检查 loginCode 是否冲突
+      const fullUser = await prisma.user.findUnique({ where: { id: eu.id } });
+      if (fullUser && backupLoginCodes.has(fullUser.loginCode)) {
+        console.log(`  [DELETE] Conflicting test user: ${eu.displayName} (${eu.id}) loginCode=${fullUser.loginCode}`);
+        // 先删关联数据
+        await prisma.checkinLog.deleteMany({ where: { userId: eu.id } });
+        await prisma.activity.deleteMany({ where: { userId: eu.id } });
+        await prisma.prediction.deleteMany({ where: { userId: eu.id } });
+        await prisma.tournamentBet.deleteMany({ where: { userId: eu.id } });
+        await prisma.transaction.deleteMany({ where: { userId: eu.id } });
+        await prisma.userBadge.deleteMany({ where: { userId: eu.id } });
+        await prisma.userTitle.deleteMany({ where: { userId: eu.id } });
+        await prisma.cardInventory.deleteMany({ where: { userId: eu.id } });
+        await prisma.wallet.deleteMany({ where: { userId: eu.id } });
+        await prisma.user.delete({ where: { id: eu.id } });
+      }
+    }
+  }
+
+  // 4. 恢复 users (使用 upsert 避免冲突)
   let userCount = 0;
   for (const u of backupUsers) {
-    if (existingIds.has(u.id)) {
-      console.log(`  [SKIP] User ${u.displayName} already exists`);
-      continue;
-    }
-    await prisma.user.create({
-      data: {
+    await prisma.user.upsert({
+      where: { id: u.id },
+      update: {
+        groupId: u.groupId,
+        displayName: u.displayName,
+        avatarUrl: u.avatarUrl || '',
+        loginCode: u.loginCode,
+        pinHash: u.pinHash,
+        status: u.status,
+        claimedAt: esc(u.claimedAt),
+        lastLoginAt: esc(u.lastLoginAt),
+        createdAt: u.createdAt,
+      },
+      create: {
         id: u.id,
         groupId: u.groupId,
         displayName: u.displayName,
@@ -54,7 +85,7 @@ async function main() {
         createdAt: u.createdAt,
       }
     });
-    console.log(`  [INSERT] User: ${u.displayName} (${u.id})`);
+    console.log(`  [UPSERT] User: ${u.displayName} (${u.id})`);
     userCount++;
   }
   console.log(`[Users] Restored: ${userCount}`);
