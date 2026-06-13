@@ -5,7 +5,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Brain, Calendar, CheckCircle2, ChevronRight, Coins, Sparkles, Timer, XCircle, Zap } from 'lucide-react';
+import { Brain, Calendar, CheckCircle2, ChevronRight, Coins, Sparkles, Timer, Users, XCircle, Zap } from 'lucide-react';
 import { AIContent, Match, MatchStatus, User, Wallet } from '../types';
 import { apiRequest, formatDate } from '../utils/api';
 import { useStaggerReveal, useFadeIn } from '../animations';
@@ -229,6 +229,9 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate, wsS
   const [teamDetailOpen, setTeamDetailOpen] = useState(false);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [activitiesLoading, setActivitiesLoading] = useState(true);
+  const [sentiment, setSentiment] = useState<{ home: number; draw: number; away: number } | null>(null);
+  const [sentimentLoading, setSentimentLoading] = useState(true);
+  const [activityExpanded, setActivityExpanded] = useState(false);
   const toast = useToast();
 
   useEffect(() => {
@@ -365,6 +368,22 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate, wsS
     [unifiedFeaturedMatch, now],
   );
   const focusMatch = useMemo(() => buildFocusMatch(unifiedFeaturedMatch, now), [unifiedFeaturedMatch, now]);
+
+  // 获取焦点战群内倾向数据
+  useEffect(() => {
+    const matchId = unifiedFeaturedMatch?.id;
+    if (!matchId) {
+      setSentimentLoading(false);
+      return;
+    }
+    apiRequest(`/api/matches/${matchId}`)
+      .then((data) => {
+        setSentiment(data.sentiment || null);
+      })
+      .catch(() => setSentiment(null))
+      .finally(() => setSentimentLoading(false));
+  }, [unifiedFeaturedMatch?.id]);
+
   const aiView = extractAiView(dailyAI);
   const nearestDayLabel = recentMatches[0] ? getBeijingDayLabel(recentMatches[0].startTimeUtc) : '';
 
@@ -480,27 +499,35 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate, wsS
 
       <AIPredictionCard />
 
-      <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Zap className="h-4.5 w-4.5 text-rose-500" />
-            <h3 className="text-sm font-black text-slate-900">群内动态</h3>
-            <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-700 ring-1 ring-rose-100">
-              LIVE
+      {/* 群内倾向 - 焦点战投注分布 */}
+      {!sentimentLoading && sentiment && focusMatch && (
+        <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+          <div className="flex items-center gap-2 mb-1">
+            <Users className="h-4.5 w-4.5 text-violet-500" />
+            <h3 className="text-sm font-black text-slate-900">群内倾向</h3>
+            <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-700 ring-1 ring-violet-100">
+              焦点战
             </span>
           </div>
-          <span className="text-[10px] font-semibold text-slate-400">最近 20 条</span>
-        </div>
-
-        <div className="mt-4">
-          <ActivityFeed
-            activities={activities}
-            loading={activitiesLoading}
-            emptyText="群里最近有点安静，快去下个注或者签个到带节奏吧～"
-            limit={6}
-          />
-        </div>
-      </section>
+          <div className="mt-4 space-y-3">
+            {[
+              { label: `${focusMatch.homeTeam.name} 支持率`, value: sentiment.home, tone: 'bg-emerald-500' },
+              { label: '平局支持率', value: sentiment.draw, tone: 'bg-slate-500' },
+              { label: `${focusMatch.awayTeam.name} 支持率`, value: sentiment.away, tone: 'bg-cyan-500' },
+            ].map((row) => (
+              <div key={row.label}>
+                <div className="mb-1.5 flex items-center justify-between text-xs font-bold text-slate-600">
+                  <span>{row.label}</span>
+                  <span>{row.value}%</span>
+                </div>
+                <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+                  <div className={`h-full rounded-full ${row.tone}`} style={{ width: `${row.value}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
 
 
@@ -635,6 +662,50 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate, wsS
             </div>
           )}
         </div>
+      </section>
+
+      {/* 群内动态 - 默认2条，可展开20条 */}
+      <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Zap className="h-4.5 w-4.5 text-rose-500" />
+            <h3 className="text-sm font-black text-slate-900">群内动态</h3>
+            <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-700 ring-1 ring-rose-100">
+              LIVE
+            </span>
+          </div>
+          <span className="text-[10px] font-semibold text-slate-400">最近 20 条</span>
+        </div>
+
+        <div className="mt-4">
+          <ActivityFeed
+            activities={activities}
+            loading={activitiesLoading}
+            emptyText="群里最近有点安静，快去下个注或者签个到带节奏吧～"
+            limit={activityExpanded ? 20 : 2}
+          />
+        </div>
+
+        {activities.length > 2 && (
+          <div className="mt-4 flex justify-center">
+            <button
+              onClick={() => setActivityExpanded(!activityExpanded)}
+              className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-slate-100 to-slate-200 px-5 py-2 text-xs font-bold text-slate-600 transition hover:from-slate-200 hover:to-slate-300 hover:text-slate-800 active:scale-[0.97]"
+            >
+              {activityExpanded ? (
+                <>
+                  收起
+                  <span className="text-[10px]">▲</span>
+                </>
+              ) : (
+                <>
+                  展开全部 20 条
+                  <span className="text-[10px]">▼</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
       </section>
 
       <AnimatePresence>

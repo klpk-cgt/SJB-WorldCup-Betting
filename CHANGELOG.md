@@ -1,5 +1,21 @@
 # 更新日志 (Changelog)
 
+## v2.3.2 - 2026-06-13
+
+### 首页布局优化
+
+- **新增「群内倾向」卡片**：放在今日 AI 娱乐预测下方，展示焦点战的主胜/平局/客胜三条百分比进度条，数据复用 `GET /api/matches/:id` 的 `sentiment` 字段，UI 风格与比赛详情页一致
+- **「群内动态」移至首页底部**：从原位置（AI 预测下方）移至每日足球问答下方，方便用户聚焦核心内容后浏览动态
+- **群内动态展开交互**：默认显示 2 条，新增胶囊样式「展开全部 20 条」按钮，展开后切换为「收起」
+
+### 技术细节
+
+- 新增 `sentiment` / `sentimentLoading` / `activityExpanded` 三个 state
+- sentiment 数据通过独立 `useEffect` 监听 `unifiedFeaturedMatch?.id` 变化自动获取
+- ActivityFeed 复用已有 `limit` prop 实现 2/20 条切换，无需修改子组件
+
+---
+
 ## v2.3.1 - 2026-06-13
 
 ### 赔率系统修复与增强
