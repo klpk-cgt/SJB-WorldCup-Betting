@@ -142,7 +142,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
 
       // 卡牌统计（可选，失败不影响）
     } catch (e: unknown) {
-      const message = e instanceof Error ? e.message || '未取得授权或网络读取错误，请重新登录。';
+      const message = e instanceof Error ? e.message : '未取得授权或网络读取错误，请重新登录。';
       if (message.includes('权限') || message.includes('登录已失效')) {
         clearAdminSession('管理员登录已失效，请重新登录。');
         return;
