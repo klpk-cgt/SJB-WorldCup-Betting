@@ -6,8 +6,8 @@ module.exports = {
       env_production: {
         NODE_ENV: 'production',
       },
-      // 从 .env.production 文件加载环境变量
-      node_args: '--env-file=.env.production',
+      // 从 .env 文件加载环境变量（统一使用 .env）
+      node_args: '--env-file=.env',
       max_memory_restart: '512M',
       instances: 1,
       autorestart: true,

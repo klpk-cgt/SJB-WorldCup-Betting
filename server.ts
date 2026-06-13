@@ -3,7 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import path from 'path';
+
+// 根据 NODE_ENV 选择正确的 .env 文件
+// PM2 --env-file 优先级最高，如果已有 DATABASE_URL 则不覆盖
+if (!process.env.DATABASE_URL) {
+  const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env';
+  const result = dotenv.config({ path: path.resolve(process.cwd(), envFile) });
+  if (result.error) {
+    // 回退到默认 .env
+    dotenv.config();
+  }
+}
 import express from 'express';
 import { createServer as createHttpServer } from 'http';
 import path from 'path';
