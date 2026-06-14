@@ -1,5 +1,29 @@
 # 更新日志 (Changelog)
 
+## v2.5.1 - 2026-06-14
+
+### 热修复：syncLog 持久化修复 + 战报卡片 UI 优化
+
+#### 1. syncLog MySQL 写入修复（7 commits）
+- **根因**：竞彩网同步日志缺少必填字段（`id`/`requestSummary`/`responseSummary`/`createdAt`）+ `detail` 字段不在 Prisma schema 中 + `targetMatchId` 超长溢出 VARCHAR(191)
+- **修复**：4 层防御体系
+  - `buildLog()` 生成日志时补全所有必填字段
+  - `appendSyncLog()` 兜底补全缺失字段
+  - `sanitizeSyncLogs()` 持久化前清洗脏数据
+  - `db-storage.mjs` MySQL 写入前最后过滤
+- **部署注意**：云服务器需执行 `prisma db push` 同步 HAFU 新列
+
+#### 2. 战后战报卡片 UI 优化
+- 用户展示改为 SmartAvatar 头像 + emoji 角色标签
+- 玩家行统一单列对称布局（emoji + 头像 + 标签/昵称 + 数值右对齐）
+- AI 点评轻量化（line-clamp-1/2）
+
+### 改动文件
+`src/server/sporttery_sync.ts`, `src/server/helpers.ts`, `src/db/db_service.ts`,
+`scripts/db-storage.mjs`, `src/components/BattleReportCard.tsx`
+
+---
+
 ## v2.5.0 - 2026-06-14
 
 ### 新增：赛后群战报 + 积分余额 UI 重设计
