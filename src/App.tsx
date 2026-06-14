@@ -5,7 +5,7 @@
 
 import React, { Suspense, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Award, BarChart3, Calendar, Eye, GitBranch, History, Home, Menu, Settings, Sparkles, Trophy, UserRound, X } from 'lucide-react';
+import { Award, BarChart3, Calendar, Eye, FileText, GitBranch, History, Home, Menu, Settings, Sparkles, Trophy, UserRound, X } from 'lucide-react';
 
 // 首屏核心组件 - 静态导入（底部导航栏 tab，高频访问）
 import HomeTab from './components/HomeTab';
@@ -23,6 +23,7 @@ const MatchDetailPage = React.lazy(() => import('./components/MatchDetailPage'))
 const StatsPage = React.lazy(() => import('./components/StatsPage'));
 const WatchGuidePage = React.lazy(() => import('./components/WatchGuidePage'));
 const AIRecommendations = React.lazy(() => import('./components/AIRecommendations'));
+const BattleReportWall = React.lazy(() => import('./components/BattleReportWall'));
 
 // 首屏小工具 - 静态导入
 import SearchBar from './components/SearchBar';
@@ -32,8 +33,8 @@ import { useToast } from './components/ToastProvider';
 import type { User, Wallet } from './types';
 
 type RootTab = 'home' | 'matches' | 'prediction' | 'leaderboard' | 'me' | 'admin';
-type PageTab = RootTab | 'match-detail' | 'history-hall' | 'bracket' | 'stats' | 'watchguide';
-type MatchDetailTab = 'overview' | 'lineup' | 'events' | 'stats';
+type PageTab = RootTab | 'match-detail' | 'history-hall' | 'bracket' | 'stats' | 'watchguide' | 'battle-reports';
+type MatchDetailTab = 'overview' | 'lineup' | 'events' | 'stats' | 'report';
 
 const FOOTER_TABS: Array<{
   id: RootTab;
@@ -196,7 +197,7 @@ export default function App() {
       setSelectedMatchId(undefined);
     }
 
-    if (detailTab && ['overview', 'lineup', 'events', 'stats'].includes(detailTab)) {
+    if (detailTab && ['overview', 'lineup', 'events', 'stats', 'report'].includes(detailTab)) {
       setSelectedDetailTab(detailTab as MatchDetailTab);
     } else if (targetTab === 'match-detail') {
       setSelectedDetailTab('overview');
@@ -223,6 +224,7 @@ export default function App() {
       { id: 'history-hall' as PageTab, label: '历史长廊', desc: '浏览历届世界杯经典内容', icon: <History className="h-5 w-5" /> },
       { id: 'bracket' as PageTab, label: '淘汰赛对阵图', desc: '查看晋级路径与实时比分', icon: <GitBranch className="h-5 w-5" /> },
       { id: 'stats' as PageTab, label: '统计页', desc: '查看群聊投注热度与分布', icon: <BarChart3 className="h-5 w-5" /> },
+      { id: 'battle-reports' as PageTab, label: '战报墙', desc: '赛后群战报回顾与AI点评', icon: <FileText className="h-5 w-5" /> },
       { id: 'watchguide' as PageTab, label: '观赛攻略', desc: '2026世界杯小组分析与必看比赛', icon: <Eye className="h-5 w-5" /> },
       { id: 'ai-recommend' as PageTab, label: 'AI推荐', desc: 'AI分析推荐投注方案', icon: <Sparkles className="h-5 w-5 text-amber-500" /> },
       {
@@ -318,6 +320,7 @@ export default function App() {
           {activeTab === 'bracket' && <BracketPage onOpenMatch={(matchId) => navigateTo('match-detail', matchId, 'overview')} />}
           {activeTab === 'stats' && <StatsPage />}
           {activeTab === 'watchguide' && <WatchGuidePage />}
+          {activeTab === 'battle-reports' && <BattleReportWall onNavigate={navigateTo} />}
           {activeTab === 'ai-recommend' && <AIRecommendations onNavigate={navigateTo} />}
           {activeTab === 'me' &&
             (user ? (

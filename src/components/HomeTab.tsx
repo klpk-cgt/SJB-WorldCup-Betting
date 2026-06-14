@@ -5,7 +5,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Brain, Calendar, CheckCircle2, ChevronRight, Coins, Sparkles, Timer, Users, XCircle, Zap } from 'lucide-react';
+import { Brain, Calendar, CheckCircle2, ChevronRight, Sparkles, Timer, Trophy, Users, XCircle, Zap } from 'lucide-react';
 import { AIContent, Match, MatchStatus, User, Wallet } from '../types';
 import { apiRequest, formatDate } from '../utils/api';
 import { useStaggerReveal, useFadeIn } from '../animations';
@@ -23,6 +23,7 @@ import SmartAvatar from './SmartAvatar';
 import TeamDetailDrawer from './TeamDetailDrawer';
 import { useToast } from './ToastProvider';
 import ActivityFeed, { ActivityItem } from './ActivityFeed';
+import BattleReportCard, { type BattleReportData } from './BattleReportCard';
 
 interface HomeTabProps {
   user: User | null;
@@ -229,6 +230,7 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate, wsS
   const [teamDetailOpen, setTeamDetailOpen] = useState(false);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [activitiesLoading, setActivitiesLoading] = useState(true);
+  const [battleReport, setBattleReport] = useState<BattleReportData | null>(null);
   const [sentiment, setSentiment] = useState<{ home: number; draw: number; away: number } | null>(null);
   const [sentimentLoading, setSentimentLoading] = useState(true);
   const [activityExpanded, setActivityExpanded] = useState(false);
@@ -242,15 +244,19 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate, wsS
   useEffect(() => {
     async function initHome() {
       try {
-        const [matchesData, aiData, activityData] = await Promise.all([
+        const [matchesData, aiData, activityData, reportData] = await Promise.all([
           apiRequest('/api/matches'),
           apiRequest('/api/ai/daily'),
           apiRequest('/api/activities?limit=20'),
+          apiRequest('/api/matches/recent-reports?limit=1').catch(() => []),
         ]);
         setMatches(matchesData);
         setDailyAI(aiData);
         setActivities(activityData.activities || []);
         setActivitiesLoading(false);
+        if (Array.isArray(reportData) && reportData.length > 0) {
+          setBattleReport(reportData[0]);
+        }
 
         if (user) {
           try {
@@ -434,12 +440,44 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate, wsS
           </div>
         </div>
 
-        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-right">
-          <div className="flex items-center justify-end gap-1 text-[10px] font-bold text-emerald-700">
-            <Coins className="h-3.5 w-3.5" />
-            娱乐积分
+        {/* 积分余额 */}
+        <div className="relative shrink-0">
+          {/* 背景光晕 */}
+          <div className="pointer-events-none absolute inset-0 rounded-2xl bg-emerald-400/10 blur-xl" />
+          <div className="relative rounded-2xl bg-gradient-to-br from-emerald-50 via-emerald-50/70 to-teal-50/50 border border-emerald-200/60 px-4 py-3 shadow-[0_4px_20px_rgba(16,185,129,0.08)]">
+            <div className="flex items-center gap-2.5">
+              {/* 自定义积分图标 */}
+              <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" className="shrink-0 drop-shadow-sm">
+                <defs>
+                  <linearGradient id="coinGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#F59E0B" />
+                    <stop offset="50%" stopColor="#FBBF24" />
+                    <stop offset="100%" stopColor="#D97706" />
+                  </linearGradient>
+                  <linearGradient id="coinInner" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#FEF3C7" />
+                    <stop offset="100%" stopColor="#FDE68A" />
+                  </linearGradient>
+                </defs>
+                {/* 外圈 */}
+                <circle cx="18" cy="18" r="16" fill="url(#coinGrad)" />
+                <circle cx="18" cy="18" r="16" stroke="#B45309" strokeWidth="0.5" fill="none" />
+                {/* 内圈 */}
+                <circle cx="18" cy="18" r="11" fill="url(#coinInner)" />
+                <circle cx="18" cy="18" r="11" stroke="#D97706" strokeWidth="0.5" fill="none" />
+                {/* PTS 文字 */}
+                <text x="18" y="20.5" textAnchor="middle" fontSize="8.5" fontWeight="900" fill="#B45309" fontFamily="system-ui, sans-serif">PTS</text>
+                {/* 顶部高光 */}
+                <ellipse cx="14" cy="9" rx="5" ry="2.5" fill="white" opacity="0.35" />
+              </svg>
+              <div>
+                <p className="text-[10px] font-bold tracking-wider uppercase text-emerald-700/70">娱乐积分</p>
+                <p className="text-lg font-black tabular-nums tracking-tight text-emerald-900 leading-tight">
+                  {wallet?.balance?.toLocaleString() || '10,000'}
+                </p>
+              </div>
+            </div>
           </div>
-          <p className="mt-1 text-sm font-black text-emerald-900">{wallet?.balance?.toLocaleString() || '10,000'}</p>
         </div>
       </section>
 
@@ -663,6 +701,24 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate, wsS
           )}
         </div>
       </section>
+
+      {/* 赛后战报 - 最近1场 */}
+      {battleReport && (
+        <section className="mb-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Trophy className="h-4.5 w-4.5 text-amber-500" />
+            <h3 className="text-sm font-black text-slate-900">最近赛后战报</h3>
+            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 ring-1 ring-amber-100">
+              赛后
+            </span>
+          </div>
+          <BattleReportCard
+            report={battleReport}
+            mode="compact"
+            onClick={(matchId) => onNavigate('match-detail', matchId, 'report')}
+          />
+        </section>
+      )}
 
       {/* 群内动态 - 默认2条，可展开20条 */}
       <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">

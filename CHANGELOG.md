@@ -1,5 +1,41 @@
 # 更新日志 (Changelog)
 
+## v2.5.0 - 2026-06-14
+
+### 新增：赛后群战报 + 积分余额 UI 重设计
+
+#### 1. 赛后群战报功能
+- 新建 `src/components/BattleReportCard.tsx`：战报卡片组件，支持精简/完整双模式
+- 新建 `src/components/BattleReportWall.tsx`：战报墙页面，分页加载+时间线展示
+- 三个展示位置：
+  - **首页**：群内动态上方显示最近 1 场战报（精简模式）
+  - **比赛详情页**：新增「战报」Tab（仅 FT/AET/PEN 完赛显示）
+  - **导航抽屉**：新增「战报墙」入口
+
+#### 2. 战报数据增强
+- `PostMatchReport` 新增 4 个字段：
+  - `exactPredictor`：最准预言家（猜中准确比分 CORRECT_SCORE 的玩家）
+  - `darkHorse`：反向明灯（近期连续 ≥3 场猜错的玩家）
+  - `popularOpinion`：群体倾向文本（如 "70% 看好荷兰"）
+  - `aiCommentary`：AI 趣味点评模板生成函数
+- `getRecentReports()` 返回字段扩展，支持首页卡片渲染
+
+#### 3. 新增 API
+- `GET /api/battle-reports`：分页返回全部已结算比赛完整战报
+- 修复 `recent-reports` 路由被 `/:id` 拦截的 Bug（路由顺序调整）
+
+#### 4. 积分余额 UI 重设计
+- 自定义 PTS 金币 SVG 图标（金色渐变 + 高光 + 立体感）
+- 积分卡片改为横向布局（图标左 + 数字右）
+- 新增 emerald 渐变底色 + 背景光晕效果
+
+### 改动文件
+`src/App.tsx`, `src/components/HomeTab.tsx`, `src/components/MatchDetailPage.tsx`,
+`src/server/routes/matches.ts`, `src/server/services/post_match_report_service.ts`,
+`src/components/BattleReportCard.tsx`(新), `src/components/BattleReportWall.tsx`(新)
+
+---
+
 ## v2.4.0 - 2026-06-14
 
 ### 重大更新：竞彩网集成 + 竞猜玩法扩展

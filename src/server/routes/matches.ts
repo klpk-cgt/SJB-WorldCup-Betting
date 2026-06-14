@@ -120,6 +120,13 @@ router.get('/api/matches/search', async (req: Request, res: Response) => {
   });
 });
 
+// ─── 最近战报 ───
+
+router.get('/api/matches/recent-reports', (_req: Request, res: Response) => {
+  const limit = Math.min(10, Math.max(1, Number(_req.query.limit) || 3));
+  res.json(getRecentReports(limit));
+});
+
 // ─── 队伍搜索 ───
 
 router.get('/api/matches/:id', async (req: Request, res: Response) => {
@@ -766,9 +773,26 @@ router.get('/api/matches/:id/share-card', (req: Request, res: Response) => {
   }
 });
 
-router.get('/api/matches/recent-reports', (_req: Request, res: Response) => {
-  const limit = Math.min(10, Math.max(1, Number(_req.query.limit) || 3));
-  res.json(getRecentReports(limit));
+// ─── 战报墙：分页返回全部已结算比赛的完整战报 ───
+router.get('/api/battle-reports', (req: Request, res: Response) => {
+  const db = dbService.getData();
+  const reports = db.postMatchReports || [];
+  const offset = Math.max(0, Number(req.query.offset) || 0);
+  const limit = Math.min(20, Math.max(1, Number(req.query.limit) || 10));
+
+  // 按结算时间倒序
+  const sorted = [...reports].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+  const page = sorted.slice(offset, offset + limit);
+
+  res.json({
+    items: page,
+    total: reports.length,
+    offset,
+    limit,
+    hasMore: offset + limit < reports.length,
+  });
 });
 
 export default router;

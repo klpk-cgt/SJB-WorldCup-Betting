@@ -8,8 +8,9 @@ import FlagBadge from './home/FlagBadge';
 import SmartAvatar from './SmartAvatar';
 import TeamDetailDrawer from './TeamDetailDrawer';
 import { TEAM_TACTICS } from '../data/worldcup/tactics';
+import BattleReportCard, { type BattleReportData } from './BattleReportCard';
 
-type MatchDetailTab = 'overview' | 'lineup' | 'history' | 'stats' | 'ai';
+type MatchDetailTab = 'overview' | 'lineup' | 'history' | 'stats' | 'ai' | 'report';
 
 interface MatchDetailPageProps {
   matchId?: string;
@@ -49,6 +50,7 @@ const TAB_META: Array<{
   { key: 'history', label: '战绩', icon: <History className="h-3.5 w-3.5" /> },
   { key: 'stats', label: '统计', icon: <BarChart3 className="h-3.5 w-3.5" /> },
   { key: 'ai', label: 'AI', icon: <Brain className="h-3.5 w-3.5" /> },
+  { key: 'report', label: '战报', icon: <Trophy className="h-3.5 w-3.5" /> },
 ];
 
 export default function MatchDetailPage({
@@ -73,6 +75,7 @@ export default function MatchDetailPage({
   const [headToHead, setHeadToHead] = useState<WorldCupHeadToHead | null>(null);
   const [aiContent, setAiContent] = useState<AIContent | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [battleReport, setBattleReport] = useState<BattleReportData | null>(null);
 
   useEffect(() => {
     setActiveTab(defaultTab);
@@ -90,6 +93,12 @@ export default function MatchDetailPage({
       .then((data) => {
         setMatch(data);
         setHeadToHead(data.headToHead || null);
+        // 已结算比赛自动拉取战报
+        if (data?.isSettled || data?.status === 'FT' || data?.status === 'AET' || data?.status === 'PEN') {
+          apiRequest(`/api/matches/${matchId}/post-report`)
+            .then((report) => { if (report && !('status' in report)) setBattleReport(report); })
+            .catch(() => {});
+        }
       })
       .catch(() => setMatch(null))
       .finally(() => setLoading(false));
@@ -257,7 +266,14 @@ export default function MatchDetailPage({
         </div>
 
         <div className="flex gap-1 border-b border-slate-100 bg-slate-50 p-2">
-          {TAB_META.map((tab) => (
+          {TAB_META.filter((tab) => {
+            // 战报 Tab 仅在比赛已完赛时显示
+            if (tab.key === 'report') {
+              const status = match.status;
+              return status === 'FT' || status === 'AET' || status === 'PEN';
+            }
+            return true;
+          }).map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
@@ -561,6 +577,19 @@ export default function MatchDetailPage({
 
           {activeTab === 'ai' && (
             <AiAnalysisPanel match={match} aiContent={aiContent} loading={aiLoading} />
+          )}
+
+          {activeTab === 'report' && (
+            <div className="py-4 space-y-4">
+              {battleReport ? (
+                <BattleReportCard report={battleReport} mode="full" />
+              ) : (
+                <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-5 py-12 text-center">
+                  <p className="text-sm font-bold text-slate-400">战报数据加载中...</p>
+                  <p className="mt-1 text-xs text-slate-400">若比赛刚刚结算，战报正在生成中，请稍后再试</p>
+                </div>
+              )}
+            </div>
           )}
         </div>
 
