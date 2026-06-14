@@ -88,9 +88,7 @@ export function placePrediction(params: PlacePredictionParams): PlacePredictionR
     )
     .reduce((sum, item) => sum + item.stakePoints, 0);
 
-  if (singleMatchTotalBet + betAmount > wallet.balance * 0.5 && wallet.balance > 200) {
-    throw new Error('单场总投入不能超过当前余额的 50%。');
-  }
+  // 已移除单场50%上限，允许梭哈；保留至少留100积分的保底
   if (wallet.balance - betAmount < 100) {
     throw new Error('下单后至少保留 100 积分。');
   }

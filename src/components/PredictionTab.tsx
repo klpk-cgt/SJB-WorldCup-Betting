@@ -837,7 +837,7 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
                   </div>
 
                   <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-500">
-                    提交后系统会记录这次的指数快照，并在锁盘后保持不变。单场总投入仍会按风险规则限制。
+                    提交后系统会记录这次的指数快照，并在锁盘后保持不变。下单后至少保留100积分。
                   </div>
 
                   {/* 卡牌选择 */}

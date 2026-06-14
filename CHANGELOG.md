@@ -1,5 +1,19 @@
 # 更新日志 (Changelog)
 
+## v2.3.11 - 2026-06-14
+
+### 优化：解除单场投注50%上限，支持梭哈
+
+移除了单场竞猜"总投入不能超过余额50%"的限制，允许用户自由投入积分，仅保留"下单后至少保留100分"的保底门槛。
+
+- **后端** (`prediction_service.ts`)：移除 `singleMatchTotalBet + betAmount > wallet.balance * 0.5` 校验逻辑
+- **前端** (`PredictionTab.tsx`)：下单确认提示文案更新，移除"风险规则限制"表述
+
+### 改动文件
+`prediction_service.ts`, `PredictionTab.tsx`
+
+---
+
 ## v2.3.10 - 2026-06-14
 
 ### 新增：焦点战实时监控 + 同步调用优化
