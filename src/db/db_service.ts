@@ -502,6 +502,8 @@ class DatabaseService {
     db.syncLogs = db.syncLogs.filter((log: any) => {
       // 过滤缺少必填字段的记录
       if (!log.id || !log.requestSummary || !log.createdAt) return false;
+      // 补全可能缺失的可空字段
+      if (log.responseSummary === undefined) log.responseSummary = null;
       // 过滤 targetMatchId 超长记录
       if (log.targetMatchId && log.targetMatchId.length > 190) {
         log.targetMatchId = log.targetMatchId.slice(0, 187) + '...';

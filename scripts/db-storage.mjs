@@ -316,9 +316,10 @@ async function saveSnapshot(snapshot) {
         await tx.shareCard.create({ data: shareCard });
       }
 
-      // 过滤脏 syncLog：去掉缺必填字段或 targetMatchId 超长的记录
+      // 过滤脏 syncLog：去掉缺必填字段的记录，补全可空字段
       const validSyncLogs = (db.syncLogs || []).filter((log) => {
         if (!log.id || !log.requestSummary || !log.createdAt) return false;
+        if (log.responseSummary === undefined) log.responseSummary = null;
         if (log.targetMatchId && log.targetMatchId.length > 190) {
           log.targetMatchId = log.targetMatchId.slice(0, 187) + '...';
         }

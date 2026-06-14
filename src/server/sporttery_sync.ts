@@ -115,6 +115,7 @@ function buildLog(override: Partial<SyncLog>): Partial<SyncLog> {
     id: createId('sync'),
     source: '竞彩网 Sporttery',
     requestSummary: 'GET 竞彩网赔率API',
+    responseSummary: null,
     createdAt: new Date().toISOString(),
     ...override,
   };

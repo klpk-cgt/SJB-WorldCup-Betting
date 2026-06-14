@@ -1,0 +1,14 @@
+- generic [ref=e401]:
+  - generic [ref=e402]:
+    - img [ref=e403]
+    - heading "管理员专属授权验证枢纽" [level=2] [ref=e405]
+  - paragraph [ref=e406]: 出于积分操作及赛程同步安全考虑，请使用生产环境里配置的管理员账号和密码登录后台。
+  - generic [ref=e407]:
+    - generic [ref=e408]:
+      - generic [ref=e409]: 管理员账号
+      - textbox "请输入管理员账号..." [ref=e410]: admin
+    - generic [ref=e411]:
+      - generic [ref=e412]: 管理员密码
+      - textbox "请输入管理员密码..." [ref=e413]
+    - button "开启操纵台进入" [ref=e414] [cursor=pointer]
+  - button "← 返回普通球迷入口" [ref=e415] [cursor=pointer]
