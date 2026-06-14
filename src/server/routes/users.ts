@@ -5,9 +5,8 @@
 
 import { Router, Request, Response } from 'express';
 import { dbService } from '../../db/db_service';
-import { buildUserProfileSummary } from '../../utils/achievements';
 import { getAuthenticatedUser, serializeUserForClient } from '../helpers';
-import { getUserTitle } from '../badge_service';
+import { getUserProfileSummary } from '../badge_service';
 
 const router = Router();
 
@@ -25,14 +24,7 @@ router.get('/api/me', (req: Request, res: Response) => {
     return res.status(401).json({ error: '未登录或登录已失效。' });
   }
   const wallet = dbService.getWallets().find((item) => item.userId === user.id);
-  const profileSummary = buildUserProfileSummary({
-    userId: user.id,
-    predictions: dbService.getPredictions().filter((item) => item.userId === user.id),
-    tournamentBets: dbService.getTournamentBets().filter((item) => item.userId === user.id),
-    transactions: dbService.getTransactions().filter((item) => item.userId === user.id),
-    wallet: wallet || { userId: user.id, balance: 0, initialPoints: 10000 },
-    persistedTitle: getUserTitle(user.id),
-  });
+  const profileSummary = getUserProfileSummary(user.id);
   res.json({
     user: serializeUserForClient(user),
     wallet: wallet || { userId: user.id, balance: 0, initialPoints: 10000 },
@@ -45,17 +37,7 @@ router.get('/api/me/profile-summary', (req: Request, res: Response) => {
   if (!user) {
     return res.status(401).json({ error: '请先登录。' });
   }
-  const wallet = dbService.getWallets().find((item) => item.userId === user.id);
-  res.json(
-    buildUserProfileSummary({
-      userId: user.id,
-      predictions: dbService.getPredictions().filter((item) => item.userId === user.id),
-      tournamentBets: dbService.getTournamentBets().filter((item) => item.userId === user.id),
-      transactions: dbService.getTransactions().filter((item) => item.userId === user.id),
-      wallet: wallet || { userId: user.id, balance: 0, initialPoints: 10000 },
-      persistedTitle: getUserTitle(user.id),
-    }),
-  );
+  res.json(getUserProfileSummary(user.id));
 });
 
 router.get('/api/me/transactions', (req: Request, res: Response) => {
@@ -78,7 +60,7 @@ router.get('/api/users/:userId/trend', (req: Request, res: Response) => {
     .filter((item) => item.userId === user.id)
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 
-  const trend = [];
+  const trend: Array<{ dateStr: string; label: string; balance: number }> = [];
   const today = new Date();
   for (let i = 6; i >= 0; i -= 1) {
     const date = new Date(today);

@@ -797,7 +797,7 @@ export async function runScheduledMaintenance(forceSync = false) {
         });
         appendSyncLog({
           ...fixturesResult.log,
-          action: 'Sync live fixtures by date',
+          action: '同步进行中比赛的实时比分',
           requestSummary: `${fixturesResult.log.requestSummary} [live-1m]`,
         });
         [...fixturesResult.updatedMatches, ...fixturesResult.createdMatches].forEach((item) => markMatchAiStale(item.id));

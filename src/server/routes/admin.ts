@@ -186,7 +186,111 @@ router.post('/api/admin/integrations/test-sync', async (req: Request, res: Respo
   });
 });
 
-// 鈹€鈹€鈹€ 鐢ㄦ埛绠＄悊 鈹€鈹€鈹€
+/**
+ * API 连通性健康检查
+ * 分别检测 API-Football、The Odds API、Gemini AI 三个外部服务的连通性
+ */
+router.post('/api/admin/integrations/health-check', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+
+  const HEALTH_TIMEOUT_MS = 5000;
+
+  async function checkApi(name: string, url: string, headers: Record<string, string>): Promise<{
+    apiName: string; configured: boolean; healthy: boolean;
+    statusCode: number | null; latencyMs: number;
+    error: string | null; detail: string;
+  }> {
+    const startMs = Date.now();
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), HEALTH_TIMEOUT_MS);
+      const resp = await fetch(url, { headers, signal: controller.signal });
+      clearTimeout(timeoutId);
+      const latencyMs = Date.now() - startMs;
+      const healthy = resp.ok;
+      return {
+        apiName: name, configured: true, healthy,
+        statusCode: resp.status, latencyMs,
+        error: healthy ? null : `HTTP ${resp.status} ${resp.statusText}`,
+        detail: healthy ? `响应正常 (${resp.status})` : `请求失败 (${resp.status})`,
+      };
+    } catch (err: unknown) {
+      const latencyMs = Date.now() - startMs;
+      const errMsg = err instanceof Error ? err.message : String(err);
+      const isTimeout = err instanceof Error && err.name === 'AbortError';
+      return {
+        apiName: name, configured: true, healthy: false,
+        statusCode: null, latencyMs,
+        error: isTimeout ? '请求超时' : errMsg,
+        detail: isTimeout ? `检测超时（超过${HEALTH_TIMEOUT_MS / 1000}秒）` : `连接失败: ${errMsg}`,
+      };
+    }
+  }
+
+  const checks: Array<{
+    apiName: string; configured: boolean; healthy: boolean;
+    statusCode: number | null; latencyMs: number;
+    error: string | null; detail: string;
+  }> = [];
+
+  // 1. API-Football 检测
+  if (hasProviderKey(config.apiFootballKey)) {
+    checks.push(await checkApi('API-Football', 'https://v3.football.api-sports.io/status', {
+      'x-apisports-key': config.apiFootballKey,
+    }));
+  } else {
+    checks.push({
+      apiName: 'API-Football', configured: false, healthy: false,
+      statusCode: null, latencyMs: 0,
+      error: '未配置 API_FOOTBALL_KEY',
+      detail: '请在环境变量中设置有效的 API_FOOTBALL_KEY',
+    });
+  }
+
+  // 2. The Odds API 检测
+  if (hasProviderKey(config.theOddsApiKey)) {
+    checks.push(await checkApi('The Odds API',
+      `https://api.the-odds-api.com/v4/sports/soccer_fifa_world_cup/odds/?regions=eu&markets=h2h&apiKey=${encodeURIComponent(config.theOddsApiKey)}`,
+      {}));
+  } else {
+    checks.push({
+      apiName: 'The Odds API', configured: false, healthy: false,
+      statusCode: null, latencyMs: 0,
+      error: '未配置 THE_ODDS_API_KEY',
+      detail: '请在环境变量中设置有效的 THE_ODDS_API_KEY',
+    });
+  }
+
+  // 3. Gemini AI 检测
+  if (hasProviderKey(config.geminiApiKey)) {
+    checks.push(await checkApi('Gemini AI',
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(config.geminiApiKey)}`,
+      { 'Content-Type': 'application/json' }));
+  } else {
+    checks.push({
+      apiName: 'Gemini AI', configured: false, healthy: false,
+      statusCode: null, latencyMs: 0,
+      error: '未配置 GEMINI_API_KEY',
+      detail: '请在环境变量中设置有效的 GEMINI_API_KEY',
+    });
+  }
+
+  const allHealthy = checks.every((c) => c.configured && c.healthy);
+  const anyConfigured = checks.some((c) => c.configured);
+
+  res.json({
+    checkedAt: new Date().toISOString(),
+    summary: allHealthy
+      ? '全部API服务连通正常'
+      : anyConfigured
+        ? '部分API服务异常，请检查详情'
+        : '未检测到任何已配置的API Key',
+    allHealthy,
+    checks,
+  });
+});
+
+// ─── 用户管理 ───
 
 router.get('/api/admin/users', (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;

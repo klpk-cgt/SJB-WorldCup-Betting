@@ -16,7 +16,6 @@ import {
   LogOut,
   Medal,
   RefreshCw,
-  Share2,
   ShieldCheck,
   Sparkles,
   Target,
@@ -24,9 +23,8 @@ import {
   TrendingUp,
   Trophy,
 } from 'lucide-react';
-import { AchievementBadgeSummary, Prediction, TournamentBet, Transaction } from '../types';
+import { AchievementBadgeSummary, Prediction, TournamentBet, Transaction, UserProfileSummary } from '../types';
 import { apiRequest, formatDate } from '../utils/api';
-import { buildUserProfileSummary } from '../utils/achievements';
 import SmartAvatar from './SmartAvatar';
 import FlagBadge from './home/FlagBadge';
 import { useGameContext } from './GameContext';
@@ -69,11 +67,51 @@ const STAT_ICON_SRC = {
 
 const BADGE_ICON_SRC: Partial<Record<AchievementBadgeSummary['id'], string>> = {
   first_win: `${PROFILE_ICON_BASE}/first-win.png`,
+  first_bet: `${PROFILE_ICON_BASE}/first-win.png`,
   three_streak: `${PROFILE_ICON_BASE}/three-streak.png`,
+  five_streak: `${PROFILE_ICON_BASE}/three-streak.png`,
+  seven_streak: `${PROFILE_ICON_BASE}/three-streak.png`,
+  ten_streak: `${PROFILE_ICON_BASE}/three-streak.png`,
   hit_rate_60: `${PROFILE_ICON_BASE}/hit-rate-60.png`,
+  perfect_shooter: `${PROFILE_ICON_BASE}/hit-rate-60.png`,
   big_win: `${PROFILE_ICON_BASE}/big-win.png`,
+  big_winner: `${PROFILE_ICON_BASE}/big-win.png`,
+  profit_king: `${PROFILE_ICON_BASE}/big-win-trophy.png`,
+  rich_50k: `${PROFILE_ICON_BASE}/points-coin.png`,
+  overnight_rich: `${PROFILE_ICON_BASE}/net-profit-trend.png`,
   long_term_player: `${PROFILE_ICON_BASE}/long-term-player.png`,
+  champion_eye: `${PROFILE_ICON_BASE}/big-win-trophy.png`,
+  golden_boot_prophet: `${PROFILE_ICON_BASE}/big-win-trophy.png`,
+  golden_ball_scout: `${PROFILE_ICON_BASE}/big-win-trophy.png`,
   history_scholar: `${PROFILE_ICON_BASE}/history-scholar.png`,
+  history_regular: `${PROFILE_ICON_BASE}/history-scholar.png`,
+};
+
+const CATEGORY_LABEL: Record<string, string> = {
+  newbie: '新手',
+  streak: '连红',
+  funny: '名场面',
+  profit: '收益',
+  precision: '精准',
+  playstyle: '玩法',
+  tournament: '长线',
+  activity: '活跃',
+  knowledge: '知识',
+  history: '历史',
+};
+
+const RARITY_LABEL: Record<string, string> = {
+  common: '普通',
+  rare: '稀有',
+  epic: '史诗',
+  legendary: '传说',
+};
+
+const RARITY_CLASS: Record<string, string> = {
+  common: 'bg-slate-100 text-slate-600 ring-1 ring-slate-200',
+  rare: 'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-100',
+  epic: 'bg-violet-50 text-violet-700 ring-1 ring-violet-100',
+  legendary: 'bg-amber-50 text-amber-700 ring-1 ring-amber-100',
 };
 
 const CARD_ICON_SRC: Record<string, string> = {
@@ -98,12 +136,6 @@ function formatCompact(value?: number | null) {
   return Number(value || 0).toLocaleString();
 }
 
-function getPredictionTone(status: string) {
-  if (status === 'WON') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
-  if (status === 'LOST') return 'border-rose-200 bg-rose-50 text-rose-700';
-  return 'border-slate-200 bg-slate-50 text-slate-600';
-}
-
 function getTitleCopy(title?: string) {
   switch (title) {
     case '稳健分析师':
@@ -116,6 +148,22 @@ function getTitleCopy(title?: string) {
       return '收益曲线领先，已经打出资产感。';
     case '世界杯老炮':
       return '参与够深，经验值正在持续累积。';
+    case '传奇球王':
+      return '收益和命中双线封神，群聊顶级身份已坐实。';
+    case '全胜将军':
+      return '连红气势拉满，最近每一手都有压迫感。';
+    case '比分之王':
+      return '能把比分猜到点上，属于真正的预言家流派。';
+    case '新晋黑马':
+      return '近况突然起飞，短期收益曲线很有冲击力。';
+    case '知识达人':
+      return '不只会下注，世界杯知识储备也很能打。';
+    case '明灯本灯':
+      return '群聊反向风向标上线，节目效果已经拉满。';
+    case '慈善赌王':
+      return '娱乐精神很足，群聊名场面贡献值很高。';
+    case '破产兄弟':
+      return '低谷不丢人，下一场就是翻身局。';
     default:
       return '新一轮竞猜征程已经开启。';
   }
@@ -124,6 +172,23 @@ function getTitleCopy(title?: string) {
 function getProgressPercent(item: AchievementBadgeSummary) {
   if (item.target <= 0) return 0;
   return Math.min(100, Math.round((item.current / item.target) * 100));
+}
+
+function getBadgeImageSrc(badge: AchievementBadgeSummary) {
+  return BADGE_ICON_SRC[badge.id];
+}
+
+function getRarityClass(rarity?: string) {
+  return RARITY_CLASS[rarity || 'common'] || RARITY_CLASS.common;
+}
+
+function groupBadgesByCategory(badges: AchievementBadgeSummary[]) {
+  return badges.reduce<Record<string, AchievementBadgeSummary[]>>((groups, badge) => {
+    const category = badge.category || 'newbie';
+    if (!groups[category]) groups[category] = [];
+    groups[category].push(badge);
+    return groups;
+  }, {});
 }
 
 function withTimeout<T>(promise: Promise<T>, fallback: T, timeoutMs = 5000): Promise<T> {
@@ -283,10 +348,11 @@ export default function MeTab({ onLogout, onAdminLogin }: MeTabProps) {
   const [tournamentBets, setTournamentBets] = useState<TournamentBet[]>([]);
   const [tournamentMarkets, setTournamentMarkets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [, setRefreshing] = useState(false);
   const [cardInventory, setCardInventory] = useState<any>(null);
   const [sharing, setSharing] = useState(false);
   const [activeTab, setActiveTab] = useState<ProfileTab>('overview');
+  const [profileSummary, setProfileSummary] = useState<UserProfileSummary | null>(null);
   const shareCardRef = useRef<HTMLDivElement>(null);
 
   const handleShareCard = async () => {
@@ -314,11 +380,12 @@ export default function MeTab({ onLogout, onAdminLogin }: MeTabProps) {
     if (showRefreshing) setRefreshing(true);
 
     try {
-      const [txsData, predictionsData, tournamentPayload, cardData] = await Promise.all([
+      const [txsData, predictionsData, tournamentPayload, cardData, profileSummaryData] = await Promise.all([
         withTimeout(apiRequest('/api/me/transactions'), [] as Transaction[]),
         withTimeout(apiRequest('/api/predictions/me'), [] as PredictionWithMatch[]),
         withTimeout(apiRequest('/api/tournament-bets'), { bets: [] as TournamentBet[] }),
         withTimeout(apiRequest('/api/cards/inventory'), null).catch(() => null),
+        withTimeout(apiRequest('/api/me/profile-summary'), null).catch(() => null),
       ]);
 
       setTransactions(txsData || []);
@@ -326,6 +393,7 @@ export default function MeTab({ onLogout, onAdminLogin }: MeTabProps) {
       setTournamentBets(tournamentPayload?.bets || []);
       setTournamentMarkets(tournamentPayload?.markets || []);
       setCardInventory(cardData);
+      setProfileSummary(profileSummaryData);
     } catch (error) {
       console.error('Failed to load me center data', error);
     } finally {
@@ -384,32 +452,44 @@ export default function MeTab({ onLogout, onAdminLogin }: MeTabProps) {
 
   const recentTransactions = useMemo(() => transactions.slice(0, 6), [transactions]);
 
-  const profileSummary = useMemo(
-    () =>
-      buildUserProfileSummary({
-        predictions,
-        tournamentBets,
-        transactions,
-        wallet,
-      }),
-    [predictions, tournamentBets, transactions, wallet],
-  );
+  const safeProfileSummary: UserProfileSummary = profileSummary || {
+    currentTitle: '群聊新星',
+    featuredBadge: null,
+    achievementBadges: [],
+    achievementProgress: [],
+    badges: [],
+    rareUnlockedCount: 0,
+    totalBadgeCount: 0,
+  };
 
   const unlockedBadges = useMemo(
-    () => profileSummary.achievementBadges.filter((item) => item.unlocked),
-    [profileSummary],
+    () => safeProfileSummary.achievementBadges.filter((item) => item.unlocked),
+    [safeProfileSummary],
   );
 
   const upcomingBadges = useMemo(
     () =>
-      [...profileSummary.achievementProgress]
+      [...safeProfileSummary.achievementProgress]
         .filter((item) => !item.unlocked)
         .sort((a, b) => getProgressPercent(b) - getProgressPercent(a)),
-    [profileSummary],
+    [safeProfileSummary],
   );
 
-  const leadingBadge = upcomingBadges[0] || unlockedBadges[0] || null;
-  const nextProgress = leadingBadge ? getProgressPercent(leadingBadge) : 0;
+  const allBadges = useMemo(
+    () => safeProfileSummary.badges || [...unlockedBadges, ...upcomingBadges],
+    [safeProfileSummary, unlockedBadges, upcomingBadges],
+  );
+
+  const totalBadgeCount = safeProfileSummary.totalBadgeCount || allBadges.length || unlockedBadges.length + upcomingBadges.length;
+  const badgeGroups = useMemo(() => groupBadgesByCategory(allBadges), [allBadges]);
+  const badgeCategoryOrder = useMemo(
+    () => Object.keys(badgeGroups).sort((a, b) => {
+      const first = badgeGroups[a]?.[0]?.sortOrder ?? 999;
+      const second = badgeGroups[b]?.[0]?.sortOrder ?? 999;
+      return first - second;
+    }),
+    [badgeGroups],
+  );
 
   if (loading) {
     return (
@@ -465,22 +545,22 @@ export default function MeTab({ onLogout, onAdminLogin }: MeTabProps) {
                   <span className="text-[28px] font-extrabold leading-none tracking-tight text-[#0f172a]">{user?.displayName || '世界杯玩家'}</span>
                   <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-indigo-50 to-sky-50 text-[10px] font-bold text-slate-500 px-2 py-0.5 border border-slate-200/60">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                    {profileSummary.featuredBadge?.label || '新星'}
+                    {safeProfileSummary.featuredBadge?.label || '新星'}
                   </span>
                 </div>
                 {/* 称号标签 */}
                 <div className="flex flex-wrap gap-1.5 mt-2">
                   <span className="tag-worldcup inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 text-[11px] font-semibold">
                     <Award className="h-3 w-3 text-emerald-600" />
-                    {profileSummary.currentTitle}
+                    {safeProfileSummary.currentTitle}
                   </span>
-                  {profileSummary.featuredBadge && (
-                    <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${TONE_CLASS[profileSummary.featuredBadge.tone]}`}>
-                      {profileSummary.featuredBadge.icon} {profileSummary.featuredBadge.label}
+                  {safeProfileSummary.featuredBadge && (
+                    <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${TONE_CLASS[safeProfileSummary.featuredBadge.tone]}`}>
+                      {safeProfileSummary.featuredBadge.icon} {safeProfileSummary.featuredBadge.label}
                     </span>
                   )}
                 </div>
-                <p className="mt-1.5 text-xs font-medium text-slate-500 line-clamp-1">{getTitleCopy(profileSummary.currentTitle)}</p>
+                <p className="mt-1.5 text-xs font-medium text-slate-500 line-clamp-1">{getTitleCopy(safeProfileSummary.currentTitle)}</p>
               </div>
             </div>
 
@@ -560,7 +640,7 @@ export default function MeTab({ onLogout, onAdminLogin }: MeTabProps) {
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
                   <h3 className="text-sm font-bold text-[#0f172a]">徽章进度</h3>
                 </div>
-                <span className="text-xs font-bold text-emerald-600 tabular-nums">{unlockedBadges.length} / {profileSummary.achievementBadges.length}</span>
+                <span className="text-xs font-bold text-emerald-600 tabular-nums">{unlockedBadges.length} / {totalBadgeCount}</span>
               </div>
               <div className="space-y-3">
                 {upcomingBadges.slice(0, 3).map((badge) => (
@@ -683,24 +763,50 @@ export default function MeTab({ onLogout, onAdminLogin }: MeTabProps) {
             <div className="flex items-center justify-between mb-3.5">
               <div>
                 <h3 className="text-sm font-bold text-[#0f172a]">徽章雷达</h3>
-                <p className="mt-0.5 text-[11px] font-semibold text-slate-500">已解锁 {unlockedBadges.length} 枚</p>
+                <p className="mt-0.5 text-[11px] font-semibold text-slate-500">
+                  已解锁 {unlockedBadges.length} / {totalBadgeCount} 枚 · 稀有以上 {safeProfileSummary.rareUnlockedCount || 0} 枚
+                </p>
               </div>
               <BadgeCheck className="h-5 w-5 text-emerald-600" />
             </div>
 
-            {unlockedBadges.length > 0 && (
-              <div className="mb-3 grid grid-cols-2 gap-2">
-                {unlockedBadges.map((badge) => (
-                  <BadgeCard key={badge.id} badge={badge} unlocked />
-                ))}
+            {safeProfileSummary.featuredBadge && (
+              <div className="mb-3 rounded-2xl border border-amber-100 bg-gradient-to-br from-amber-50 to-white p-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-sm">
+                    <ProfileImageIcon src={getBadgeImageSrc(safeProfileSummary.featuredBadge)} alt={safeProfileSummary.featuredBadge.label} size={38} fallback={<span className="text-xl">{safeProfileSummary.featuredBadge.icon}</span>} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-600">代表徽章</p>
+                    <p className="mt-0.5 text-sm font-black text-slate-950">{safeProfileSummary.featuredBadge.label}</p>
+                    <p className="mt-0.5 line-clamp-1 text-[11px] font-semibold text-slate-500">{safeProfileSummary.featuredBadge.description}</p>
+                  </div>
+                  <span className={`ml-auto shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black ${getRarityClass(safeProfileSummary.featuredBadge.rarity)}`}>
+                    {RARITY_LABEL[safeProfileSummary.featuredBadge.rarity || 'common']}
+                  </span>
+                </div>
               </div>
             )}
 
-            <div className="space-y-2">
-              {upcomingBadges.length === 0 ? (
-                <EmptyState>本阶段徽章已全部点亮。</EmptyState>
+            <div className="space-y-3">
+              {badgeCategoryOrder.length === 0 ? (
+                <EmptyState>暂无徽章数据。</EmptyState>
               ) : (
-                upcomingBadges.map((badge) => <BadgeProgress key={badge.id} badge={badge} />)
+                badgeCategoryOrder.map((category) => (
+                  <div key={category} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-black text-slate-700">{CATEGORY_LABEL[category] || category}</h4>
+                      <span className="text-[10px] font-bold text-slate-400">
+                        {badgeGroups[category].filter((badge) => badge.unlocked).length}/{badgeGroups[category].length}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {badgeGroups[category].map((badge) => (
+                        <BadgeCard key={badge.id} badge={badge} unlocked={badge.unlocked} />
+                      ))}
+                    </div>
+                  </div>
+                ))
               )}
             </div>
           </section>
@@ -817,49 +923,34 @@ function TransactionList({ transactions }: { transactions: Transaction[] }) {
 }
 
 function BadgeCard({ badge, unlocked = false }: { badge: AchievementBadgeSummary; unlocked?: boolean; key?: React.Key }) {
+  const progress = getProgressPercent(badge);
+  const polarityLabel = badge.polarity === 'negative' ? '反向公开' : badge.polarity === 'funny' ? '名场面' : '成就';
   return (
-    <div className={`rounded-2xl border p-3 ${unlocked ? 'border-emerald-100 bg-emerald-50/70' : 'border-slate-100 bg-slate-50'}`}>
+    <div className={`rounded-2xl border p-3 transition ${unlocked ? 'border-emerald-100 bg-emerald-50/70' : 'border-slate-100 bg-slate-50 opacity-80'}`}>
       <div className="flex items-center gap-2">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-white/70">
-          <ProfileImageIcon src={BADGE_ICON_SRC[badge.id]} alt={badge.label} size={32} fallback={<span className="text-lg">{badge.icon}</span>} />
+          <ProfileImageIcon src={getBadgeImageSrc(badge)} alt={badge.label} size={32} fallback={<span className="text-lg">{badge.icon}</span>} />
         </div>
         <div className="min-w-0">
           <span className={`inline-flex max-w-full truncate rounded-full px-2.5 py-1 text-[11px] font-black ${TONE_CLASS[badge.tone]}`}>
             {badge.label}
           </span>
-          <p className="mt-1 text-[10px] font-black text-emerald-700">{unlocked ? '已点亮' : '未解锁'}</p>
+          <div className="mt-1 flex flex-wrap gap-1">
+            <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black ${getRarityClass(badge.rarity)}`}>
+              {RARITY_LABEL[badge.rarity || 'common']}
+            </span>
+            <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black ${badge.polarity === 'negative' ? 'bg-rose-50 text-rose-600' : badge.polarity === 'funny' ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>
+              {polarityLabel}
+            </span>
+          </div>
         </div>
       </div>
       <p className="mt-2 line-clamp-2 text-xs font-semibold leading-5 text-slate-500">{badge.description}</p>
-    </div>
-  );
-}
-
-function BadgeProgress({ badge }: { badge: AchievementBadgeSummary; key?: React.Key }) {
-  const progress = getProgressPercent(badge);
-  return (
-    <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-100">
-            <ProfileImageIcon src={BADGE_ICON_SRC[badge.id]} alt={badge.label} size={32} fallback={<span className="text-lg">{badge.icon}</span>} />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-black ${TONE_CLASS[badge.tone]}`}>
-                {badge.label}
-              </span>
-              <span className="text-[11px] font-black text-slate-400">
-                {badge.current}/{badge.target}
-              </span>
-            </div>
-            <p className="mt-2 line-clamp-1 text-xs font-semibold text-slate-500">{badge.description}</p>
-          </div>
+      <div className="mt-2 flex items-center gap-2">
+        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white">
+          <div className={`h-full rounded-full ${unlocked ? 'bg-gradient-to-r from-emerald-500 to-cyan-500' : 'bg-slate-300'}`} style={{ width: `${progress}%` }} />
         </div>
-        <span className="shrink-0 text-sm font-black text-slate-700">{progress}%</span>
-      </div>
-      <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
-        <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-cyan-500" style={{ width: `${progress}%` }} />
+        <span className="text-[10px] font-black text-slate-400">{badge.current}/{badge.target}</span>
       </div>
     </div>
   );

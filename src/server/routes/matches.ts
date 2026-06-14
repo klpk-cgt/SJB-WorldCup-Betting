@@ -6,7 +6,6 @@
 import { Router, Request, Response } from 'express';
 import { dbService } from '../../db/db_service';
 import { MatchStatus, Prediction, TournamentBet } from '../../types';
-import { buildUserProfileSummary } from '../../utils/achievements';
 import {
   createId,
   getAuthenticatedUser,
@@ -22,7 +21,7 @@ import {
 } from '../helpers';
 import { getRuntimeConfig } from '../config';
 import { emitTournamentBet } from '../activity_service';
-import { getUserTitle } from '../badge_service';
+import { getUserProfileSummary } from '../badge_service';
 import { getHeadToHead } from '../../data/worldcup/headToHead';
 import { mergeCorrectScoreOdds } from '../../utils/odds';
 import { getTeamProfile } from '../../data/worldcup/teams';
@@ -443,7 +442,6 @@ router.get('/api/leaderboards', (_req: Request, res: Response) => {
   const predictionMap = new Map<string, typeof db.predictions>();
   const walletMap = new Map<string, typeof db.wallets[number]>();
   const transactionMap = new Map<string, typeof db.transactions>();
-  const tournamentBetMap = new Map<string, typeof db.tournamentBets>();
   let anchorTime = Date.now();
 
   for (const p of db.predictions) {
@@ -461,11 +459,6 @@ router.get('/api/leaderboards', (_req: Request, res: Response) => {
     if (!transactionMap.has(tx.userId)) transactionMap.set(tx.userId, []);
     transactionMap.get(tx.userId)!.push(tx);
   }
-  for (const tb of db.tournamentBets) {
-    if (!tournamentBetMap.has(tb.userId)) tournamentBetMap.set(tb.userId, []);
-    tournamentBetMap.get(tb.userId)!.push(tb);
-  }
-
   // ── 钱包与历史排名 ──
   const currentWalletMap = new Map<string, number>();
   const previousBalanceMap = new Map<string, number>();
@@ -553,14 +546,7 @@ router.get('/api/leaderboards', (_req: Request, res: Response) => {
       aiBadge = '搏冷选手';
     }
 
-    const profileSummary = buildUserProfileSummary({
-      userId: user.id,
-      predictions,
-      tournamentBets: tournamentBetMap.get(user.id) || [],
-      transactions: transactionMap.get(user.id) || [],
-      wallet,
-      persistedTitle: getUserTitle(user.id),
-    });
+    const profileSummary = getUserProfileSummary(user.id);
 
     return {
       userId: user.id,

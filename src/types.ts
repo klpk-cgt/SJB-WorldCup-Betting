@@ -220,15 +220,30 @@ export type PlayerTitle =
   | '连红猎手'
   | '冷门先知'
   | '金杯投资人'
-  | '世界杯老炮';
+  | '世界杯老炮'
+  | '传奇球王'
+  | '全胜将军'
+  | '比分之王'
+  | '新晋黑马'
+  | '知识达人'
+  | '明灯本灯'
+  | '慈善赌王'
+  | '破产兄弟';
 
-export type AchievementBadgeId =
-  | 'first_win'
-  | 'three_streak'
-  | 'hit_rate_60'
-  | 'big_win'
-  | 'long_term_player'
-  | 'history_scholar';
+export type AchievementBadgeId = string;
+export type AchievementBadgeCategory =
+  | 'newbie'
+  | 'streak'
+  | 'funny'
+  | 'profit'
+  | 'precision'
+  | 'playstyle'
+  | 'tournament'
+  | 'activity'
+  | 'knowledge'
+  | 'history';
+export type AchievementBadgeRarity = 'common' | 'rare' | 'epic' | 'legendary';
+export type AchievementBadgePolarity = 'positive' | 'funny' | 'negative';
 
 export interface AchievementBadgeSummary {
   id: AchievementBadgeId;
@@ -236,9 +251,15 @@ export interface AchievementBadgeSummary {
   description: string;
   icon: string;
   tone: 'emerald' | 'amber' | 'violet' | 'cyan' | 'rose' | 'slate';
+  category?: AchievementBadgeCategory;
+  rarity?: AchievementBadgeRarity;
+  polarity?: AchievementBadgePolarity;
+  sortOrder?: number;
   unlocked: boolean;
   current: number;
+  progress?: number;
   target: number;
+  unlockedAt?: string;
 }
 
 export interface UserProfileSummary {
@@ -246,6 +267,9 @@ export interface UserProfileSummary {
   featuredBadge: AchievementBadgeSummary | null;
   achievementBadges: AchievementBadgeSummary[];
   achievementProgress: AchievementBadgeSummary[];
+  badges?: AchievementBadgeSummary[];
+  rareUnlockedCount?: number;
+  totalBadgeCount?: number;
 }
 
 export interface Wallet {

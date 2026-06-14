@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Award, BarChart2, Coins, Flame, Medal, RefreshCw, Sparkles, Star, TrendingDown, TrendingUp, Trophy, Zap } from 'lucide-react';
+import { Award, BarChart2, Coins, Flame, RefreshCw, Sparkles, TrendingDown, TrendingUp, Trophy, Zap } from 'lucide-react';
 import { CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { User } from '../types';
 import { apiRequest } from '../utils/api';
@@ -123,6 +123,30 @@ function PodiumCard({ item, rank, tabKey }: { item: LeaderboardEntry; rank: 1 | 
             {item.featuredBadge}
           </span>
         )}
+      </div>
+    </div>
+  );
+}
+
+function PodiumPlaceholder({ rank }: { rank: 1 | 2 | 3 }) {
+  const rankMeta = {
+    1: { bg: 'from-amber-300 to-yellow-100', badge: 'bg-amber-500 text-white', height: 'h-28' },
+    2: { bg: 'from-slate-300 to-slate-50', badge: 'bg-slate-500 text-white', height: 'h-20' },
+    3: { bg: 'from-orange-300 to-amber-50', badge: 'bg-orange-500 text-white', height: 'h-16' },
+  }[rank];
+
+  return (
+    <div className="flex flex-1 flex-col items-center opacity-60">
+      <div className="flex h-[42px] w-[42px] items-center justify-center rounded-full bg-slate-200 ring-2 ring-white">
+        <Award className="h-5 w-5 text-slate-400" />
+      </div>
+      <div className="mt-2 text-center">
+        <div className="mx-auto h-3 w-16 rounded-full bg-slate-200" />
+        <div className="mx-auto mt-1.5 h-2 w-10 rounded-full bg-slate-100" />
+      </div>
+      <div className={`mt-3 flex w-full flex-col items-center justify-end rounded-t-3xl bg-gradient-to-b ${rankMeta.bg} ${rankMeta.height} px-2 py-3`}>
+        <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${rankMeta.badge}`}>#{rank}</span>
+        <div className="mt-2 text-[10px] font-bold text-slate-400">虚位以待</div>
       </div>
     </div>
   );
@@ -282,10 +306,10 @@ export default function LeaderboardTab({ user }: LeaderboardTabProps) {
               <div className="text-sm font-black text-slate-900">前三领奖台</div>
               <div className="text-[11px] font-medium text-slate-500">{tabMeta[activeLeaderboardTab].label}</div>
             </div>
-            <div className="flex items-end gap-2">
-              {activeList[1] && <PodiumCard item={activeList[1]} rank={2} tabKey={activeLeaderboardTab} />}
-              {activeList[0] && <PodiumCard item={activeList[0]} rank={1} tabKey={activeLeaderboardTab} />}
-              {activeList[2] && <PodiumCard item={activeList[2]} rank={3} tabKey={activeLeaderboardTab} />}
+            <div className="grid grid-cols-3 items-end gap-2 sm:gap-3">
+              {activeList[1] ? <PodiumCard item={activeList[1]} rank={2} tabKey={activeLeaderboardTab} /> : <PodiumPlaceholder rank={2} />}
+              {activeList[0] ? <PodiumCard item={activeList[0]} rank={1} tabKey={activeLeaderboardTab} /> : <PodiumPlaceholder rank={1} />}
+              {activeList[2] ? <PodiumCard item={activeList[2]} rank={3} tabKey={activeLeaderboardTab} /> : <PodiumPlaceholder rank={3} />}
             </div>
           </div>
         )}

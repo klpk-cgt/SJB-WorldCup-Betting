@@ -136,7 +136,6 @@ function archiveOldActivities(activities: Activity[], keep: number) {
 export function getRecentActivities(limit = 30, groupId?: string): Activity[] {
   const activities = ensureActivities();
   // 构建禁用用户集合，一次性过滤
-  const { dbService } = require('../db/db_service');
   const db = dbService.getData();
   const disabledSet = new Set(db.users.filter((u: any) => u.status === 'DISABLED').map((u: any) => u.id));
   const filtered = activities.filter((item) => {
@@ -380,6 +379,7 @@ export function emitBadgeUnlocked(input: {
   avatarUrl?: string;
   badgeId: string;
   badgeLabel: string;
+  polarity?: 'positive' | 'funny' | 'negative';
   groupId?: string;
 }) {
   return addActivity({
@@ -390,7 +390,9 @@ export function emitBadgeUnlocked(input: {
     groupId: input.groupId,
     badgeId: input.badgeId,
     badgeLabel: input.badgeLabel,
-    message: `解锁新成就「${input.badgeLabel}」`,
+    message: input.polarity === 'negative' || input.polarity === 'funny'
+      ? `获得群聊名场面「${input.badgeLabel}」`
+      : `解锁新成就「${input.badgeLabel}」`,
   });
 }
 

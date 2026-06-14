@@ -195,13 +195,13 @@ export async function syncFixturesForDay(params: {
       createdMatches: [],
       log: buildLog({
         source: 'API-Football',
-        action: 'Sync fixtures by date',
+        action: '按日期同步赛程',
         syncType: 'fixtures',
         status: 'FAILED',
         requestSummary: `GET /fixtures?date=${date}`,
-        responseSummary: 'No API_FOOTBALL_KEY configured.',
+        responseSummary: '未配置 API_FOOTBALL_KEY，无法同步。',
         targetDate: date,
-        errorMessage: 'API_FOOTBALL_KEY missing',
+        errorMessage: 'API_FOOTBALL_KEY 缺失',
         startedAt,
       }),
     };
@@ -334,11 +334,11 @@ export async function syncFixturesForDay(params: {
       createdMatches,
       log: buildLog({
         source: 'API-Football',
-        action: 'Sync fixtures by date',
+        action: '按日期同步赛程',
         syncType: 'fixtures',
         status: updatedMatches.length > 0 || createdMatches.length > 0 ? 'SUCCESS' : 'PARTIAL',
         requestSummary: `GET /fixtures?date=${date}`,
-        responseSummary: `Fixtures ${fixtureCount}, updated ${updatedMatches.length}, created ${createdMatches.length}, unmatched teams ${unmatchedTeams}.`,
+        responseSummary: `共获取${fixtureCount}场赛事，更新${updatedMatches.length}场，新建${createdMatches.length}场，未匹配队伍${unmatchedTeams}支`,
         targetDate: date,
         startedAt,
       }),
@@ -349,13 +349,13 @@ export async function syncFixturesForDay(params: {
       createdMatches: [],
       log: buildLog({
         source: 'API-Football',
-        action: 'Sync fixtures by date',
+        action: '按日期同步赛程',
         syncType: 'fixtures',
         status: 'FAILED',
         requestSummary: `GET /fixtures?date=${date}`,
-        responseSummary: 'Failed to sync fixtures.',
+        responseSummary: '同步赛程失败。',
         targetDate: date,
-        errorMessage: error instanceof Error ? error.message : 'Unknown sync error',
+        errorMessage: error instanceof Error ? error.message : '未知同步错误',
         startedAt,
       }),
     };
@@ -398,14 +398,14 @@ export async function syncFixturesForDateWindow(params: {
     dates,
     log: buildLog({
       source: 'API-Football',
-      action: 'Sync fixtures by date window',
+      action: '按日期窗口同步赛程',
       syncType: 'fixtures',
       status,
-      requestSummary: `GET /fixtures?date=<window ${dates[0]}..${dates[dates.length - 1]}>`,
-      responseSummary: `Window ${dates.length} days, updated ${uniqueUpdated.length}, created ${uniqueCreated.length}. ${summaries.join(' | ')}`,
+      requestSummary: `GET /fixtures?date=<窗口 ${dates[0]}..${dates[dates.length - 1]}>`,
+      responseSummary: `窗口共${dates.length}天，更新${uniqueUpdated.length}场，新建${uniqueCreated.length}场。${summaries.join(' | ')}`,
       targetDate: dates[0],
       startedAt,
-      errorMessage: status === 'FAILED' ? 'All fixture sync attempts failed in the current window.' : undefined,
+      errorMessage: status === 'FAILED' ? '当前窗口内所有赛程同步均失败。' : undefined,
     }),
   };
 }
@@ -432,13 +432,13 @@ export async function syncOddsForMatches(params: {
       oddsMap: db.matchOdds,
       log: buildLog({
         source: 'The Odds API',
-        action: targetMatchId ? 'Sync odds for match' : 'Sync world cup odds',
+        action: targetMatchId ? '同步单场赔率' : '同步世界杯赔率',
         syncType: 'odds',
         status: 'FAILED',
         requestSummary: 'GET /v4/sports/soccer_fifa_world_cup/odds',
-        responseSummary: 'No THE_ODDS_API_KEY configured.',
+        responseSummary: '未配置 THE_ODDS_API_KEY，无法同步。',
         targetMatchId,
-        errorMessage: 'THE_ODDS_API_KEY missing',
+        errorMessage: 'THE_ODDS_API_KEY 缺失',
         startedAt,
       }),
     };
@@ -574,8 +574,8 @@ export async function syncOddsForMatches(params: {
     for (const match of candidateMatches) {
       if (updatedMatchIds.includes(match.id)) continue;
       const reason = db.matchOdds[match.id]
-        ? 'No matching event or complete market found from The Odds API for this local fixture.'
-        : 'No local odds snapshot is available and The Odds API did not match this fixture.';
+        ? 'The Odds API 未找到此比赛的完整盘口数据。'
+        : '本地无赔率快照，且 The Odds API 未匹配到此比赛。';
       markMatchUnsynced(match.id, reason);
     }
 
@@ -586,11 +586,11 @@ export async function syncOddsForMatches(params: {
       oddsMap: db.matchOdds,
       log: buildLog({
         source: 'The Odds API',
-        action: targetMatchId ? 'Sync odds for match' : 'Sync world cup odds',
+        action: targetMatchId ? '同步单场赔率' : '同步世界杯赔率',
         syncType: 'odds',
         status: updatedMatchIds.length > 0 ? 'SUCCESS' : 'PARTIAL',
         requestSummary: 'GET /v4/sports/soccer_fifa_world_cup/odds',
-        responseSummary: `Odds payload ${payload.length}, updated ${updatedMatchIds.length}, unmatched ${unmatchedEvents}, incomplete markets ${incompleteMarkets}, unsynced local matches ${unsyncedMatchIds.length}.`,
+        responseSummary: `赔率数据共${payload.length}条，更新${updatedMatchIds.length}场，未匹配${unmatchedEvents}，盘口不完整${incompleteMarkets}，未同步本地${unsyncedMatchIds.length}场`,
         targetMatchId,
         startedAt,
       }),
@@ -603,13 +603,13 @@ export async function syncOddsForMatches(params: {
       oddsMap: db.matchOdds,
       log: buildLog({
         source: 'The Odds API',
-        action: targetMatchId ? 'Sync odds for match' : 'Sync world cup odds',
+        action: targetMatchId ? '同步单场赔率' : '同步世界杯赔率',
         syncType: 'odds',
         status: 'FAILED',
         requestSummary: 'GET /v4/sports/soccer_fifa_world_cup/odds',
-        responseSummary: 'Failed to sync odds.',
+        responseSummary: '同步赔率失败。',
         targetMatchId,
-        errorMessage: error instanceof Error ? error.message : 'Unknown sync error',
+        errorMessage: error instanceof Error ? error.message : '未知同步错误',
         startedAt,
       }),
     };

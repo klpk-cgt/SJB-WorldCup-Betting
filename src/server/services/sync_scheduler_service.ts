@@ -167,7 +167,7 @@ export function getSyncHealthStatus() {
       consecutiveFailures: consecutiveFixturesFailures,
       isHealthy: fixturesHealthy,
       status: fixturesConfigured ? (fixturesHealthy ? 'healthy' : 'degraded') : 'disabled',
-      reason: fixturesConfigured ? null : 'API_FOOTBALL_KEY missing',
+      reason: fixturesConfigured ? null : '未配置 API_FOOTBALL_KEY',
       lastSyncAt: latestSuccessTimestamp('fixtures'),
     },
     odds: {
@@ -175,14 +175,14 @@ export function getSyncHealthStatus() {
       consecutiveFailures: consecutiveOddsFailures,
       isHealthy: oddsHealthy,
       status: oddsConfigured ? (oddsHealthy ? 'healthy' : 'degraded') : 'disabled',
-      reason: oddsConfigured ? null : 'THE_ODDS_API_KEY missing',
+      reason: oddsConfigured ? null : '未配置 THE_ODDS_API_KEY',
       lastSyncAt: latestSuccessTimestamp('odds'),
     },
     liveScore: {
       consecutiveFailures: consecutiveLiveScoreFailures,
       isHealthy: liveScoreHealthy,
       status: fixturesConfigured ? (liveScoreHealthy ? 'healthy' : 'degraded') : 'disabled',
-      reason: fixturesConfigured ? null : 'API_FOOTBALL_KEY missing',
+      reason: fixturesConfigured ? null : '未配置 API_FOOTBALL_KEY',
       lastSyncAt: latestSuccessTimestamp('livescore'),
     },
     currentPriority: runtimeState.currentPriority,
@@ -507,7 +507,7 @@ export async function runDynamicSyncTick() {
           });
           appendSyncLog({
             ...result.log,
-            action: 'Sync live fixtures by date',
+            action: '同步进行中比赛的实时比分',
             requestSummary: `${result.log.requestSummary} [live-dynamic]`,
           });
           if (result.updatedMatches.length > 0 || result.createdMatches.length > 0) {

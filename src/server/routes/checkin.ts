@@ -20,6 +20,7 @@ import {
   generateAIQuizQuestions,
   getAIQuizCache,
 } from '../services/quiz_service';
+import { evaluateUserBadges, syncUserTitle } from '../badge_service';
 
 const router = Router();
 
@@ -85,6 +86,8 @@ router.post('/api/checkin', async (req: Request, res: Response) => {
       return { amount, prizeName, wallet };
     });
 
+    evaluateUserBadges(user.id, user.displayName, user.avatarUrl);
+    syncUserTitle(user.id, user.displayName, user.avatarUrl);
     res.json({ success: true, amount: result.amount, prizeName: result.prizeName, wallet: result.wallet });
   } catch (error) {
     const message = error instanceof Error ? error.message : '签到失败';
@@ -133,6 +136,8 @@ router.post('/api/quiz/answer', async (req: Request, res: Response) => {
       }),
     );
 
+    evaluateUserBadges(user.id, user.displayName, user.avatarUrl);
+    syncUserTitle(user.id, user.displayName, user.avatarUrl);
     res.json({ correct: result.isCorrect, pointsEarned: result.pointsEarned, explanation: result.explanation });
   } catch (error) {
     const message = error instanceof Error ? error.message : '答题失败';

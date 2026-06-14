@@ -33,6 +33,8 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
   const [syncWindowPastDays, setSyncWindowPastDays] = useState('1');
   const [syncWindowFutureDays, setSyncWindowFutureDays] = useState('7');
   const [opsStatusMsg, setOpsStatusMsg] = useState('');
+  const [healthCheckResult, setHealthCheckResult] = useState<any | null>(null);
+  const [isHealthChecking, setIsHealthChecking] = useState(false);
 
   // User provisioning helpers
   const [pasteNames, setPasteNames] = useState('');
@@ -74,6 +76,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
 
   const [settleStatusMsg, setSettleStatusMsg] = useState('');
   const [isWorking, setIsWorking] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   // 竞猜记录查询
   const [predUserId, setPredUserId] = useState('');
@@ -368,6 +371,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
 
   const handleMatchSelect = (match: Match) => {
     setSelectedMatch(match);
+    setDrawerOpen(true);
     setHomeScore(match.homeScore?.toString() || '0');
     setAwayScore(match.awayScore?.toString() || '0');
     setMatchStatus(match.status);
@@ -471,7 +475,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
     setIsWorking(true);
     try {
       await apiRequest('/api/admin/sync/today', { method: 'POST' });
-      setOpsStatusMsg('Today sync completed.');
+      setOpsStatusMsg('今日同步完成。');
       toast.success('赛程同步完成', '本地赛程与缓存已重新构建。');
       await loadAdminData();
     } catch (e: unknown) {
@@ -483,7 +487,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
 
   const syncWindowAPI = async () => {
     setIsWorking(true);
-    setOpsStatusMsg('Syncing recent fixture window...');
+    setOpsStatusMsg('正在同步近期赛程窗口...');
     try {
       const result = await apiRequest('/api/admin/sync/window', {
         method: 'POST',
@@ -494,13 +498,13 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
         }),
       });
       setOpsStatusMsg(
-        `Window sync completed. Updated ${result.updatedMatches?.length || 0}, created ${result.createdMatches?.length || 0}.`,
+        `窗口同步完成。已更新${result.updatedMatches?.length || 0}场，已创建${result.createdMatches?.length || 0}场。`,
       );
-      toast.success('Window sync completed', `Updated ${result.updatedMatches?.length || 0}, created ${result.createdMatches?.length || 0}`);
+      toast.success('窗口同步完成', `已更新${result.updatedMatches?.length || 0}场，已创建${result.createdMatches?.length || 0}场`);
       await loadAdminData();
     } catch (e: unknown) {
-      setOpsStatusMsg(`Window sync failed: ${e.message}`);
-      toast.error('Window sync failed', e.message);
+      setOpsStatusMsg(`窗口同步失败: ${e.message}`);
+      toast.error('窗口同步失败', e.message);
     } finally {
       setIsWorking(false);
     }
@@ -511,7 +515,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
     try {
       const result = await apiRequest('/api/admin/integrations/test-sync', { method: 'POST' });
       setLastTestSyncResult(result);
-      setOpsStatusMsg(`Integration test finished for ${result.sampleDate || 'unknown date'}.`);
+      setOpsStatusMsg(`同步校验完成，样本日期: ${result.sampleDate || '未知日期'}`);
       await loadAdminData();
     } catch (e: unknown) {
       toast.error('同步校验失败', e.message || '请稍后重试。');
@@ -520,12 +524,28 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
     }
   };
 
+  const handleHealthCheck = async () => {
+    setIsHealthChecking(true);
+    setHealthCheckResult(null);
+    setOpsStatusMsg('正在检测各API连通性，请稍候...');
+    try {
+      const result = await apiRequest('/api/admin/integrations/health-check', { method: 'POST' });
+      setHealthCheckResult(result);
+      setOpsStatusMsg(`API连通性检测完成：${result.summary}`);
+    } catch (e: unknown) {
+      setOpsStatusMsg(`API检测失败: ${e instanceof Error ? e.message : '未知错误'}`);
+      toast.error('API检测失败', e instanceof Error ? e.message : '请稍后重试');
+    } finally {
+      setIsHealthChecking(false);
+    }
+  };
+
   const syncSelectedMatch = async () => {
     if (!selectedMatch) return;
     setIsWorking(true);
     try {
       await apiRequest(`/api/admin/sync/matches/${selectedMatch.id}`, { method: 'POST' });
-      setOpsStatusMsg(`Selected match synced: ${selectedMatch.id}`);
+      setOpsStatusMsg(`已同步选中比赛: ${selectedMatch.id}`);
       toast.success('单场同步完成', '这场比赛已经重新同步。');
       await loadAdminData();
     } catch (e: unknown) {
@@ -686,7 +706,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
           <div className="flex flex-col sm:flex-row justify-between sm:items-center bg-slate-50 p-4.5 rounded-2xl border border-slate-200 gap-3">
             <div>
               <h4 className="text-xs font-black text-slate-700">世界杯赛事与盘口后台操纵</h4>
-              <p className="text-[10px] text-slate-400 font-bold mt-0.5">更改赛前赔率，敲定结果后对群 predictions 展开结算派彩</p>
+              <p className="text-[10px] text-slate-400 font-bold mt-0.5">点击比赛展开底部抽屉，输入比分并结算派彩</p>
             </div>
             <button
               onClick={syncFixturesAPI}
@@ -698,92 +718,126 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Left list matches */}
-            <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
-              {matches.map((m) => (
-                <div
-                  key={m.id}
-                  onClick={() => handleMatchSelect(m)}
-                  className={`p-3.5 bg-white border rounded-2xl cursor-pointer hover:border-rose-300 transition duration-150 text-[11px] space-y-2 shadow-2xs ${
-                    selectedMatch?.id === m.id ? 'border-rose-400 bg-rose-50/20' : 'border-slate-200'
-                  }`}
-                >
-                  <div className="flex justify-between text-slate-400 font-bold">
-                    <span className="font-mono text-[9px]">{m.roundName} ({m.stage})</span>
-                    <span className="text-[10px]">状态: {m.status === 'FT' ? '已结束 FT' : m.status === 'LIVE' ? '开踢 LIVE' : '未开赛 NS'}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-xs py-1">
-                    <span className="font-black text-slate-800">{m.homeTeam?.nameZh}</span>
-                    <span className="font-mono text-amber-600 font-black text-sm bg-amber-55 mb-0 px-2 py-0.5 rounded-lg border border-amber-250/50 bg-amber-50">
-                      {m.homeScore !== undefined && m.status !== 'NS' ? `${m.homeScore} : ${m.awayScore}` : 'VS'}
-                    </span>
-                    <span className="font-black text-slate-800">{m.awayTeam?.nameZh}</span>
-                  </div>
-                  <div className="flex justify-between text-[10px] font-mono text-slate-400 mt-1 font-bold">
-                    <span className="flex items-center gap-1">
-                      结算：{m.isSettled ? (
-                        <span className="text-emerald-600 flex items-center gap-0.5">✅ 已派发</span>
-                      ) : (
-                        <span className="text-rose-500 font-bold">❌ 尚未清算发放积分</span>
-                      )}
-                    </span>
-                    <span className="text-slate-500">赔率: {m.odds ? `${m.odds.h2h.homeWin}/${m.odds.h2h.draw}/${m.odds.h2h.awayWin}` : '无'}</span>
-                  </div>
+          {/* Full-width matches list */}
+          <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
+            {matches.map((m) => (
+              <div
+                key={m.id}
+                onClick={() => handleMatchSelect(m)}
+                className={`p-3.5 bg-white border rounded-2xl cursor-pointer hover:border-rose-300 transition duration-150 text-[11px] space-y-2 shadow-2xs ${
+                  selectedMatch?.id === m.id ? 'border-rose-400 bg-rose-50/20' : 'border-slate-200'
+                }`}
+              >
+                <div className="flex justify-between text-slate-400 font-bold">
+                  <span className="font-mono text-[9px]">{m.roundName} ({m.stage})</span>
+                  <span className="text-[10px]">状态: {m.status === 'FT' ? '已结束 FT' : m.status === 'LIVE' ? '开踢 LIVE' : '未开赛 NS'}</span>
                 </div>
-              ))}
-            </div>
+                <div className="flex justify-between items-center text-xs py-1">
+                  <span className="font-black text-slate-800">{m.homeTeam?.nameZh}</span>
+                  <span className="font-mono text-amber-600 font-black text-sm bg-amber-55 mb-0 px-2 py-0.5 rounded-lg border border-amber-250/50 bg-amber-50">
+                    {m.homeScore !== undefined && m.status !== 'NS' ? `${m.homeScore} : ${m.awayScore}` : 'VS'}
+                  </span>
+                  <span className="font-black text-slate-800">{m.awayTeam?.nameZh}</span>
+                </div>
+                <div className="flex justify-between text-[10px] font-mono text-slate-400 mt-1 font-bold">
+                  <span className="flex items-center gap-1">
+                    结算：{m.isSettled ? (
+                      <span className="text-emerald-600 flex items-center gap-0.5">✅ 已派发</span>
+                    ) : (
+                      <span className="text-rose-500 font-bold">❌ 尚未清算发放积分</span>
+                    )}
+                  </span>
+                  <span className="text-slate-500">赔率: {m.odds ? `${m.odds.h2h.homeWin}/${m.odds.h2h.draw}/${m.odds.h2h.awayWin}` : '无'}</span>
+                </div>
+              </div>
+            ))}
+          </div>
 
-            {/* Right Editing Matching Details */}
-            <div>
-              {selectedMatch ? (
-                <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-2xs space-y-4">
-                  <h4 className="text-xs font-display font-black text-rose-600 uppercase tracking-widest border-b border-slate-100 pb-2 flex items-center gap-1.5">
+          {/* Bottom Drawer Overlay */}
+          {drawerOpen && selectedMatch && (
+            <div className="fixed inset-0 z-50 flex items-end justify-center">
+              {/* Semi-transparent backdrop */}
+              <div
+                className="absolute inset-0 bg-black/50 transition-opacity duration-300"
+                onClick={() => setDrawerOpen(false)}
+              />
+              {/* Drawer panel */}
+              <div
+                className="relative w-full max-w-2xl bg-white rounded-t-3xl shadow-2xl transform transition-transform duration-300 ease-out animate-slide-up max-h-[85vh] overflow-y-auto"
+                style={{ animation: 'slideUp 0.3s ease-out' }}
+              >
+                {/* Drag handle */}
+                <div className="flex justify-center pt-3 pb-1">
+                  <div className="w-10 h-1 bg-slate-300 rounded-full" />
+                </div>
+
+                {/* Header */}
+                <div className="flex items-center justify-between px-5 pb-3 border-b border-slate-100">
+                  <h4 className="text-sm font-display font-black text-rose-600 flex items-center gap-2">
                     <Settings className="w-4 h-4" />
-                    操纵中赛事: {selectedMatch.homeTeam?.nameZh} vs {selectedMatch.awayTeam?.nameZh}
+                    {selectedMatch.homeTeam?.nameZh} vs {selectedMatch.awayTeam?.nameZh}
                   </h4>
+                  <button
+                    onClick={() => setDrawerOpen(false)}
+                    className="p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer"
+                  >
+                    <X className="w-5 h-5 text-slate-400" />
+                  </button>
+                </div>
+
+                {/* Body */}
+                <div className="p-5 space-y-4">
+                  {/* Match info strip */}
+                  <div className="flex items-center justify-between text-xs text-slate-500 bg-slate-50 rounded-xl px-3 py-2">
+                    <span className="font-mono">{selectedMatch.roundName} ({selectedMatch.stage})</span>
+                    <span>{selectedMatch.isSettled ? '✅ 已结算' : '⏳ 待结算'}</span>
+                    <span className="font-mono">{selectedMatch.startTimeBeijing || selectedMatch.startTimeUtc?.slice(0, 16)}</span>
+                  </div>
 
                   {/* Edit Core Metrics */}
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <label className="text-[10px] text-slate-450 block mb-1 font-bold">主队进球</label>
-                      <input
-                        type="number"
-                        value={homeScore}
-                        onChange={(e) => setHomeScore(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-rose-400 focus:bg-white rounded-lg"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-slate-450 block mb-1 font-bold">客队进球</label>
-                      <input
-                        type="number"
-                        value={awayScore}
-                        onChange={(e) => setAwayScore(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-rose-400 focus:bg-white rounded-lg"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-slate-450 block mb-1 font-bold">比赛进度</label>
-                      <select
-                        value={matchStatus}
-                        onChange={(e) => setMatchStatus(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-rose-500 rounded-lg text-left"
-                      >
-                        <option value="NS">未开赛 NS</option>
-                        <option value="LIVE">进行中 LIVE</option>
-                        <option value="FT">已完赛 FT</option>
-                        <option value="CANCELLED">取消 CANCELLED</option>
-                      </select>
+                  <div>
+                    <p className="text-[10px] font-black text-slate-600 mb-2">📊 比分与状态</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="text-[10px] text-slate-450 block mb-1 font-bold">主队进球</label>
+                        <input
+                          type="number"
+                          value={homeScore}
+                          onChange={(e) => setHomeScore(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-rose-400 focus:bg-white rounded-lg"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-450 block mb-1 font-bold">客队进球</label>
+                        <input
+                          type="number"
+                          value={awayScore}
+                          onChange={(e) => setAwayScore(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-rose-400 focus:bg-white rounded-lg"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-450 block mb-1 font-bold">比赛进度</label>
+                        <select
+                          value={matchStatus}
+                          onChange={(e) => setMatchStatus(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-rose-500 rounded-lg text-left"
+                        >
+                          <option value="NS">未开赛 NS</option>
+                          <option value="LIVE">进行中 LIVE</option>
+                          <option value="FT">已完赛 FT</option>
+                          <option value="CANCELLED">取消 CANCELLED</option>
+                        </select>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Edit Odds Snapshot Details */}
-                  <div className="space-y-2 pt-2 border-t border-slate-100">
-                    <p className="text-[10px] text-slate-400 font-bold">手动配置即时竞猜指数赔率 Decimals</p>
+                  {/* Edit Odds */}
+                  <div className="pt-2 border-t border-slate-100">
+                    <p className="text-[10px] font-black text-slate-600 mb-2">🎲 即时赔率配置</p>
                     <div className="grid grid-cols-3 gap-2">
                       <div>
-                        <label className="text-[9px] text-slate-400 block font-bold">主胜 (Home)</label>
+                        <label className="text-[9px] text-slate-400 block font-bold">主胜</label>
                         <input
                           type="text"
                           value={oddsHomeWin}
@@ -792,7 +846,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
                         />
                       </div>
                       <div>
-                        <label className="text-[9px] text-slate-400 block font-bold">平局 (Draw)</label>
+                        <label className="text-[9px] text-slate-400 block font-bold">平局</label>
                         <input
                           type="text"
                           value={oddsDraw}
@@ -801,7 +855,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
                         />
                       </div>
                       <div>
-                        <label className="text-[9px] text-slate-400 block font-bold">客胜 (Away)</label>
+                        <label className="text-[9px] text-slate-400 block font-bold">客胜</label>
                         <input
                           type="text"
                           value={oddsAwayWin}
@@ -810,7 +864,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
                         />
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 mt-1">
+                    <div className="grid grid-cols-2 gap-2 mt-2">
                       <div>
                         <label className="text-[9px] text-slate-400 block font-bold">大 2.5分球</label>
                         <input
@@ -832,18 +886,19 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
                     </div>
                   </div>
 
-                  <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 pt-3 border-t border-slate-100">
+                  {/* Action buttons */}
+                  <div className="flex flex-wrap gap-2 pt-3 border-t border-slate-100">
                     <button
                       onClick={handleUpdateMatchDetails}
                       disabled={isWorking}
-                      className="flex-1 bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition cursor-pointer"
+                      className="flex-1 bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold py-3 px-4 rounded-xl transition cursor-pointer min-w-[100px]"
                     >
-                      保存比分/指数设置
+                      保存比分/赔率
                     </button>
                     <button
                       onClick={syncSelectedMatch}
                       disabled={isWorking}
-                      className="flex-1 bg-white border border-slate-200 text-slate-700 text-xs font-bold py-2.5 px-4 rounded-xl transition cursor-pointer"
+                      className="flex-1 bg-white border border-slate-200 text-slate-700 text-xs font-bold py-3 px-4 rounded-xl transition cursor-pointer min-w-[100px]"
                     >
                       单场同步
                     </button>
@@ -851,9 +906,9 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
                       <button
                         onClick={handleTriggerSettlement}
                         disabled={isWorking}
-                        className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black py-2.5 px-4 rounded-xl transition cursor-pointer"
+                        className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black py-3 px-4 rounded-xl transition cursor-pointer min-w-[100px]"
                       >
-                        一键清算本场派积分
+                        一键清算积分
                       </button>
                     )}
                   </div>
@@ -862,7 +917,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
                     <button
                       onClick={() => handleSettleSelectedMatch(true)}
                       disabled={isWorking}
-                      className="w-full bg-amber-500 hover:bg-amber-600 text-white text-xs font-black py-2.5 px-4 rounded-xl transition cursor-pointer"
+                      className="w-full bg-amber-500 hover:bg-amber-600 text-white text-xs font-black py-3 px-4 rounded-xl transition cursor-pointer"
                     >
                       强制重算本场结算
                     </button>
@@ -874,13 +929,9 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
                     </div>
                   )}
                 </div>
-              ) : (
-                <div className="bg-white/80 p-8 border border-dashed border-slate-200 rounded-3xl text-center text-xs text-slate-400 font-bold shadow-2xs">
-                  请在左手边选择任意 2026 世界杯赛程行，展开结果更新、即时红利结算与赔口指控。
-                </div>
-              )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 
@@ -911,10 +962,10 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
 
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Storage</div>
-                  <div className="mt-2 text-sm font-black text-slate-900">{systemStatus?.storage?.mode || 'unknown'}</div>
+                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">存储</div>
+                  <div className="mt-2 text-sm font-black text-slate-900">{systemStatus?.storage?.mode || '未知'}</div>
                   <div className={`mt-1 text-[11px] font-bold ${systemStatus?.storage?.databaseConnected ? 'text-emerald-600' : 'text-rose-600'}`}>
-                    {systemStatus?.storage?.databaseConnected ? 'Database connected' : 'Database unavailable'}
+                    {systemStatus?.storage?.databaseConnected ? '数据库已连接' : '数据库不可用'}
                   </div>
                   {systemStatus?.storage?.logDirectory && (
                     <div className="mt-1 text-[10px] font-bold text-slate-400 break-all">
@@ -923,30 +974,30 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
                   )}
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Data</div>
+                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">数据</div>
                   <div className="mt-2 text-sm font-black text-slate-900">
-                    {systemStatus?.counts?.teams || 0} teams / {systemStatus?.counts?.matches || 0} matches
+                    {systemStatus?.counts?.teams || 0} 支球队 / {systemStatus?.counts?.matches || 0} 场比赛
                   </div>
                   <div className="mt-1 text-[11px] font-bold text-slate-500">
-                    {systemStatus?.counts?.players || 0} players / {systemStatus?.counts?.teamHistory || 0} history
+                    {systemStatus?.counts?.players || 0} 位玩家 / {systemStatus?.counts?.teamHistory || 0} 条历史
                   </div>
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Betting</div>
+                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">竞猜</div>
                   <div className="mt-2 text-sm font-black text-slate-900">
-                    {systemStatus?.counts?.predictions || 0} predictions
+                    {systemStatus?.counts?.predictions || 0} 条竞猜
                   </div>
                   <div className="mt-1 text-[11px] font-bold text-slate-500">
-                    {systemStatus?.counts?.wallets || 0} wallets / {systemStatus?.counts?.transactions || 0} transactions
+                    {systemStatus?.counts?.wallets || 0} 个钱包 / {systemStatus?.counts?.transactions || 0} 笔交易
                   </div>
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Match health</div>
+                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">比赛健康</div>
                   <div className="mt-2 text-sm font-black text-slate-900">
-                    {systemStatus?.matches?.joinedTeamMatches || 0} joined matches
+                    {systemStatus?.matches?.joinedTeamMatches || 0} 场配对比赛
                   </div>
                   <div className={`mt-1 text-[11px] font-bold ${(systemStatus?.matches?.orphanTeamRefs || 0) > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                    orphan refs: {systemStatus?.matches?.orphanTeamRefs || 0}
+                    孤立引用: {systemStatus?.matches?.orphanTeamRefs || 0}
                   </div>
                 </div>
               </div>
@@ -955,21 +1006,21 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-700">
                   <div className="font-black text-slate-900">最近同步</div>
                   <div className="mt-2 space-y-1.5">
-                    <div>Fixtures: {systemStatus?.sync?.latestFixtures?.status || 'N/A'}</div>
-                    <div>Fixtures time: {formatStatusTime(systemStatus?.sync?.latestFixtures?.createdAt || systemStatus?.sync?.latestFixtures?.lastRunAt)}</div>
-                    <div>Odds: {systemStatus?.sync?.latestOdds?.status || 'N/A'}</div>
-                    <div>Odds time: {formatStatusTime(systemStatus?.sync?.latestOdds?.createdAt || systemStatus?.sync?.latestOdds?.lastRunAt)}</div>
-                    <div>Latest log: {formatStatusTime(systemStatus?.sync?.latest?.createdAt)}</div>
+                    <div>赛程: {systemStatus?.sync?.latestFixtures?.status || '无'}</div>
+                    <div>赛程时间: {formatStatusTime(systemStatus?.sync?.latestFixtures?.createdAt || systemStatus?.sync?.latestFixtures?.lastRunAt)}</div>
+                    <div>赔率: {systemStatus?.sync?.latestOdds?.status || '无'}</div>
+                    <div>赔率时间: {formatStatusTime(systemStatus?.sync?.latestOdds?.createdAt || systemStatus?.sync?.latestOdds?.lastRunAt)}</div>
+                    <div>最新日志: {formatStatusTime(systemStatus?.sync?.latest?.createdAt)}</div>
                   </div>
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-700">
                   <div className="font-black text-slate-900">调度状态</div>
                   <div className="mt-2 space-y-1.5">
-                    <div>Priority: {syncRuntime?.state?.currentPriority || 'N/A'}</div>
-                    <div>Reason: {syncRuntime?.state?.currentReason || 'N/A'}</div>
-                    <div>Live sync interval: {syncRuntime?.plan?.liveScoreIntervalMs ? `${Math.round(syncRuntime.plan.liveScoreIntervalMs / 1000)}s` : 'disabled'}</div>
-                    <div>Fixtures interval: {syncRuntime?.plan?.fixturesIntervalMs ? `${Math.round(syncRuntime.plan.fixturesIntervalMs / 60000)}m` : 'disabled'}</div>
-                    <div>Match dates: {syncRuntime?.plan?.fixturesDates?.length || 0}</div>
+                    <div>优先级: {syncRuntime?.state?.currentPriority || '无'}</div>
+                    <div>原因: {syncRuntime?.state?.currentReason || '无'}</div>
+                    <div>比分同步间隔: {syncRuntime?.plan?.liveScoreIntervalMs ? `${Math.round(syncRuntime.plan.liveScoreIntervalMs / 1000)}秒` : '已禁用'}</div>
+                    <div>赛程同步间隔: {syncRuntime?.plan?.fixturesIntervalMs ? `${Math.round(syncRuntime.plan.fixturesIntervalMs / 60000)}分钟` : '已禁用'}</div>
+                    <div>比赛日期: {syncRuntime?.plan?.fixturesDates?.length || 0} 天</div>
                   </div>
                 </div>
               </div>
@@ -1014,7 +1065,69 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
                   <Play className="h-3.5 w-3.5" />
                   运行同步校验
                 </button>
+                <button
+                  onClick={handleHealthCheck}
+                  disabled={isHealthChecking || isWorking}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-violet-500 px-4 py-3 text-xs font-black text-white transition hover:bg-violet-600 disabled:opacity-60 sm:col-span-2"
+                >
+                  <Shield className="h-3.5 w-3.5" />
+                  {isHealthChecking ? '检测中...' : 'API连通性检测'}
+                </button>
               </div>
+
+              {healthCheckResult && (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs font-black text-slate-800">API连通性检测结果</div>
+                    <span className="text-[10px] text-slate-400 font-bold">
+                      {new Date(healthCheckResult.checkedAt).toLocaleString('zh-CN')}
+                    </span>
+                  </div>
+                  <div className={`rounded-xl px-3 py-2 text-xs font-bold ${
+                    healthCheckResult.allHealthy
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                      : 'bg-amber-50 text-amber-700 border border-amber-200'
+                  }`}>
+                    {healthCheckResult.summary}
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {(healthCheckResult.checks || []).map((check: any) => (
+                      <div
+                        key={check.apiName}
+                        className={`rounded-xl border p-3 text-xs ${
+                          check.healthy
+                            ? 'border-emerald-200 bg-emerald-50/50'
+                            : check.configured
+                              ? 'border-rose-200 bg-rose-50/50'
+                              : 'border-amber-200 bg-amber-50/50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="font-black text-slate-800">{check.apiName}</span>
+                          <span className={`text-sm ${
+                            check.healthy ? '' : check.configured ? '' : ''
+                          }`}>
+                            {check.healthy ? '✅' : check.configured ? '❌' : '⚠️'}
+                          </span>
+                        </div>
+                        {check.configured ? (
+                          <>
+                            <div className="text-[10px] text-slate-500 space-y-0.5">
+                              <div>HTTP状态: <span className="font-mono font-bold text-slate-700">{check.statusCode ?? '-'}</span></div>
+                              <div>响应时间: <span className="font-mono font-bold text-slate-700">{check.latencyMs}ms</span></div>
+                            </div>
+                            {check.error && (
+                              <div className="mt-1.5 text-[10px] text-rose-600 font-bold leading-relaxed">{check.error}</div>
+                            )}
+                          </>
+                        ) : (
+                          <div className="text-[10px] text-amber-600 font-bold leading-relaxed">{check.detail}</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 space-y-3">
                 <div className="text-[11px] font-black text-slate-700">窗口同步</div>
@@ -1437,7 +1550,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
                     <div className="flex items-center justify-between">
                       <span className="font-black text-slate-900">{key}</span>
                       <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${value.configured ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                        {value.configured ? 'Configured' : 'Missing'}
+                        {value.configured ? '已配置' : '未配置'}
                       </span>
                     </div>
                     <div className="mt-2 text-slate-500">Env: {value.env}</div>

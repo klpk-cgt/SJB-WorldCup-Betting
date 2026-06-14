@@ -1,5 +1,34 @@
 # 更新日志 (Changelog)
 
+## v2.3.9 - 2026-06-14
+
+### 新增：管理后台四大体验优化
+
+围绕管理员日常运维效率进行四项针对性改进：
+
+#### 1. API连通性一键检测
+- **后端** (`admin.ts`)：新增 `POST /api/admin/integrations/health-check` 端点，分别对 API-Football、The Odds API、Gemini AI 发起连通性验证（5秒超时），返回每项的 HTTP 状态码、响应延迟、错误详情
+- **前端** (`AdminPanel.tsx`)：仪表盘「一键运维」区新增紫色「API连通性检测」按钮，点击后展示三列彩色结果卡片（✅正常 / ❌失败 / ⚠️未配置）
+
+#### 2. 赛程结算交互改为底部抽屉
+- 重构赛程结算Tab：从左右分栏改为全宽比赛列表 + 底部抽屉编辑面板
+- 点击比赛从底部滑入抽屉（CSS `slideUp` 动画），含半透明遮罩、拖拽手柄、X关闭按钮
+- 抽屉内完整保留：比赛对阵信息条 → 比分/状态编辑 → 赔率配置 → 保存/同步/结算/强制重算按钮
+
+#### 3. 管理后台全面中文化
+- 仪表盘系统状态卡片：Storage→存储、Data→数据、Betting→竞猜、Match health→比赛健康、Database connected→数据库已连接
+- 调度状态：Priority→优先级、Reason→原因
+- 所有Tab标签、操作反馈消息（opsStatusMsg/toast）全部改为中文
+
+#### 4. 同步日志中文输出
+- `sync.ts` 全部 `buildLog()` 的 action/responseSummary 改为中文（按日期同步赛程、同步世界杯赔率、窗口同步完成等）
+- `sync_scheduler_service.ts` 健康状态 reason 中文化（未配置 API_FOOTBALL_KEY 等）
+
+### 改动文件
+`AdminPanel.tsx`, `admin.ts`, `sync.ts`, `sync_scheduler_service.ts`, `helpers.ts`, `index.css`
+
+---
+
 ## v2.3.8 - 2026-06-14
 
 ### 新增：账号禁用/启用功能
