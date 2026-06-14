@@ -1,0 +1,7 @@
+<svg width="220" height="220" viewBox="0 0 220 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+<circle cx="110" cy="110" r="84" fill="url(#g)" stroke="#DDE6F0" stroke-width="4"/>
+<path d="M110 62L148 89L134 132H86L72 89L110 62Z" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="4"/>
+<path d="M110 62V28M148 89L181 78M134 132L153 165M86 132L67 165M72 89L39 78" stroke="#CBD5E1" stroke-width="4" stroke-linecap="round"/>
+<path d="M64 41C32 71 21 119 42 160M156 41C188 71 199 119 178 160" stroke="#E2E8F0" stroke-width="5" opacity=".8"/>
+<defs><radialGradient id="g" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(76 58) rotate(52) scale(159)"><stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#E8F0F8"/></radialGradient></defs>
+</svg>

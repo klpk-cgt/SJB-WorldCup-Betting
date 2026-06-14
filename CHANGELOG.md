@@ -1,5 +1,43 @@
 # 更新日志 (Changelog)
 
+## v2.3.3 - 2026-06-14
+
+### 「我的」资料页全新设计
+
+- **全宽球场背景**：使用 `stadium-light-bg.svg` 替代内联 data URI，渐变遮罩优化让背景可见
+- **头像模块上移**：移除 Player Center 英文标题和刷新/分享/退出按钮行，视觉更简洁
+- **统计卡片移入总览 Tab**：命中率、净收益、最长连中、单场最高仅在「总览」Tab 内显示，切换战报/徽章/道具时不再显示多余内容
+- **宽度一致性**：头像毛玻璃卡与下方内容区域统一 `max-w-xl` 全宽，移动端 `mx-4` 保留呼吸间距
+- **Header 装饰**：右上角使用素材包 `worldcup-trophy.svg` + `football.svg` 替代内联手绘 SVG
+- **Tab 切换动效**：所有 Tab 内容区添加 `fadeIn` 淡入动画，按钮增加 `hover` 态
+
+### 修复
+
+- **每日答题逻辑修复** (quiz_service.ts)：
+  - `hasCompletedQuizToday` 从"今日有任意记录"改为"答完今日全部 3 题"才算完成
+  - `submitQuizAnswer` 增加防重复提交校验
+  - `getAIQuizCache` 增加按日期过期过滤，自动丢弃旧 AI 题目
+- **Framer Motion 动画警告修复**：全局 5 处 `AnimatePresence` 统一添加 `mode="wait"`，消除 `getBoundingClientRect` 运行时警告
+  - 涉及文件：App.tsx、HomeTab.tsx、PredictionTab.tsx、TeamDetailDrawer.tsx、FocusMatchCard.tsx
+
+### 资产
+
+- **新增素材**：`public/assets/player-profile/` (14个SVG)、`public/profile-icons/` (16个PNG图标)
+- **新增字体**：引入 Bebas Neue 字体 (Google Fonts CDN)
+- **移除重复/废弃内容**：
+  - `player_profile_ui_package/` (已复制到 public，设计文档不再需要)
+  - `public/preview-me-light.html` / `public/preview-me-redesign.html` (原型预览)
+  - `public/stadium-bg.svg` (未使用)
+  - `public/assets/player-profile/design-tokens.css` (未引用)
+
+### 构建
+
+- Vite build ✅ 2806 modules, 10.8s
+- TypeScript 变更文件零错误
+- ESLint 全 src 零诊断
+
+---
+
 ## v2.3.2 - 2026-06-13
 
 ### 首页布局优化

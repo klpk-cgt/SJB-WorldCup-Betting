@@ -1,4 +1,4 @@
-﻿/**
+﻿﻿/**
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -708,7 +708,7 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate, wsS
         )}
       </section>
 
-      <AnimatePresence>
+      <AnimatePresence mode="wait">
         {showQuizModal && (
           <motion.div
             className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4"
@@ -850,7 +850,7 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate, wsS
                         })}
                       </div>
 
-                      <AnimatePresence>
+                      <AnimatePresence mode="wait">
                         {answered && (
                           <motion.div
                             initial={{ opacity: 0, y: 8 }}

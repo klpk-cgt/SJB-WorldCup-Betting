@@ -13,3 +13,4 @@ runtime/
 backups/
 *.png
 !src/assets/*.png
+!public/profile-icons/*.png

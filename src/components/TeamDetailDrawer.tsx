@@ -128,7 +128,7 @@ export default function TeamDetailDrawer({ teamId, open, onClose }: TeamDetailDr
   ];
 
   return (
-    <AnimatePresence>
+    <AnimatePresence mode="wait">
       {open && teamId && (
         <>
           <motion.div

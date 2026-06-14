@@ -37,11 +37,14 @@ interface AIGeneratedQuestion {
 }
 
 /**
- * 获取今日 AI 生成的题目（从 db.aiQuizCache 读取）
+ * 获取今日 AI 生成的题目（从 db.aiQuizCache 读取，自动过滤过期题目）
  */
 export function getAIQuizCache(): AIGeneratedQuestion[] {
   const db = dbService.getData();
-  return (db as any).aiQuizCache || [];
+  const today = toBeijingDateKey();
+  const cache: AIGeneratedQuestion[] = (db as any).aiQuizCache || [];
+  // 仅返回今日生成的 AI 题目，过期的自动丢弃
+  return cache.filter((q) => q.id.startsWith(`ai-${today}`));
 }
 
 /**
@@ -167,10 +170,15 @@ export function getMergedDailyQuestions(): typeof quizQuestionPool {
 
 /**
  * 查询用户今日是否已完成问答（基于 quizLog）
+ * 必须答完当日全部题目才算完成
  */
 export function hasCompletedQuizToday(userId: string, date: string): boolean {
   const db = dbService.getData();
-  return (db.quizLogs || []).some((log) => log.userId === userId && log.date === date);
+  const dailyQuestions = getMergedDailyQuestions();
+  if (dailyQuestions.length === 0) return false;
+  const logs = (db.quizLogs || []).filter((log) => log.userId === userId && log.date === date);
+  const answeredIds = new Set(logs.flatMap((log) => log.questionIds));
+  return dailyQuestions.every((q) => answeredIds.has(q.id));
 }
 
 /**
@@ -204,9 +212,16 @@ export function submitQuizAnswer(params: {
   const db = dbService.getData();
   const today = toBeijingDateKey();
 
-  // 1. 校验今日未答题
+  // 1. 校验今日是否已全部答完
   if (hasCompletedQuizToday(params.userId, today)) {
     throw new Error('今日问答已完成。');
+  }
+
+  // 1.5 校验该题是否已作答（防重复）
+  const todayLogs = (db.quizLogs || []).filter((log) => log.userId === params.userId && log.date === today);
+  const alreadyAnswered = todayLogs.some((log) => log.questionIds.includes(params.questionId));
+  if (alreadyAnswered) {
+    throw new Error('该题已作答，请继续下一题。');
   }
 
   // 2. 校验题目存在（先查静态题库，再查 AI 缓存）

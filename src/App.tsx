@@ -435,7 +435,7 @@ export default function App() {
         </footer>
       </div>
 
-      <AnimatePresence>
+      <AnimatePresence mode="wait">
         {navDrawerOpen && (
           <>
             <motion.div

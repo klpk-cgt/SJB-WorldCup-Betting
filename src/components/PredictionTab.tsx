@@ -652,7 +652,7 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
         </div>
       )}
 
-      <AnimatePresence>
+      <AnimatePresence mode="wait">
         {(selectedMatch && selectedOption) || selectedTournamentMarket ? (
           <motion.div
             className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/45 px-4 pb-4 pt-10 sm:items-center"

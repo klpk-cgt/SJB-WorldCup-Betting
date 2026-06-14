@@ -8,12 +8,16 @@ import html2canvas from 'html2canvas';
 import {
   Award,
   BadgeCheck,
-  Coins,
+  BarChart3,
   Download,
   Flame,
+  Gift,
+  Layers3,
   LogOut,
+  Medal,
   RefreshCw,
   Share2,
+  ShieldCheck,
   Sparkles,
   Target,
   Ticket,
@@ -34,6 +38,7 @@ interface MeTabProps {
 }
 
 type PredictionWithMatch = Prediction & { match?: any | null };
+type ProfileTab = 'overview' | 'reports' | 'badges' | 'items';
 
 const TONE_CLASS: Record<AchievementBadgeSummary['tone'], string> = {
   emerald: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100',
@@ -44,32 +49,76 @@ const TONE_CLASS: Record<AchievementBadgeSummary['tone'], string> = {
   slate: 'bg-slate-100 text-slate-600 ring-1 ring-slate-200',
 };
 
+const TABS: Array<{ id: ProfileTab; label: string; icon: React.ElementType }> = [
+  { id: 'overview', label: '总览', icon: ShieldCheck },
+  { id: 'reports', label: '战报', icon: BarChart3 },
+  { id: 'badges', label: '徽章', icon: Medal },
+  { id: 'items', label: '道具', icon: Gift },
+];
+
+const PROFILE_ICON_BASE = '/profile-icons';
+const PROFILE_ASSETS_BASE = '/assets/player-profile';
+
+const STAT_ICON_SRC = {
+  points: `${PROFILE_ICON_BASE}/points-coin.png`,
+  hitRate: `${PROFILE_ICON_BASE}/hit-rate-target.png`,
+  netProfit: `${PROFILE_ICON_BASE}/net-profit-trend.png`,
+  streak: `${PROFILE_ICON_BASE}/streak-flame.png`,
+  biggestWin: `${PROFILE_ICON_BASE}/big-win-trophy.png`,
+  predictionTicket: `${PROFILE_ICON_BASE}/prediction-ticket.png`,
+} as const;
+
+const BADGE_ICON_SRC: Partial<Record<AchievementBadgeSummary['id'], string>> = {
+  first_win: `${PROFILE_ICON_BASE}/first-win.png`,
+  three_streak: `${PROFILE_ICON_BASE}/three-streak.png`,
+  hit_rate_60: `${PROFILE_ICON_BASE}/hit-rate-60.png`,
+  big_win: `${PROFILE_ICON_BASE}/big-win.png`,
+  long_term_player: `${PROFILE_ICON_BASE}/long-term-player.png`,
+  history_scholar: `${PROFILE_ICON_BASE}/history-scholar.png`,
+};
+
+const CARD_ICON_SRC: Record<string, string> = {
+  NO_LOSS: `${PROFILE_ICON_BASE}/no-loss-card.png`,
+  no_loss: `${PROFILE_ICON_BASE}/no-loss-card.png`,
+  'no-loss': `${PROFILE_ICON_BASE}/no-loss-card.png`,
+  DOUBLE: `${PROFILE_ICON_BASE}/double-card.png`,
+  double: `${PROFILE_ICON_BASE}/double-card.png`,
+  REGRET: `${PROFILE_ICON_BASE}/regret-card.png`,
+  regret: `${PROFILE_ICON_BASE}/regret-card.png`,
+  FLOOR: `${PROFILE_ICON_BASE}/floor-card.png`,
+  floor: `${PROFILE_ICON_BASE}/floor-card.png`,
+};
+
 function formatSigned(value?: number | null) {
   if (value == null) return '0';
   if (value > 0) return `+${value.toLocaleString()}`;
   return value.toLocaleString();
 }
 
+function formatCompact(value?: number | null) {
+  return Number(value || 0).toLocaleString();
+}
+
 function getPredictionTone(status: string) {
-  if (status === 'WON') return 'text-emerald-700 bg-emerald-50 border-emerald-100';
-  if (status === 'LOST') return 'text-rose-700 bg-rose-50 border-rose-100';
-  return 'text-slate-600 bg-slate-50 border-slate-200';
+  if (status === 'WON') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+  if (status === 'LOST') return 'border-rose-200 bg-rose-50 text-rose-700';
+  return 'border-slate-200 bg-slate-50 text-slate-600';
 }
 
 function getTitleCopy(title?: string) {
   switch (title) {
     case '稳健分析师':
-      return '命中率稳定、判断克制，属于群里最让人安心的下注风格。';
+      return '判断稳定，适合做群里的稳盘参考。';
     case '连红猎手':
-      return '连续抓红能力出色，最近的手感和节奏都在上升。';
+      return '最近手感正在升温，连中节奏值得关注。';
     case '冷门先知':
-      return '擅长捕捉赔率背后的反差机会，爆点常常比别人更早一步。';
+      return '擅长捕捉赔率背后的反差机会。';
     case '金杯投资人':
-      return '收益长期领先，已经把娱乐竞猜打成了自己的资产曲线。';
+      return '收益曲线领先，已经打出资产感。';
     case '世界杯老炮':
-      return '参与深、场次多，对赛事节奏和长期走势都更有经验。';
+      return '参与够深，经验值正在持续累积。';
     default:
-      return '已经进入本届世界杯互动局，接下来每一场都可能刷新你的身份。';
+      return '新一轮竞猜征程已经开启。';
   }
 }
 
@@ -93,6 +142,141 @@ function withTimeout<T>(promise: Promise<T>, fallback: T, timeoutMs = 5000): Pro
   });
 }
 
+function ProfileImageIcon({
+  src,
+  alt,
+  size = 32,
+  fallback,
+  className = '',
+}: {
+  src?: string;
+  alt: string;
+  size?: number;
+  fallback?: React.ReactNode;
+  className?: string;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  if (!src || failed) {
+    return (
+      <span
+        className={`inline-flex items-center justify-center rounded-full bg-white/80 text-slate-500 ring-1 ring-slate-200 ${className}`}
+        style={{ width: size, height: size }}
+        aria-label={alt}
+      >
+        {fallback}
+      </span>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      width={size}
+      height={size}
+      loading="lazy"
+      className={`shrink-0 object-contain drop-shadow-[0_7px_12px_rgba(15,23,42,0.16)] ${className}`}
+      style={{ width: size, height: size }}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+function StatTileLight({
+  icon: Icon,
+  iconSrc,
+  label,
+  value,
+  iconBg = 'bg-emerald-50',
+  iconColor = 'text-emerald-600',
+  valueColor,
+}: {
+  icon: React.ElementType;
+  iconSrc?: string;
+  label: string;
+  value: string;
+  iconBg?: string;
+  iconColor?: string;
+  valueColor?: string;
+}) {
+  return (
+    <div className="bg-white border border-slate-200 rounded-[20px] p-4 flex flex-col transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgba(15,23,42,0.08)] shadow-[0_12px_30px_rgba(15,23,42,0.05)] cursor-default">
+      <span className="text-xs font-semibold text-slate-500 mb-1">{label}</span>
+      <span className={`text-2xl font-extrabold tabular-nums leading-none ${valueColor || 'text-[#0f172a]'}`}>{value}</span>
+      <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${iconBg} mt-2`}>
+        <ProfileImageIcon src={iconSrc} alt={label} size={36} fallback={<Icon className={`h-4 w-4 ${iconColor}`} />} />
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-slate-200 bg-white/70 px-4 py-5 text-sm font-medium text-slate-500">
+      {children}
+    </div>
+  );
+}
+
+const METAB_CSS = `
+  .metab-stadium-bg {
+    background-image:
+      linear-gradient(180deg, rgba(248,251,255,0.35) 0%, rgba(246,248,251,0.75) 60%, rgba(255,255,255,0.96) 100%),
+      url('/assets/player-profile/stadium-light-bg.svg');
+    background-size: cover;
+    background-position: center top;
+    background-repeat: no-repeat;
+  }
+  .metab-glass {
+    background: rgba(255,255,255,0.86);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(255,255,255,0.72);
+    box-shadow: 0 24px 60px rgba(15,23,42,0.10), inset 0 1px 0 rgba(255,255,255,0.70);
+  }
+  @supports not (backdrop-filter: blur(18px)) {
+    .metab-glass { background: rgba(255,255,255,0.96); }
+  }
+  .metab-avatar-ring {
+    box-shadow: 0 14px 30px rgba(15,23,42,0.12);
+  }
+  .metab-bar-animate {
+    transition: width 1s cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+  .metab-btn-glass {
+    background: rgba(255,255,255,0.72);
+    border: 1px solid rgba(255,255,255,0.9);
+    box-shadow: 0 10px 28px rgba(15,23,42,0.08);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  @supports not (backdrop-filter: blur(12px)) {
+    .metab-btn-glass { background: rgba(255,255,255,0.96); }
+  }
+  .metab-btn-glass:hover { transform: translateY(-1px); box-shadow: 0 14px 32px rgba(15,23,42,0.12); }
+  .metab-btn-glass:active { transform: scale(0.95); }
+  .metab-green-btn {
+    background: #16a34a;
+    box-shadow: 0 10px 26px rgba(22,163,74,0.20);
+  }
+  .metab-green-btn:hover { background: #15803d; transform: translateY(-1px); }
+  .metab-green-btn:active { transform: scale(0.98); }
+  .font-display { font-family: 'Bebas Neue', cursive; }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .metab-tab-enter {
+    animation: fadeIn 0.3s ease-out;
+  }
+  .metab-header-decor {
+    opacity: 0.5;
+    pointer-events: none;
+    user-select: none;
+  }
+`;
+
 export default function MeTab({ user, wallet, onLogout, onAdminLogin }: MeTabProps) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [predictions, setPredictions] = useState<PredictionWithMatch[]>([]);
@@ -102,6 +286,7 @@ export default function MeTab({ user, wallet, onLogout, onAdminLogin }: MeTabPro
   const [refreshing, setRefreshing] = useState(false);
   const [cardInventory, setCardInventory] = useState<any>(null);
   const [sharing, setSharing] = useState(false);
+  const [activeTab, setActiveTab] = useState<ProfileTab>('overview');
   const shareCardRef = useRef<HTMLDivElement>(null);
 
   const handleShareCard = async () => {
@@ -109,17 +294,17 @@ export default function MeTab({ user, wallet, onLogout, onAdminLogin }: MeTabPro
     setSharing(true);
     try {
       const canvas = await html2canvas(shareCardRef.current, {
-        backgroundColor: '#0f172a',
+        backgroundColor: '#f8fafc',
         scale: 2,
         useCORS: true,
         logging: false,
       });
       const link = document.createElement('a');
-      link.download = `世界杯战绩-${user?.displayName || 'player'}-${new Date().toISOString().slice(0, 10)}.png`;
+      link.download = `worldcup-profile-${user?.displayName || 'player'}-${new Date().toISOString().slice(0, 10)}.png`;
       link.href = canvas.toDataURL('image/png');
       link.click();
     } catch (e) {
-      console.error('分享截图失败', e);
+      console.error('Failed to generate profile share card', e);
     } finally {
       setSharing(false);
     }
@@ -184,6 +369,7 @@ export default function MeTab({ user, wallet, onLogout, onAdminLogin }: MeTabPro
       settledCount: settled.length,
       wonCount: wins.length,
       longTermCount: tournamentBets.length,
+      currentStreak,
     };
   }, [predictions, tournamentBets]);
 
@@ -192,11 +378,11 @@ export default function MeTab({ user, wallet, onLogout, onAdminLogin }: MeTabPro
       predictions
         .filter((item) => item.status === 'WON' || item.status === 'LOST')
         .sort((a, b) => (b.settledAt || b.placedAt).localeCompare(a.settledAt || a.placedAt))
-        .slice(0, 4),
+        .slice(0, 5),
     [predictions],
   );
 
-  const recentTransactions = useMemo(() => transactions.slice(0, 5), [transactions]);
+  const recentTransactions = useMemo(() => transactions.slice(0, 6), [transactions]);
 
   const profileSummary = useMemo(
     () =>
@@ -222,397 +408,548 @@ export default function MeTab({ user, wallet, onLogout, onAdminLogin }: MeTabPro
     [profileSummary],
   );
 
+  const leadingBadge = upcomingBadges[0] || unlockedBadges[0] || null;
+  const nextProgress = leadingBadge ? getProgressPercent(leadingBadge) : 0;
+
   if (loading) {
     return (
-      <div className="flex min-h-[70vh] flex-col items-center justify-center space-y-4">
+      <div className="flex min-h-[70vh] flex-col items-center justify-center space-y-4 bg-slate-50">
         <div className="h-10 w-10 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent" />
-        <p className="text-xs font-medium text-slate-500">正在整理你的荣誉和战绩...</p>
+        <p className="text-xs font-bold text-slate-500">正在整理你的战绩档案...</p>
       </div>
     );
   }
 
+  const expPercent = Math.max(12, Math.min(100, wallet?.balance ? (wallet.balance / Math.max(wallet.initialPoints || 10000, wallet.balance)) * 100 : 12));
+
   return (
-    <div className="space-y-5 pb-24">
-      <section ref={shareCardRef} className="overflow-hidden rounded-[30px] border border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-5 text-white shadow-[0_20px_48px_rgba(15,23,42,0.18)]">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <SmartAvatar name={user?.displayName || '世界杯玩家'} src={user?.avatarUrl} size={54} className="ring-2 ring-white/15" />
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-emerald-300">Identity Card</p>
-              <h2 className="mt-2 text-2xl font-black">{user?.displayName || '世界杯玩家'}</h2>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold text-slate-100 ring-1 ring-white/10">
-                  {profileSummary.currentTitle}
-                </span>
-                {profileSummary.featuredBadge && (
-                  <span
-                    className={`rounded-full px-3 py-1 text-[11px] font-bold ${TONE_CLASS[profileSummary.featuredBadge.tone]}`}
-                  >
-                    {profileSummary.featuredBadge.icon} {profileSummary.featuredBadge.label}
+    <div className="relative min-h-screen text-[#111827]" style={{ overflow: 'hidden' }}>
+      {/* 全宽背景层 */}
+      <div className="absolute inset-0 pointer-events-none -mx-4 sm:mx-0" style={{
+        background: 'radial-gradient(circle at 20% 0%, rgba(34,197,94,0.10), transparent 30%), radial-gradient(circle at 85% 10%, rgba(59,130,246,0.12), transparent 28%), linear-gradient(180deg, #f8fbff 0%, #f6f8fb 42%, #ffffff 100%)',
+      }} />
+      <style>{METAB_CSS}</style>
+
+      {/* ===== 浅色体育场 Header 全宽 ===== */}
+      <header className="metab-stadium-bg relative flex flex-col items-center justify-start pt-2 pb-8 -mx-4 sm:mx-0 sm:rounded-t-2xl">
+        <div ref={shareCardRef} className="relative z-10 w-full max-w-xl px-4">
+          {/* 右上角装饰: 奖杯 + 足球 */}
+          <div className="metab-header-decor absolute right-6 top-6 flex flex-col items-end gap-1">
+            <img src={`${PROFILE_ASSETS_BASE}/worldcup-trophy.svg`} alt="" className="w-16 h-auto drop-shadow-[0_6px_14px_rgba(217,119,6,0.15)]" />
+            <img src={`${PROFILE_ASSETS_BASE}/football.svg`} alt="" className="w-11 h-auto mt-1 opacity-70 drop-shadow-[0_4px_10px_rgba(15,23,42,0.1)]" />
+          </div>
+
+          {/* 毛玻璃资料主卡 */}
+          <div className="metab-glass w-full rounded-[28px] px-5 py-5 relative z-10">
+            {/* 上半: 头像 + 信息 */}
+            <div className="flex items-start gap-4">
+              {/* 头像 92px */}
+              <div className="relative shrink-0">
+                <div className="avatar-box w-[92px] h-[92px] rounded-full border-4 border-white/90 overflow-hidden metab-avatar-ring bg-gradient-to-br from-emerald-50 to-emerald-100">
+                  <SmartAvatar
+                    name={user?.displayName || '世界杯玩家'}
+                    src={user?.avatarUrl}
+                    size={92}
+                    className="w-full h-full"
+                  />
+                </div>
+                {/* 认证角标 */}
+                <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-gradient-to-br from-green-400 to-green-600 border-[3px] border-white flex items-center justify-center shadow-sm">
+                  <svg width="12" height="12" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" fill="none"/></svg>
+                </div>
+              </div>
+
+              {/* 信息区 */}
+              <div className="min-w-0 flex-1 pt-0.5">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[28px] font-extrabold leading-none tracking-tight text-[#0f172a]">{user?.displayName || '世界杯玩家'}</span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-indigo-50 to-sky-50 text-[10px] font-bold text-slate-500 px-2 py-0.5 border border-slate-200/60">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    {profileSummary.featuredBadge?.label || '新星'}
                   </span>
+                </div>
+                {/* 称号标签 */}
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  <span className="tag-worldcup inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 text-[11px] font-semibold">
+                    <Award className="h-3 w-3 text-emerald-600" />
+                    {profileSummary.currentTitle}
+                  </span>
+                  {profileSummary.featuredBadge && (
+                    <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${TONE_CLASS[profileSummary.featuredBadge.tone]}`}>
+                      {profileSummary.featuredBadge.icon} {profileSummary.featuredBadge.label}
+                    </span>
+                  )}
+                </div>
+                <p className="mt-1.5 text-xs font-medium text-slate-500 line-clamp-1">{getTitleCopy(profileSummary.currentTitle)}</p>
+              </div>
+            </div>
+
+            {/* 分割线 */}
+            <div className="mt-4 border-t border-slate-100"></div>
+
+            {/* 下半: 积分 / 净收益 / 等级进度 */}
+            <div className="mt-4 flex items-center gap-6">
+              <div>
+                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider leading-none">当前积分</p>
+                <p className="mt-0.5 text-[26px] font-extrabold leading-none tabular-nums text-[#0f172a]">{formatCompact(wallet?.balance)}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider leading-none">净收益</p>
+                <p className={`mt-0.5 text-[22px] font-extrabold leading-none tabular-nums ${stats.netProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{formatSigned(stats.netProfit)}</p>
+              </div>
+              <div className="flex-1 min-w-0 pl-3 border-l border-slate-100">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">等级进度</span>
+                  <span className="text-[11px] font-bold tabular-nums text-emerald-600">{Math.round(expPercent)}%</span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
+                  <div
+                    className="metab-bar-animate h-full rounded-full bg-gradient-to-r from-emerald-500 to-green-400"
+                    style={{ width: `${expPercent}%` }}
+                  />
+                </div>
+                <p className="text-[10px] font-semibold text-slate-400 mt-1 tabular-nums">
+                  Lv.{Math.max(1, Math.floor((wallet?.balance || 0) / 1000))}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+        </header>
+
+      {/* ===== 内容区 居中 ===== */}
+      <div className="relative z-20 mx-auto max-w-xl space-y-3.5 pt-2">
+
+        {/* ===== Tab 导航 (底部下划线 active) ===== */}
+        <nav className="relative z-20 -mt-3 mx-4 flex items-center h-[52px] rounded-[22px] bg-white/90 border border-slate-200 px-1.5 shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
+          {TABS.map((tab) => {
+            const Icon = tab.icon;
+            const active = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`relative flex-1 flex items-center justify-center gap-1 h-full text-sm font-semibold transition-all duration-300 ${
+                  active ? 'text-[#16a34a] font-bold' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <Icon className="h-[18px] w-[18px]" />
+                {tab.label}
+                {active && (
+                  <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-7 h-[3px] bg-green-500 rounded-t-sm animate-[fadeIn_0.25s_ease-out]" />
+                )}
+              </button>
+            );
+          })}
+        </nav>
+
+        {activeTab === 'overview' && (
+          <div className="space-y-3.5 animate-[fadeIn_0.25s_ease-out]">
+            {/* 极简统计 2x2 竖排 */}
+            <section className="grid grid-cols-2 gap-2.5">
+              <StatTileLight icon={Target} iconSrc={STAT_ICON_SRC.hitRate} label="命中率" value={`${stats.hitRate}%`} iconBg="bg-emerald-50" iconColor="text-emerald-600" />
+              <StatTileLight icon={TrendingUp} iconSrc={STAT_ICON_SRC.netProfit} label="净收益" value={formatSigned(stats.netProfit)} iconBg={stats.netProfit >= 0 ? 'bg-emerald-50' : 'bg-rose-50'} iconColor={stats.netProfit >= 0 ? 'text-emerald-600' : 'text-rose-500'} valueColor={stats.netProfit >= 0 ? 'text-emerald-600' : 'text-rose-500'} />
+              <StatTileLight icon={Flame} iconSrc={STAT_ICON_SRC.streak} label="最长连中" value={`${stats.maxStreak} 场`} iconBg="bg-orange-50" iconColor="text-orange-500" />
+              <StatTileLight icon={Trophy} iconSrc={STAT_ICON_SRC.biggestWin} label="单场最高" value={formatCompact(stats.biggestWin)} iconBg="bg-amber-50" iconColor="text-amber-500" />
+            </section>
+
+            {/* 徽章进度 */}
+            <div className="soft-card bg-white border border-slate-200 rounded-[20px] p-4 shadow-[0_12px_32px_rgba(15,23,42,0.06)]">
+              <div className="flex items-center justify-between mb-3.5">
+                <div className="flex items-center gap-1.5">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                  <h3 className="text-sm font-bold text-[#0f172a]">徽章进度</h3>
+                </div>
+                <span className="text-xs font-bold text-emerald-600 tabular-nums">{unlockedBadges.length} / {profileSummary.achievementBadges.length}</span>
+              </div>
+              <div className="space-y-3">
+                {upcomingBadges.slice(0, 3).map((badge) => (
+                  <div key={badge.id}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-emerald-50">
+                          <span className="text-sm font-extrabold text-emerald-600">{badge.icon}</span>
+                        </div>
+                        <span className="text-xs font-semibold text-slate-700">{badge.label}</span>
+                      </div>
+                      <span className="text-[11px] font-bold text-emerald-600 tabular-nums">{badge.current}/{badge.target}</span>
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+                      <div className="metab-bar-animate h-full rounded-full bg-gradient-to-r from-emerald-500 to-green-400" style={{ width: `${getProgressPercent(badge)}%` }} />
+                    </div>
+                  </div>
+                ))}
+                {upcomingBadges.length === 0 && unlockedBadges.length > 0 && (
+                  <p className="text-[10px] font-semibold text-slate-400">全部徽章已点亮 🎉</p>
                 )}
               </div>
-              <p className="mt-3 max-w-[16rem] text-xs leading-6 text-slate-300">{getTitleCopy(profileSummary.currentTitle)}</p>
             </div>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={handleShareCard}
-              disabled={sharing}
-              className="rounded-2xl border border-amber-500/30 bg-amber-500/20 px-3 py-2 text-xs font-black text-amber-300 transition hover:bg-amber-500/30 disabled:opacity-50"
-            >
-              <span className="inline-flex items-center gap-1.5">
-                {sharing ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                {sharing ? '生成中' : '保存战绩'}
-              </span>
-            </button>
-            {onAdminLogin && (
-              <button
-                onClick={onAdminLogin}
-                className="rounded-2xl border border-emerald-500/30 bg-emerald-500/20 px-3 py-2 text-xs font-black text-emerald-300 transition hover:bg-emerald-500/30"
-              >
-                <span className="inline-flex items-center gap-1.5">
-                  管理后台
-                </span>
-              </button>
-            )}
-            <button
-              onClick={onLogout}
-              className="rounded-2xl border border-white/15 bg-white/10 px-3 py-2 text-xs font-black text-white transition hover:bg-white/15"
-            >
-              <span className="inline-flex items-center gap-1.5">
-                <LogOut className="h-3.5 w-3.5" />
-                退出
-              </span>
-            </button>
-          </div>
-        </div>
 
-        <div className="mt-5 grid grid-cols-2 gap-3">
-          <div className="rounded-3xl bg-white/8 p-4 ring-1 ring-white/10">
-            <div className="flex items-center gap-2 text-xs font-bold text-emerald-200">
-              <Coins className="h-4 w-4" />
-              当前积分
-            </div>
-            <p className="mt-3 text-3xl font-black tracking-tight">{wallet?.balance?.toLocaleString() || '0'}</p>
-            <p className="mt-1 text-[11px] text-slate-300">娱乐积分余额</p>
-          </div>
-
-          <div className="rounded-3xl bg-white/8 p-4 ring-1 ring-white/10">
-            <div className="flex items-center gap-2 text-xs font-bold text-cyan-200">
-              <Target className="h-4 w-4" />
-              命中率
-            </div>
-            <p className="mt-3 text-3xl font-black tracking-tight">{stats.hitRate}%</p>
-            <p className="mt-1 text-[11px] text-slate-300">
-              已结算 {stats.settledCount} 场，命中 {stats.wonCount} 场
-            </p>
-          </div>
-
-          <div className="rounded-3xl bg-white/8 p-4 ring-1 ring-white/10">
-            <div className="flex items-center gap-2 text-xs font-bold text-amber-200">
-              <TrendingUp className="h-4 w-4" />
-              净收益
-            </div>
-            <p className={`mt-3 text-3xl font-black tracking-tight ${stats.netProfit >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
-              {formatSigned(stats.netProfit)}
-            </p>
-            <p className="mt-1 text-[11px] text-slate-300">按已结算单场统计</p>
-          </div>
-
-          <div className="rounded-3xl bg-white/8 p-4 ring-1 ring-white/10">
-            <div className="flex items-center gap-2 text-xs font-bold text-violet-200">
-              <Flame className="h-4 w-4" />
-              最长连中
-            </div>
-            <p className="mt-3 text-3xl font-black tracking-tight">{stats.maxStreak}</p>
-            <p className="mt-1 text-[11px] text-slate-300">单场高光 {stats.biggestWin?.toLocaleString() ?? 0} PTS</p>
-          </div>
-        </div>
-
-        {/* 卡牌库存 */}
-        {cardInventory && cardInventory.definitions && (
-          <div className="mt-3 rounded-3xl bg-white/8 p-4 ring-1 ring-white/10">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-xs font-bold text-amber-200">
-                <Sparkles className="h-4 w-4" />
-                我的道具卡
-              </div>
-              <span className="text-[10px] text-slate-300">下注时可用</span>
-            </div>
-            <div className="mt-3 grid grid-cols-4 gap-2">
-              {cardInventory.definitions.map((def: any) => {
-                const count = cardInventory.cards?.[def.id] || 0;
-                return (
-                  <div key={def.id} className="rounded-2xl bg-white/10 p-2 text-center ring-1 ring-white/10">
-                    <div className="text-lg">{def.icon}</div>
-                    <div className="mt-0.5 text-[10px] font-bold text-white">{def.shortLabel}</div>
-                    <div className={`mt-1 text-base font-black ${count > 0 ? 'text-amber-200' : 'text-slate-400'}`}>×{count}</div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </section>
-
-      <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-black text-slate-900">称号与成就</h3>
-            <p className="mt-1 text-xs text-slate-500">现在的外显身份、已解锁徽章，以及下一枚正在逼近的荣誉。</p>
-          </div>
-          <button
-            onClick={() => loadProfileCenter(true)}
-            className="inline-flex items-center gap-1 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700 transition hover:bg-white"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-            刷新
-          </button>
-        </div>
-
-        <div className="mt-4 grid gap-3">
-          <div className="rounded-[24px] border border-slate-200 bg-gradient-to-r from-emerald-50 via-white to-cyan-50 p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700">Current Title</p>
-                <h4 className="mt-2 text-xl font-black text-slate-900">{profileSummary.currentTitle}</h4>
-                <p className="mt-2 text-xs leading-6 text-slate-600">{getTitleCopy(profileSummary.currentTitle)}</p>
-              </div>
-              <div className="rounded-2xl bg-white p-3 text-emerald-600 shadow-sm ring-1 ring-emerald-100">
-                <Award className="h-5 w-5" />
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
-              <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
-                <BadgeCheck className="h-4 w-4 text-amber-500" />
-                主徽章
-              </div>
-              {profileSummary.featuredBadge ? (
-                <div className="mt-3">
-                  <span className={`inline-flex rounded-full px-3 py-1 text-xs font-black ${TONE_CLASS[profileSummary.featuredBadge.tone]}`}>
-                    {profileSummary.featuredBadge.icon} {profileSummary.featuredBadge.label}
-                  </span>
-                  <p className="mt-2 text-xs leading-6 text-slate-500">{profileSummary.featuredBadge.description}</p>
+            {/* 最近战报 */}
+            <div className="soft-card bg-white border border-slate-200 rounded-[20px] p-4 shadow-[0_12px_32px_rgba(15,23,42,0.06)]">
+              <div className="flex items-center justify-between mb-3.5">
+                <div className="flex items-center gap-1.5">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  <h3 className="text-sm font-bold text-[#0f172a]">最近战报</h3>
                 </div>
+                <button onClick={() => setActiveTab('reports')} className="text-[11px] font-semibold text-slate-400">查看全部 ›</button>
+              </div>
+              {recentSettlements.length === 0 ? (
+                <EmptyState>还没有结算记录。</EmptyState>
               ) : (
-                <p className="mt-3 text-xs text-slate-500">继续参与竞猜和问答，这里很快就会点亮第一枚徽章。</p>
+                <div className="space-y-2">
+                  {recentSettlements.slice(0, 3).map((prediction) => (
+                    <SettlementRow key={prediction.id} prediction={prediction} />
+                  ))}
+                </div>
               )}
             </div>
 
-            <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
-              <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
-                <Sparkles className="h-4 w-4 text-violet-500" />
-                荣誉概览
+            {/* 长线竞猜 */}
+            <div className="soft-card bg-white border border-slate-200 rounded-[20px] p-4 shadow-[0_12px_32px_rgba(15,23,42,0.06)]">
+              <div className="flex items-center justify-between mb-3.5">
+                <div className="flex items-center gap-1.5">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                  <h3 className="text-sm font-bold text-[#0f172a]">长期预测</h3>
+                </div>
+                <span className="text-[11px] font-semibold text-slate-400">查看全部 ›</span>
               </div>
-              <div className="mt-3 space-y-2 text-sm font-semibold text-slate-700">
-                <div className="flex items-center justify-between">
-                  <span>已解锁徽章</span>
-                  <span>{unlockedBadges.length}</span>
+              {tournamentBets.length === 0 ? (
+                <EmptyState>你还没有参与长线竞猜。</EmptyState>
+              ) : (
+                <div className="grid grid-cols-2 gap-2.5">
+                  {tournamentBets.slice(0, 2).map((bet) => {
+                    const market = tournamentMarkets.find((m: any) => m.type === bet.type);
+                    return (
+                      <div key={bet.id} className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-white to-emerald-50/50 p-3 transition hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50">
+                            <Trophy className="h-5 w-5 text-amber-500" strokeWidth={2} />
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-semibold text-slate-400">{market?.label || bet.type}</p>
+                            <p className="text-xs font-bold text-[#0f172a]">{bet.targetLabel}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between text-[10px] font-semibold text-slate-500">
+                          <span>投入 <strong className="text-slate-700">{bet.stakePoints}</strong></span>
+                          <span>回报 <strong className="text-emerald-600">{formatCompact(bet.potentialReturn)}</strong></span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-                <div className="flex items-center justify-between">
-                  <span>长线参与</span>
-                  <span>{stats.longTermCount}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>竞猜总场次</span>
-                  <span>{stats.totalPredictions}</span>
-                </div>
-              </div>
+              )}
             </div>
           </div>
+        )}
 
-          <div>
-            <div className="mb-3 flex items-center justify-between">
-              <h4 className="text-sm font-black text-slate-900">已解锁徽章</h4>
-              <span className="text-[11px] font-medium text-slate-500">称号之外，再用徽章展示你的风格</span>
-            </div>
-            {unlockedBadges.length === 0 ? (
-              <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
-                你离第一枚徽章已经不远了，先完成一场命中或连续参与几场竞猜。
+        {activeTab === 'reports' && (
+          <div className="space-y-3.5 metab-tab-enter">
+            <section className="soft-card bg-white border border-slate-200 rounded-[20px] p-4 shadow-[0_12px_32px_rgba(15,23,42,0.06)]">
+              <div className="flex items-center justify-between mb-3.5">
+                <div className="flex items-center gap-1.5">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  <h3 className="text-sm font-bold text-[#0f172a]">最近结算</h3>
+                </div>
+                <Trophy className="h-4 w-4 text-amber-500" />
               </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-3">
+              {recentSettlements.length === 0 ? (
+                <EmptyState>暂无结算战报。</EmptyState>
+              ) : (
+                <div className="space-y-2">
+                  {recentSettlements.map((prediction) => (
+                    <SettlementRow key={prediction.id} prediction={prediction} />
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section className="soft-card bg-white border border-slate-200 rounded-[20px] p-4 shadow-[0_12px_32px_rgba(15,23,42,0.06)]">
+              <div className="flex items-center justify-between mb-3.5">
+                <div className="flex items-center gap-1.5">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0891b2" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                  <h3 className="text-sm font-bold text-[#0f172a]">积分流水</h3>
+                </div>
+                <Layers3 className="h-4 w-4 text-cyan-600" />
+              </div>
+              <TransactionList transactions={recentTransactions} />
+            </section>
+          </div>
+        )}
+
+        {activeTab === 'badges' && (
+          <section className="soft-card bg-white border border-slate-200 rounded-[20px] p-4 shadow-[0_12px_32px_rgba(15,23,42,0.06)] metab-tab-enter">
+            <div className="flex items-center justify-between mb-3.5">
+              <div>
+                <h3 className="text-sm font-bold text-[#0f172a]">徽章雷达</h3>
+                <p className="mt-0.5 text-[11px] font-semibold text-slate-500">已解锁 {unlockedBadges.length} 枚</p>
+              </div>
+              <BadgeCheck className="h-5 w-5 text-emerald-600" />
+            </div>
+
+            {unlockedBadges.length > 0 && (
+              <div className="mb-3 grid grid-cols-2 gap-2">
                 {unlockedBadges.map((badge) => (
-                  <div key={badge.id} className="rounded-[22px] border border-slate-200 bg-white p-4">
-                    <span className={`inline-flex rounded-full px-3 py-1 text-xs font-black ${TONE_CLASS[badge.tone]}`}>
-                      {badge.icon} {badge.label}
-                    </span>
-                    <p className="mt-2 text-xs leading-6 text-slate-500">{badge.description}</p>
-                  </div>
+                  <BadgeCard key={badge.id} badge={badge} unlocked />
                 ))}
               </div>
             )}
-          </div>
 
-          <div>
-            <div className="mb-3 flex items-center justify-between">
-              <h4 className="text-sm font-black text-slate-900">即将解锁</h4>
-              <span className="text-[11px] font-medium text-slate-500">把进度最靠前的几枚放在前面</span>
+            <div className="space-y-2">
+              {upcomingBadges.length === 0 ? (
+                <EmptyState>本阶段徽章已全部点亮。</EmptyState>
+              ) : (
+                upcomingBadges.map((badge) => <BadgeProgress key={badge.id} badge={badge} />)
+              )}
             </div>
-            <div className="space-y-3">
-              {upcomingBadges.slice(0, 4).map((badge) => (
-                <div key={badge.id} className="rounded-[22px] border border-slate-200 bg-slate-50 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold ${TONE_CLASS[badge.tone]}`}>
-                          {badge.icon} {badge.label}
-                        </span>
-                        <span className="text-[11px] font-semibold text-slate-500">
-                          {badge.current}/{badge.target}
-                        </span>
-                      </div>
-                      <p className="mt-2 text-xs leading-6 text-slate-500">{badge.description}</p>
-                    </div>
-                    <span className="text-sm font-black text-slate-700">{getProgressPercent(badge)}%</span>
-                  </div>
-                  <div className="mt-3 h-2 rounded-full bg-slate-200">
-                    <div
-                      className="h-2 rounded-full bg-gradient-to-r from-emerald-500 to-cyan-500"
-                      style={{ width: `${getProgressPercent(badge)}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
+          </section>
+        )}
 
-      <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-black text-slate-900">长线竞猜</h3>
-            <p className="mt-1 text-xs text-slate-500">冠军、金靴、金球这些玩法更适合看整届走势。</p>
-          </div>
-          <Ticket className="h-4.5 w-4.5 text-emerald-600" />
-        </div>
-
-        {tournamentBets.length === 0 ? (
-          <div className="mt-4 rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
-            你还没有参与长线竞猜，后续开放后会在竞猜页里进入。
-          </div>
-        ) : (
-          <div className="mt-4 space-y-3">
-            {tournamentBets.slice(0, 4).map((bet) => {
-              const market = tournamentMarkets.find((m: any) => m.type === bet.type);
-              const option = market?.options?.find((o: any) => o.id === bet.targetId);
-              return (
-                <div key={bet.id} className="flex items-center gap-3 rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  {/* 头像+国旗 */}
-                  <div className="relative shrink-0">
-                    {option?.avatarUrl ? (
-                      <img
-                        src={option.avatarUrl}
-                        alt={bet.targetLabel}
-                        className="h-10 w-10 rounded-full object-cover ring-2 ring-slate-100"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
-                          (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
-                        }}
-                      />
-                    ) : null}
-                    <div className={`flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 text-sm font-black text-slate-500 ${option?.avatarUrl ? 'hidden' : ''}`}>
-                      {bet.targetLabel.charAt(0)}
-                    </div>
-                    {option?.flagCode && (
-                      <div className="absolute -right-0.5 -bottom-0.5">
-                        <FlagBadge flagCode={option.flagCode} size="sm" className="!h-4 !w-4 !border-white/80" />
-                      </div>
-                    )}
-                  </div>
-                  {/* 信息 */}
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-black text-slate-900">{(bet as any).marketLabel || bet.type}</p>
-                    <p className="mt-0.5 text-xs text-slate-500">
-                      {bet.targetLabel}
-                      {bet.targetSubLabel ? ` · ${bet.targetSubLabel}` : ''}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-black text-slate-900">{bet.potentialReturn?.toLocaleString() ?? 0} PTS</p>
-                    <p className="mt-0.5 text-[11px] text-slate-500">{bet.stakePoints} PTS 投入</p>
-                  </div>
+        {activeTab === 'items' && (
+          <div className="space-y-3.5 metab-tab-enter">
+            <section className="soft-card bg-white border border-slate-200 rounded-[20px] p-4 shadow-[0_12px_32px_rgba(15,23,42,0.06)]">
+              <div className="flex items-center justify-between mb-3.5">
+                <div className="flex items-center gap-1.5">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/></svg>
+                  <h3 className="text-sm font-bold text-[#0f172a]">道具卡</h3>
                 </div>
-              );
-            })}
+                <Sparkles className="h-4 w-4 text-amber-500" />
+              </div>
+              <CardInventoryGrid cardInventory={cardInventory} />
+            </section>
+
+            <section className="soft-card bg-white border border-slate-200 rounded-[20px] p-4 shadow-[0_12px_32px_rgba(15,23,42,0.06)]">
+              <div className="flex items-center justify-between mb-3.5">
+                <div className="flex items-center gap-1.5">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.5"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+                  <h3 className="text-sm font-bold text-[#0f172a]">长线竞猜</h3>
+                </div>
+                <ProfileImageIcon src={STAT_ICON_SRC.predictionTicket} alt="长线竞猜" size={24} fallback={<Ticket className="h-4 w-4 text-amber-500" />} />
+              </div>
+              <TournamentBetStrip tournamentBets={tournamentBets} tournamentMarkets={tournamentMarkets} expanded />
+            </section>
+
+            {onAdminLogin && (
+              <button
+                onClick={onAdminLogin}
+                className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-700 active:scale-[0.98] transition"
+              >
+                <ShieldCheck className="h-4 w-4" />
+                管理后台
+              </button>
+            )}
           </div>
         )}
-      </section>
 
-      <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-black text-slate-900">最近结算</h3>
-            <p className="mt-1 text-xs text-slate-500">最近几单是红是黑，一眼看清你的即时状态。</p>
-          </div>
-          <Trophy className="h-4.5 w-4.5 text-amber-500" />
+      </div>
+
+        {/* 底部操作栏 */}
+        <div className="relative z-10 mx-auto max-w-xl flex gap-3 pt-1 pb-2 px-4">
+          <button
+            onClick={handleShareCard}
+            disabled={sharing}
+            className="metab-green-btn flex-1 flex items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-bold text-white transition active:scale-[0.98] disabled:opacity-50"
+          >
+            {sharing ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            保存战绩图
+          </button>
+          <button
+            onClick={onLogout}
+            className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white/90 px-6 py-3.5 text-sm font-semibold text-slate-500 hover:text-rose-600 hover:border-rose-200 transition active:scale-[0.98]"
+          >
+            <LogOut className="h-4 w-4" />
+            退出
+          </button>
         </div>
+    </div>
+  );
+}
 
-        {recentSettlements.length === 0 ? (
-          <div className="mt-4 rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
-            还没有结算记录，等第一批比赛结束后这里就会开始滚动起来。
-          </div>
-        ) : (
-          <div className="mt-4 space-y-3">
-            {recentSettlements.map((prediction) => (
-              <div key={prediction.id} className="rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-black text-slate-900">
-                      {prediction.match?.homeTeam?.nameZh || '主队'} vs {prediction.match?.awayTeam?.nameZh || '客队'}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      {prediction.optionLabel} · {formatDate(prediction.match?.startTimeUtc || prediction.placedAt)}
-                    </p>
-                  </div>
-                  <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${getPredictionTone(prediction.status)}`}>
-                    {prediction.status === 'WON' ? '命中' : '未中'}
-                  </span>
-                </div>
+function SettlementRow({ prediction }: { prediction: PredictionWithMatch; key?: React.Key }) {
+  const isWin = prediction.status === 'WON';
+  const homeFlag = prediction.match?.homeTeam?.flagCode || '⚽';
+  const awayFlag = prediction.match?.awayTeam?.flagCode || '⚽';
+  return (
+    <div className={`flex items-center justify-between rounded-2xl px-3.5 py-2.5 transition cursor-default ${
+      isWin ? 'bg-slate-50/80 hover:bg-emerald-50/50' : 'bg-slate-50/80 hover:bg-rose-50/30'
+    }`}>
+      <div className="flex items-center gap-2.5 min-w-0">
+        <span className="text-xl leading-none">{homeFlag}</span>
+        <span className="text-sm font-bold tabular-nums text-[#0f172a] min-w-[32px] text-center">
+          {prediction.match?.homeScore ?? '-'} : {prediction.match?.awayScore ?? '-'}
+        </span>
+        <span className="text-xl leading-none">{awayFlag}</span>
+        <span className={`inline-flex items-center ml-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+          isWin ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-500'
+        }`}>
+          {isWin ? '命中' : '未中'}
+        </span>
+      </div>
+      <span className={`text-sm font-bold tabular-nums shrink-0 ml-2 ${Number(prediction.settledProfit || 0) >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
+        {formatSigned(prediction.settledProfit || 0)}
+      </span>
+    </div>
+  );
+}
 
-                <div className="mt-3 flex items-center justify-between text-xs">
-                  <span className="font-semibold text-slate-500">投入 {prediction.stakePoints} PTS</span>
-                  <span className={`font-black ${Number(prediction.settledProfit || 0) >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-                    {formatSigned(prediction.settledProfit || 0)} PTS
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
+function TransactionList({ transactions }: { transactions: Transaction[] }) {
+  if (transactions.length === 0) {
+    return <EmptyState>暂无积分流水。</EmptyState>;
+  }
 
-      <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-black text-slate-900">最近操作</h3>
-            <p className="mt-1 text-xs text-slate-500">下注、结算、问答和积分变化放在一起，方便快速回看。</p>
+  return (
+    <div className="space-y-2">
+      {transactions.map((tx) => (
+        <div key={tx.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-black text-slate-900">{tx.note}</p>
+            <p className="mt-1 text-xs font-semibold text-slate-500">{formatDate(tx.createdAt)}</p>
           </div>
-          <RefreshCw className="h-4.5 w-4.5 text-slate-400" />
+          <div className="shrink-0 text-right">
+            <p className={`text-sm font-black ${tx.amount >= 0 ? 'text-emerald-700' : 'text-slate-700'}`}>{formatSigned(tx.amount)}</p>
+            <p className="mt-1 text-[10px] font-bold text-slate-400">{formatCompact(tx.balanceAfter)}</p>
+          </div>
         </div>
+      ))}
+    </div>
+  );
+}
 
-        <div className="mt-4 space-y-3">
-          {recentTransactions.map((tx) => (
-            <div key={tx.id} className="flex items-center justify-between rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-black text-slate-900">{tx.note}</p>
-                <p className="mt-1 text-xs text-slate-500">{formatDate(tx.createdAt)}</p>
-              </div>
-              <div className="text-right">
-                <p className={`text-sm font-black ${tx.amount >= 0 ? 'text-emerald-700' : 'text-slate-700'}`}>
-                  {formatSigned(tx.amount)}
-                </p>
-                <p className="mt-1 text-[11px] text-slate-500">余额 {tx.balanceAfter?.toLocaleString() ?? '-'}</p>
-              </div>
+function BadgeCard({ badge, unlocked = false }: { badge: AchievementBadgeSummary; unlocked?: boolean; key?: React.Key }) {
+  return (
+    <div className={`rounded-2xl border p-3 ${unlocked ? 'border-emerald-100 bg-emerald-50/70' : 'border-slate-100 bg-slate-50'}`}>
+      <div className="flex items-center gap-2">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-white/70">
+          <ProfileImageIcon src={BADGE_ICON_SRC[badge.id]} alt={badge.label} size={32} fallback={<span className="text-lg">{badge.icon}</span>} />
+        </div>
+        <div className="min-w-0">
+          <span className={`inline-flex max-w-full truncate rounded-full px-2.5 py-1 text-[11px] font-black ${TONE_CLASS[badge.tone]}`}>
+            {badge.label}
+          </span>
+          <p className="mt-1 text-[10px] font-black text-emerald-700">{unlocked ? '已点亮' : '未解锁'}</p>
+        </div>
+      </div>
+      <p className="mt-2 line-clamp-2 text-xs font-semibold leading-5 text-slate-500">{badge.description}</p>
+    </div>
+  );
+}
+
+function BadgeProgress({ badge }: { badge: AchievementBadgeSummary; key?: React.Key }) {
+  const progress = getProgressPercent(badge);
+  return (
+    <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-100">
+            <ProfileImageIcon src={BADGE_ICON_SRC[badge.id]} alt={badge.label} size={32} fallback={<span className="text-lg">{badge.icon}</span>} />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-black ${TONE_CLASS[badge.tone]}`}>
+                {badge.label}
+              </span>
+              <span className="text-[11px] font-black text-slate-400">
+                {badge.current}/{badge.target}
+              </span>
             </div>
-          ))}
+            <p className="mt-2 line-clamp-1 text-xs font-semibold text-slate-500">{badge.description}</p>
+          </div>
         </div>
-      </section>
+        <span className="shrink-0 text-sm font-black text-slate-700">{progress}%</span>
+      </div>
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
+        <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-cyan-500" style={{ width: `${progress}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function CardInventoryGrid({ cardInventory }: { cardInventory: any }) {
+  if (!cardInventory?.definitions?.length) {
+    return <EmptyState>暂无道具卡，后续活动会继续发放。</EmptyState>;
+  }
+
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {cardInventory.definitions.map((def: any) => {
+        const count = cardInventory.cards?.[def.id] || 0;
+        const cardIconSrc = CARD_ICON_SRC[def.id] || CARD_ICON_SRC[String(def.id).toUpperCase()] || CARD_ICON_SRC[String(def.id).toLowerCase()];
+        return (
+          <div key={def.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-100">
+                <ProfileImageIcon src={cardIconSrc} alt={def.shortLabel || def.label} size={32} fallback={<span className="text-xl">{def.icon}</span>} />
+              </div>
+              <span className={`rounded-full px-2 py-0.5 text-xs font-black ${count > 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-500'}`}>
+                x{count}
+              </span>
+            </div>
+            <p className="mt-2 text-sm font-black text-slate-900">{def.shortLabel || def.label}</p>
+            <p className="mt-1 line-clamp-2 text-[11px] font-semibold leading-4 text-slate-500">{def.description}</p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function TournamentBetStrip({
+  tournamentBets,
+  tournamentMarkets,
+  expanded = false,
+}: {
+  tournamentBets: TournamentBet[];
+  tournamentMarkets: any[];
+  expanded?: boolean;
+}) {
+  if (tournamentBets.length === 0) {
+    return <EmptyState>你还没有参与长线竞猜。</EmptyState>;
+  }
+
+  const bets = expanded ? tournamentBets : tournamentBets.slice(0, 2);
+  return (
+    <div className="space-y-2">
+      {bets.map((bet) => {
+        const market = tournamentMarkets.find((m: any) => m.type === bet.type);
+        const option = market?.options?.find((o: any) => o.id === bet.targetId);
+        return (
+          <div key={bet.id} className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3">
+            <div className="relative shrink-0">
+              {option?.avatarUrl ? (
+                <img
+                  src={option.avatarUrl}
+                  alt={bet.targetLabel}
+                  className="h-10 w-10 rounded-full object-cover ring-2 ring-white"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                    (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                  }}
+                />
+              ) : null}
+              <div className={`flex h-10 w-10 items-center justify-center rounded-full bg-white text-sm font-black text-slate-500 ring-1 ring-slate-200 ${option?.avatarUrl ? 'hidden' : ''}`}>
+                {bet.targetLabel.charAt(0)}
+              </div>
+              {option?.flagCode && (
+                <div className="absolute -bottom-0.5 -right-0.5">
+                  <FlagBadge flagCode={option.flagCode} size="sm" className="!h-4 !w-4 !border-white/80" />
+                </div>
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-black text-slate-900">{(bet as any).marketLabel || market?.label || bet.type}</p>
+              <p className="mt-0.5 truncate text-xs font-semibold text-slate-500">
+                {bet.targetLabel}
+                {bet.targetSubLabel ? ` · ${bet.targetSubLabel}` : ''}
+              </p>
+            </div>
+            <div className="shrink-0 text-right">
+              <p className="text-sm font-black text-slate-900">{formatCompact(bet.potentialReturn)}</p>
+              <p className="mt-0.5 text-[10px] font-bold text-slate-400">{bet.stakePoints} PTS</p>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
