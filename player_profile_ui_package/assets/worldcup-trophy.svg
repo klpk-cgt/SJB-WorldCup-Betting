@@ -1,0 +1,16 @@
+<svg width="240" height="260" viewBox="0 0 240 260" fill="none" xmlns="http://www.w3.org/2000/svg">
+<ellipse cx="120" cy="235" rx="70" ry="14" fill="#E7D08A" opacity=".32"/>
+<path d="M89 214H151L161 238H79L89 214Z" fill="url(#base)"/>
+<path d="M94 196H146L151 216H89L94 196Z" fill="url(#base2)"/>
+<path d="M111 104C96 118 90 148 96 180H144C150 148 144 118 129 104H111Z" fill="url(#stem)"/>
+<path d="M72 42C82 17 105 10 120 10C135 10 158 17 168 42C180 75 151 102 132 112C125 116 115 116 108 112C89 102 60 75 72 42Z" fill="url(#cup)"/>
+<path d="M80 52C62 50 46 60 43 77C40 96 57 113 86 121" stroke="url(#cup)" stroke-width="12" stroke-linecap="round"/>
+<path d="M160 52C178 50 194 60 197 77C200 96 183 113 154 121" stroke="url(#cup)" stroke-width="12" stroke-linecap="round"/>
+<path d="M120 27C136 39 142 56 138 75C135 89 126 99 120 105C114 99 105 89 102 75C98 56 104 39 120 27Z" fill="#FFF6C8" opacity=".38"/>
+<defs>
+<linearGradient id="cup" x1="66" y1="10" x2="178" y2="128" gradientUnits="userSpaceOnUse"><stop stop-color="#FFF0A6"/><stop offset=".3" stop-color="#D8A521"/><stop offset=".64" stop-color="#FFF6C8"/><stop offset="1" stop-color="#B77912"/></linearGradient>
+<linearGradient id="stem" x1="96" y1="104" x2="148" y2="184" gradientUnits="userSpaceOnUse"><stop stop-color="#FFF3B0"/><stop offset=".52" stop-color="#D6A11D"/><stop offset="1" stop-color="#8D5E0A"/></linearGradient>
+<linearGradient id="base" x1="79" y1="214" x2="161" y2="238" gradientUnits="userSpaceOnUse"><stop stop-color="#FFEAA0"/><stop offset="1" stop-color="#9F6810"/></linearGradient>
+<linearGradient id="base2" x1="89" y1="196" x2="151" y2="216" gradientUnits="userSpaceOnUse"><stop stop-color="#FFEAA0"/><stop offset="1" stop-color="#B87A13"/></linearGradient>
+</defs>
+</svg>

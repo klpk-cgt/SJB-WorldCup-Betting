@@ -427,6 +427,17 @@ export async function runDynamicSyncTick() {
         appendSyncLog(result.log);
         markFixturesSynced();
         resetFixturesFailures();
+        // 清除降级模式下标记的 scoreUnknown（此时 API Key 可用，比分已从同步中获取）
+        let recoveredCount = 0;
+        for (const m of db.matches) {
+          if ((m as any).scoreUnknown && typeof m.homeScore === 'number' && typeof m.awayScore === 'number') {
+            delete (m as any).scoreUnknown;
+            recoveredCount++;
+          }
+        }
+        if (recoveredCount > 0) {
+          logger.info(`[SyncScheduler] Recovered ${recoveredCount} scoreUnknown matches, scores now available`);
+        }
         dbService.save();
         logger.info(`[SyncScheduler] Fixtures synced: ${result.log.responseSummary}`);
       } catch (error) {

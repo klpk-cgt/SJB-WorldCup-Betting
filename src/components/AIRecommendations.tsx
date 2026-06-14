@@ -3,7 +3,7 @@
  * 展示 AI 分析后的推荐投注方案，支持一键跟投
  */
 import { useState, useEffect } from 'react';
-import { Sparkles, TrendingUp, Shield, Target, AlertTriangle, Swords } from 'lucide-react';
+import { Sparkles, TrendingUp, Target, AlertTriangle, Swords } from 'lucide-react';
 import { apiRequest } from '../utils/api';
 import { useToast } from './ToastProvider';
 

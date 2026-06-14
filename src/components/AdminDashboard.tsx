@@ -5,7 +5,7 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import {
   Users, TrendingUp, Coins, Trophy, Activity, BarChart3,
-  Target, Clock, DollarSign, Zap, ChevronUp, ChevronDown,
+  Target, Clock, DollarSign, Zap, ChevronUp,
 } from 'lucide-react';
 import { apiRequest, ADMIN_KEY_STORAGE } from '../utils/api';
 
@@ -77,9 +77,6 @@ export default function AdminDashboard() {
   }
 
   const { overview } = data;
-  const winRate = overview.totalBetVolume > 0
-    ? Math.round(overview.totalPayout / overview.totalBetVolume * 100)
-    : 0;
 
   return (
     <div className="space-y-6">

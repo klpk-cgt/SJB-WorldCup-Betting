@@ -1,6 +1,6 @@
 import { DatabaseSchema } from '../db/db_service';
 import { Match, MatchOdds, MatchStatus, SyncLog, SyncProvider, SyncStatus, SyncType, Team } from '../types';
-import { generateDefaultOdds, mergeCorrectScoreOdds, scaleCorrectScoreOdds, DEFAULT_CORRECT_SCORE_OPTIONS, generateCorrectScoreOddsFromXG } from '../utils/odds';
+import { generateDefaultOdds, mergeCorrectScoreOdds, DEFAULT_CORRECT_SCORE_OPTIONS, generateCorrectScoreOddsFromXG } from '../utils/odds';
 import { calculateExpectedGoals } from '../utils/elo';
 import { broadcastScoreUpdate, broadcastOddsChange } from './websocket';
 

@@ -4,9 +4,9 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Shield, Users, Trophy, Play, CheckCircle, RefreshCw, BarChart3, Database, Key, Coins, HelpCircle, FileText, AlertCircle, Sparkles, Plus, Trash2, Upload, X } from 'lucide-react';
+import { Settings, Shield, Users, Play, RefreshCw, BarChart3, Database, Coins, FileText, Plus, Trash2, Upload, X } from 'lucide-react';
 import { ADMIN_KEY_STORAGE, apiRequest } from '../utils/api';
-import { Match, User, SyncLog } from '../types';
+import { Match, SyncLog } from '../types';
 import { useToast } from './ToastProvider';
 import AdminDashboard from './AdminDashboard';
 
@@ -42,7 +42,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
   // 单个创建账号
   const [singleName, setSingleName] = useState('');
   const [singleLoginCode, setSingleLoginCode] = useState('');
-  const [singleRoom, setSingleRoom] = useState('room-1');
+  const [singleRoom] = useState('room-1');
   const [singlePoints, setSinglePoints] = useState('10000');
 
   // 头像上传
@@ -342,24 +342,6 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
       toast.success('调整成功', '用户积分已经更新。');
     } catch (e: unknown) {
       toast.error('调整积分失败', e.message);
-    } finally {
-      setIsWorking(false);
-    }
-  };
-
-  // Adjust cards
-  const handleAdjustCards = async (userId: string, cardId: string, delta: number) => {
-    setIsWorking(true);
-    try {
-      await apiRequest(`/api/admin/users/${userId}/cards/adjust`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cardId, delta }),
-      });
-      await loadAdminData();
-      toast.success('卡牌已更新');
-    } catch (e: unknown) {
-      toast.error('调整卡牌失败', e.message);
     } finally {
       setIsWorking(false);
     }

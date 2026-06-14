@@ -8,7 +8,6 @@ import { dbService } from '../../db/db_service';
 import { User, Wallet } from '../../types';
 import {
   createId,
-  getAuthenticatedUser,
   serializeUserForClient,
 } from '../helpers';
 

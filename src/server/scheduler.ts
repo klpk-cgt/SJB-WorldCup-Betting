@@ -73,11 +73,16 @@ export function initScheduler() {
     }
   });
 
+  // 每天 00:30：AI 自动生成每日问答新题
+  registerTask('generate-ai-quiz', '30 0 * * *', async () => {
+    const { generateAIQuizQuestions } = await import('./services/quiz_service');
+    const result = await generateAIQuizQuestions();
+    logger.info(`[Scheduler] AI quiz generated: ${result.questions.length} questions via ${result.provider}`);
+  });
+
   // 每天 03:00：清理旧的 rate limit 缓存
   registerTask('cleanup-rate-limits', '0 3 * * *', () => {
-    // 清除超过 24 小时的 rate limit 记录
-    const now = Date.now();
-    // 这个逻辑在 server.ts 的 rateLimitMap 中处理
+    // 清除超过 24 小时的 rate limit 记录（逻辑在 server.ts 的 rateLimitMap 中处理）
     logger.info('[Cleanup] Rate limit cache cleanup scheduled');
   });
 

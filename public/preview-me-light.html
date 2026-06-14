@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>FIFA World Cup · Player Center</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<script>tailwind.config={theme:{extend:{fontFamily:{sans:['Inter','"PingFang SC"','"Microsoft YaHei"','system-ui','sans-serif']}}}}}</script>
+<style>
+  :root {
+    --page-bg: #f6f8fb;
+    --card-glass: rgba(255,255,255,0.88);
+    --card-solid: #ffffff;
+    --text-main: #111827;
+    --text-2nd: #6b7280;
+    --text-muted: #9ca3af;
+    --border-soft: #e5e7eb;
+    --border-glass: rgba(255,255,255,0.72);
+    --green-main: #16a34a;
+    --green-soft: #dcfce7;
+    --green-deep: #166534;
+    --blue-main: #3b82f6;
+    --blue-soft: #dbeafe;
+    --gold-main: #d97706;
+    --gold-soft: #fef3c7;
+    --red-main: #dc2626;
+    --red-soft: #fee2e2;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin:0; padding:0; }
+
+  body {
+    font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    background:
+      radial-gradient(circle at 20% 0%, rgba(34,197,94,0.10), transparent 30%),
+      radial-gradient(circle at 85% 10%, rgba(59,130,246,0.12), transparent 28%),
+      linear-gradient(180deg, #f8fbff 0%, #f6f8fb 42%, #ffffff 100%);
+    min-height: 100vh;
+    color: var(--text-main);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ======== 页面容器 ======== */
+  .app-shell {
+    max-width: 32rem; /* max-w-lg */
+    margin: 0 auto;
+    min-height: 100vh;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* ======== Header 浅色体育场背景 ======== */
+  .header-stadium {
+    position: relative;
+    padding: 16px 16px 32px;
+    background-image:
+      linear-gradient(180deg, rgba(248,251,255,0.70) 0%, rgba(246,248,251,0.92) 55%, rgba(255,255,255,1) 100%),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 260'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23e8f5e9' stop-opacity='.35'/%3E%3Cstop offset='1' stop-color='%23ffffff' stop-opacity='0'/%3E%3C/linearGradient%3E%3ClinearGradient id='g2' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23f0fdf4' stop-opacity='.3'/%3E%3Cstop offset='1' stop-color='%23ffffff' stop-opacity='0'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cellipse cx='200' cy='110' rx='220' ry='130' fill='url(%23g)'/%3E%3Cpath d='M30 190 Q200 150 370 190 L390 260 L10 260 Z' fill='url(%23g2)'/%3E%3Cpath d='M70 210 Q200 170 330 210 L350 256 L50 256 Z' fill='%23dcfce7' opacity='.15'/%3E%3Cline x1='140' y1='185' x2='140' y2='250' stroke='%23bbf7d0' stroke-width='1' opacity='.25'/%3E%3Cline x1='200' y1='180' x2='200' y2='254' stroke='%23bbf7d0' stroke-width='1' opacity='.25'/%3E%3Cline x1='260' y1='185' x2='260' y2='250' stroke='%23bbf7d0' stroke-width='1' opacity='.25'/%3E%3Ccircle cx='200' cy='215' r='42' fill='none' stroke='%23bbf7d0' stroke-width='1' opacity='.2'/%3E%3Crect x='158' y='173' width='84' height='1' rx='.5' fill='%23bbf7d0' opacity='.2'/%3E%3Crect x='158' y='256' width='84' height='1' rx='.5' fill='%23bbf7d0' opacity='.2'/%3E%3Cpath d='M0 55 Q200 -15 400 55 L400 0 L0 0 Z' fill='%23f0f9ff' opacity='.25'/%3E%3Cpath d='M0 82 Q200 18 400 82' fill='none' stroke='%23e0f2fe' stroke-width='1.5' opacity='.35'/%3E%3Cpath d='M0 102 Q200 42 400 102' fill='none' stroke='%23e0f2fe' stroke-width='1' opacity='.25'/%3E%3C/svg%3E");
+    background-size: cover;
+    background-position: center top;
+    background-repeat: no-repeat;
+  }
+
+  /* ======== 右上角装饰 ======== */
+  .header-decor {
+    position: absolute;
+    right: 8px;
+    top: 40px;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  /* ======== 操作按钮 44x44 ======== */
+  .action-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 16px;
+    background: rgba(255,255,255,0.72);
+    border: 1px solid rgba(255,255,255,0.9);
+    box-shadow: 0 10px 28px rgba(15,23,42,0.08);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    cursor: pointer;
+  }
+  .action-btn:hover { transform: translateY(-1px); box-shadow: 0 14px 32px rgba(15,23,42,0.12); }
+  .action-btn:active { transform: scale(0.95); }
+
+  /* ======== 毛玻璃资料主卡 ======== */
+  .profile-glass {
+    background: rgba(255,255,255,0.86);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(255,255,255,0.72);
+    box-shadow: 0 24px 60px rgba(15,23,42,0.10), inset 0 1px 0 rgba(255,255,255,0.70);
+    border-radius: 28px;
+    padding: 20px;
+    position: relative;
+    z-index: 10;
+  }
+  @supports not (backdrop-filter: blur(18px)) {
+    .profile-glass { background: rgba(255,255,255,0.96); }
+  }
+
+  /* ======== 头像 92px ======== */
+  .avatar-box {
+    width: 92px;
+    height: 92px;
+    border-radius: 999px;
+    border: 4px solid rgba(255,255,255,0.9);
+    box-shadow: 0 14px 30px rgba(15,23,42,0.12);
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  /* 认证角标 */
+  .verify-badge {
+    position: absolute;
+    bottom: -4px;
+    right: -4px;
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+    border: 3px solid #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* ======== 称号标签 ======== */
+  .tag-worldcup {
+    background: #dcfce7;
+    color: #166534;
+    border: 1px solid #bbf7d0;
+    border-radius: 999px;
+    padding: 2px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .tag-firstwin {
+    background: #dbeafe;
+    color: #2563eb;
+    border: 1px solid #bfdbfe;
+    border-radius: 999px;
+    padding: 2px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  /* ======== 段位标签 ======== */
+  .rank-badge {
+    background: linear-gradient(90deg, #eef2ff, #e0f2fe);
+    color: #64748b;
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: 10px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  /* ======== Tab 导航 ======== */
+  .tab-nav {
+    background: rgba(255,255,255,0.88);
+    border: 1px solid var(--border-soft);
+    border-radius: 22px;
+    height: 52px;
+    box-shadow: 0 10px 28px rgba(15,23,42,0.05);
+    display: flex;
+    align-items: center;
+    padding: 0 6px;
+    margin: -12px 16px 0;
+    position: relative;
+    z-index: 20;
+  }
+  .tab-item {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 100%;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-2nd);
+    cursor: pointer;
+    position: relative;
+    transition: color 0.2s;
+    border: none;
+    background: none;
+  }
+  .tab-item.active { color: var(--green-main); font-weight: 700; }
+  .tab-item.active::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 28px;
+    height: 3px;
+    background: #22c55e;
+    border-radius: 3px 3px 0 0;
+  }
+  .tab-icon { width: 18px; height: 18px; flex-shrink: 0; }
+
+  /* ======== 柔和卡片 ======== */
+  .soft-card {
+    background: #fff;
+    border: 1px solid var(--border-soft);
+    box-shadow: 0 12px 32px rgba(15,23,42,0.06);
+    border-radius: 20px;
+    padding: 16px;
+  }
+
+  /* ======== 统计卡 ======== */
+  .stat-card {
+    background: #fff;
+    border: 1px solid var(--border-soft);
+    border-radius: 20px;
+    box-shadow: 0 12px 30px rgba(15,23,42,0.05);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    cursor: default;
+  }
+  .stat-card:hover { transform: translateY(-2px); box-shadow: 0 18px 40px rgba(15,23,42,0.08); }
+  .stat-label { font-size: 12px; font-weight: 600; color: var(--text-2nd); margin-bottom: 4px; }
+  .stat-value { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
+  .stat-icon-box {
+    width: 36px; height: 36px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    margin-top: 8px;
+  }
+
+  /* ======== 进度条 ======== */
+  .progress-track {
+    height: 6px;
+    background: #e5e7eb;
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #16a34a, #22c55e);
+    transition: width 0.8s cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+
+  /* ======== 战报行 ======== */
+  .report-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-radius: 16px;
+    background: rgba(248,250,252,0.8);
+    padding: 10px 14px;
+    transition: background 0.15s;
+    cursor: default;
+  }
+  .report-row:hover { background: rgba(240,253,244,0.5); }
+  .report-row.lost:hover { background: rgba(254,226,226,0.3); }
+  .report-flag { font-size: 20px; line-height: 1; }
+  .report-score { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; color: #0f172a; min-width: 32px; text-align: center; }
+
+  /* ======== 长期预测卡 ======== */
+  .prediction-card {
+    border-radius: 16px;
+    padding: 12px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    cursor: default;
+  }
+  .prediction-card:hover { transform: translateY(-2px); box-shadow: 0 18px 40px rgba(15,23,42,0.08); }
+
+  /* ======== 主按钮 ======== */
+  .btn-primary {
+    background: var(--green-main);
+    color: white;
+    border-radius: 16px;
+    padding: 14px 0;
+    font-size: 14px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    box-shadow: 0 10px 26px rgba(22,163,74,0.20);
+    transition: all 0.2s ease;
+    cursor: pointer;
+    border: none;
+    flex: 1;
+  }
+  .btn-primary:hover { background: #15803d; transform: translateY(-1px); }
+  .btn-primary:active { transform: scale(0.98); }
+
+  .btn-outline {
+    border-radius: 16px;
+    padding: 14px 24px;
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: rgba(255,255,255,0.9);
+    border: 1px solid var(--border-soft);
+    color: var(--text-2nd);
+    transition: all 0.2s ease;
+    cursor: pointer;
+  }
+  .btn-outline:hover { border-color: #dc2626; color: #dc2626; }
+  .btn-outline:active { transform: scale(0.98); }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+
+  <!-- ==================== HEADER ==================== -->
+  <header class="header-stadium">
+
+    <!-- 右上角装饰: 大奖杯 + 足球 + 飘散粒子 -->
+    <div class="header-decor">
+      <svg width="100" height="120" viewBox="0 0 100 120" fill="none" opacity="0.55">
+        <filter id="trophy-shadow"><feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#d97706" flood-opacity="0.12"/></filter>
+        <!-- 奖杯 -->
+        <g filter="url(#trophy-shadow)" transform="translate(15,0)">
+          <path d="M12 6 C12 0 42 0 42 6 L40 28 C40 42 26 50 26 50 C26 50 12 42 12 28 Z" fill="#d97706" opacity=".3"/>
+          <ellipse cx="27" cy="6" rx="14" ry="5" fill="#fbbf24" opacity=".25"/>
+          <path d="M12 14 C3 14 1 24 5 32 C9 38 11 34 11 28 Z" fill="#d97706" opacity=".15"/>
+          <path d="M42 14 C51 14 53 24 49 32 C45 38 43 34 43 28 Z" fill="#d97706" opacity=".15"/>
+          <rect x="22" y="49" width="10" height="7" rx="2" fill="#d97706" opacity=".25"/>
+          <rect x="18" y="56" width="18" height="5" rx="2" fill="#b45309" opacity=".15"/>
+        </g>
+        <!-- 足球 -->
+        <g transform="translate(58,70)" opacity="0.4">
+          <circle cx="18" cy="18" r="16" fill="white" stroke="#d1d5db" stroke-width="1"/>
+          <path d="M18 5 L22 14 L18 13 L14 14 Z M6 12 L10 19 L8 25 M30 12 L26 19 L28 25 M12 27 L18 24 L24 27 M8 7 L11 12 L7 10" stroke="#cbd5e1" stroke-width="0.7" fill="none"/>
+        </g>
+        <!-- 飘散叶子 -->
+        <ellipse cx="6" cy="40" rx="5" ry="2" fill="#22c55e" opacity=".12" transform="rotate(-30 6 40)"/>
+        <ellipse cx="85" cy="58" rx="4" ry="2" fill="#3b82f6" opacity=".10" transform="rotate(20 85 58)"/>
+        <ellipse cx="10" cy="82" rx="4" ry="2" fill="#facc15" opacity=".12" transform="rotate(-15 10 82)"/>
+        <ellipse cx="90" cy="35" rx="3" ry="1.5" fill="#d97706" opacity=".08" transform="rotate(35 90 35)"/>
+      </svg>
+    </div>
+
+    <!-- 顶部导航 -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;position:relative;z-index:10;">
+      <h1 style="font-size:16px;font-weight:700;font-style:italic;color:#1e293b;">Player Center</h1>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <!-- 刷新 -->
+        <button class="action-btn" style="color:#64748b;" title="刷新">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        </button>
+        <!-- 分享 -->
+        <button class="action-btn" style="color:#64748b;" title="分享">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        </button>
+        <!-- 退出 -->
+        <button class="action-btn" style="color:#64748b;" title="退出">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- ===== 毛玻璃资料主卡 ===== -->
+    <div class="profile-glass">
+      <!-- 上半: 头像 + 信息 -->
+      <div style="display:flex;align-items:flex-start;gap:16px;">
+        <!-- 头像 -->
+        <div style="position:relative;flex-shrink:0;">
+          <div class="avatar-box" style="background:linear-gradient(135deg,#ecfdf5,#d1fae5);display:flex;align-items:center;justify-content:center;">
+            <svg width="52" height="52" viewBox="0 0 64 64"><circle cx="32" cy="22" r="16" fill="#94a3b8"/><ellipse cx="32" cy="58" rx="24" ry="18" fill="#cbd5e1"/></svg>
+          </div>
+          <div class="verify-badge">
+            <svg width="12" height="12" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+          </div>
+        </div>
+
+        <!-- 信息 -->
+        <div style="min-width:0;flex:1;padding-top:2px;">
+          <!-- 昵称 + 段位 -->
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span style="font-size:28px;font-weight:800;line-height:1;letter-spacing:-0.02em;color:#0f172a;">豪哥</span>
+            <span class="rank-badge">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              PLATINUM II
+            </span>
+          </div>
+          <!-- 称号标签 -->
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">
+            <span class="tag-worldcup">🌍 世界杯老炮</span>
+            <span class="tag-firstwin">🏅 首胜</span>
+          </div>
+          <!-- 描述 -->
+          <p style="margin-top:6px;font-size:12px;font-weight:500;color:#6b7280;line-height:1.5;">参与够深，经验值正在持续累积</p>
+        </div>
+      </div>
+
+      <!-- 分割线 -->
+      <div style="margin-top:16px;border-top:1px solid #f1f5f9;"></div>
+
+      <!-- 下半: 积分 / 净收益 / 等级进度 -->
+      <div style="margin-top:16px;display:flex;align-items:center;gap:24px;">
+        <div>
+          <p style="font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;">当前积分</p>
+          <p style="font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1;margin-top:2px;color:#0f172a;">10,200<span style="font-size:14px;font-weight:600;color:#d1d5db;margin-left:2px;">🪙</span></p>
+        </div>
+        <div>
+          <p style="font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;">净收益</p>
+          <p style="font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1;margin-top:2px;color:#16a34a;">+12,800<span style="font-size:14px;margin-left:2px;">📈</span></p>
+        </div>
+        <div style="flex:1;min-width:0;padding-left:12px;border-left:1px solid #f1f5f9;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+            <span style="font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;white-space:nowrap;">等级进度</span>
+            <span style="font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;color:#16a34a;">68%</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" style="width:68%;"></div>
+          </div>
+          <p style="font-size:10px;font-weight:600;color:#9ca3af;margin-top:4px;font-variant-numeric:tabular-nums;">Lv.12 → 13</p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==================== TAB 导航 ==================== -->
+  <nav class="tab-nav">
+    <button class="tab-item active">
+      <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      总览
+    </button>
+    <button class="tab-item">
+      <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      战报
+    </button>
+    <button class="tab-item">
+      <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>
+      徽章
+    </button>
+    <button class="tab-item">
+      <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 010-5C13 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z"/></svg>
+      道具
+    </button>
+  </nav>
+
+  <!-- ==================== MAIN CONTENT ==================== -->
+  <main style="padding:16px 16px 96px;display:flex;flex-direction:column;gap:14px;">
+
+    <!-- ===== 2×2 统计卡 ===== -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <!-- 命中率 -->
+      <div class="stat-card">
+        <span class="stat-label">命中率</span>
+        <span class="stat-value" style="color:#0f172a;">92%</span>
+        <div class="stat-icon-box" style="background:#dcfce7;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" fill="#16a34a"/></svg>
+        </div>
+      </div>
+      <!-- 净收益 -->
+      <div class="stat-card">
+        <span class="stat-label">净收益</span>
+        <span class="stat-value" style="color:#16a34a;">+12,800</span>
+        <div class="stat-icon-box" style="background:#dcfce7;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+        </div>
+      </div>
+      <!-- 最长连中 -->
+      <div class="stat-card">
+        <span class="stat-label">最长连中</span>
+        <span class="stat-value" style="color:#0f172a;">5 场</span>
+        <div class="stat-icon-box" style="background:#fff7ed;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f97316" stroke-width="2.5"><path d="M12 2C8 6 4 10 4 14a8 8 0 0016 0c0-4-4-8-8-12z"/></svg>
+        </div>
+      </div>
+      <!-- 单场最高 -->
+      <div class="stat-card">
+        <span class="stat-label">单场最高</span>
+        <span class="stat-value" style="color:#0f172a;">2,800</span>
+        <div class="stat-icon-box" style="background:#fefce8;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#eab308" stroke-width="2" stroke-linecap="round"><path d="M6 9H4.5a2.5 2.5 0 010-5H6"/><path d="M18 9h1.5a2.5 2.5 0 000-5H18"/><path d="M4 22h16"/><path d="M18 2H6v7a6 6 0 1012 0V2Z"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== 徽章进度 ===== -->
+    <div class="soft-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          <h3 style="font-size:14px;font-weight:700;color:#0f172a;">徽章进度</h3>
+        </div>
+        <span style="font-size:12px;font-weight:700;color:#16a34a;font-variant-numeric:tabular-nums;">3 / 6 ›</span>
+      </div>
+
+      <!-- 三连中 -->
+      <div style="margin-bottom:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="width:32px;height:32px;border-radius:10px;background:#dcfce7;display:flex;align-items:center;justify-content:center;">
+              <span style="font-size:14px;font-weight:800;color:#16a34a;">3</span>
+            </div>
+            <span style="font-size:12px;font-weight:600;color:#374151;">三连中</span>
+          </div>
+          <span style="font-size:11px;font-weight:700;color:#16a34a;">3 / 3 ✓</span>
+        </div>
+        <div class="progress-track"><div class="progress-fill" style="width:100%;"></div></div>
+      </div>
+
+      <!-- 命中率60 -->
+      <div style="margin-bottom:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="width:32px;height:32px;border-radius:10px;background:#dbeafe;display:flex;align-items:center;justify-content:center;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" fill="#3b82f6"/></svg>
+            </div>
+            <span style="font-size:12px;font-weight:600;color:#374151;">命中率60</span>
+          </div>
+          <span style="font-size:11px;font-weight:700;color:#16a34a;">4 / 5</span>
+        </div>
+        <div class="progress-track"><div class="progress-fill" style="width:80%;"></div></div>
+      </div>
+
+      <!-- 冷门先知 -->
+      <div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="width:32px;height:32px;border-radius:10px;background:#eef2ff;display:flex;align-items:center;justify-content:center;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+            </div>
+            <span style="font-size:12px;font-weight:600;color:#374151;">冷门先知</span>
+          </div>
+          <span style="font-size:11px;font-weight:700;color:#d97706;">1 / 3</span>
+        </div>
+        <div class="progress-track"><div class="progress-fill" style="width:33%;background:linear-gradient(90deg,#d97706,#f59e0b);"></div></div>
+      </div>
+    </div>
+
+    <!-- ===== 最近战报 ===== -->
+    <div class="soft-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <h3 style="font-size:14px;font-weight:700;color:#0f172a;">最近战报</h3>
+        </div>
+        <span style="font-size:11px;font-weight:600;color:#9ca3af;">查看全部 ›</span>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <!-- 战报1 -->
+        <div class="report-row">
+          <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+            <span class="report-flag">🇶🇦</span>
+            <span class="report-score">3 : 1</span>
+            <span class="report-flag">🇧🇷</span>
+            <span style="display:inline-flex;align-items:center;margin-left:4px;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;background:#dcfce7;color:#16a34a;">命中</span>
+          </div>
+          <span style="font-size:14px;font-weight:700;color:#16a34a;font-variant-numeric:tabular-nums;flex-shrink:0;margin-left:8px;">+1,240</span>
+        </div>
+        <!-- 战报2 -->
+        <div class="report-row">
+          <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+            <span class="report-flag">🇫🇷</span>
+            <span class="report-score">2 : 0</span>
+            <span class="report-flag">🇩🇪</span>
+            <span style="display:inline-flex;align-items:center;margin-left:4px;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;background:#dcfce7;color:#16a34a;">命中</span>
+          </div>
+          <span style="font-size:14px;font-weight:700;color:#16a34a;font-variant-numeric:tabular-nums;flex-shrink:0;margin-left:8px;">+980</span>
+        </div>
+        <!-- 战报3 -->
+        <div class="report-row lost">
+          <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+            <span class="report-flag">🏴󠁧󠁢󠁥󠁮󠁧󠁿</span>
+            <span class="report-score" style="color:#94a3b8;">1 : 2</span>
+            <span class="report-flag">🇪🇸</span>
+            <span style="display:inline-flex;align-items:center;margin-left:4px;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;background:#fee2e2;color:#dc2626;">未中</span>
+          </div>
+          <span style="font-size:14px;font-weight:700;color:#dc2626;font-variant-numeric:tabular-nums;flex-shrink:0;margin-left:8px;">-500</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== 长期预测 ===== -->
+    <div class="soft-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/><line x1="12" y1="22" x2="12" y2="16"/><line x1="8" y1="20" x2="16" y2="20"/></svg>
+          <h3 style="font-size:14px;font-weight:700;color:#0f172a;">长期预测</h3>
+        </div>
+        <span style="font-size:11px;font-weight:600;color:#9ca3af;">查看全部 ›</span>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <!-- 冠军 -->
+        <div class="prediction-card" style="background:linear-gradient(135deg,#ffffff,#f0fdf4);border:1px solid #dcfce7;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <div style="width:40px;height:40px;border-radius:12px;background:#fef3c7;display:flex;align-items:center;justify-content:center;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2"><path d="M6 9H4.5a2.5 2.5 0 010-5H6"/><path d="M18 9h1.5a2.5 2.5 0 000-5H18"/><path d="M4 22h16"/><path d="M18 2H6v7a6 6 0 1012 0V2Z"/></svg>
+            </div>
+            <div>
+              <p style="font-size:10px;font-weight:600;color:#9ca3af;">冠军</p>
+              <p style="font-size:12px;font-weight:700;color:#0f172a;">巴西 🇧🇷</p>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;font-size:10px;font-weight:600;color:#6b7280;">
+            <span>投入 <strong style="color:#374151;">500</strong></span>
+            <span>回报 <strong style="color:#16a34a;">2,500</strong></span>
+          </div>
+        </div>
+
+        <!-- 金靴 -->
+        <div class="prediction-card" style="background:linear-gradient(135deg,#ffffff,#eff6ff);border:1px solid #dbeafe;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <div style="width:40px;height:40px;border-radius:12px;background:#dbeafe;display:flex;align-items:center;justify-content:center;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+            </div>
+            <div>
+              <p style="font-size:10px;font-weight:600;color:#9ca3af;">金靴</p>
+              <p style="font-size:12px;font-weight:700;color:#0f172a;">凯恩 + 🏴󠁧󠁢󠁥󠁮󠁧󠁿</p>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;font-size:10px;font-weight:600;color:#6b7280;">
+            <span>投入 <strong style="color:#374151;">300</strong></span>
+            <span>回报 <strong style="color:#16a34a;">1,800</strong></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== 底部操作栏 ===== -->
+    <div style="display:flex;gap:12px;padding-top:4px;padding-bottom:8px;">
+      <button class="btn-primary">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        保存战绩图
+      </button>
+      <button class="btn-outline">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        退出
+      </button>
+    </div>
+
+  </main>
+
+</div>
+
+<!-- 页脚 -->
+<footer style="text-align:center;padding-bottom:32px;padding-top:16px;">
+  <p style="font-size:9px;font-weight:600;color:#d1d5db;text-transform:uppercase;letter-spacing:0.2em;">2026 FIFA World Cup · Player Center</p>
+</footer>
+
+</body>
+</html>

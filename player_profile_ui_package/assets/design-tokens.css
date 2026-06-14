@@ -1,0 +1,69 @@
+:root {
+  --profile-page-bg: #f6f8fb;
+  --profile-card-bg: rgba(255, 255, 255, 0.88);
+  --profile-card-solid: #ffffff;
+
+  --profile-text-main: #111827;
+  --profile-text-secondary: #6b7280;
+  --profile-text-muted: #9ca3af;
+
+  --profile-border-soft: #e5e7eb;
+  --profile-border-glass: rgba(255,255,255,0.72);
+
+  --profile-green-main: #16a34a;
+  --profile-green-soft: #dcfce7;
+  --profile-green-deep: #166534;
+
+  --profile-blue-main: #3b82f6;
+  --profile-blue-soft: #dbeafe;
+
+  --profile-gold-main: #d97706;
+  --profile-gold-soft: #fef3c7;
+
+  --profile-red-main: #dc2626;
+  --profile-red-soft: #fee2e2;
+
+  --profile-radius-xl: 20px;
+  --profile-radius-2xl: 24px;
+  --profile-radius-3xl: 28px;
+
+  --profile-shadow-card: 0 12px 32px rgba(15, 23, 42, 0.06);
+  --profile-shadow-main: 0 24px 60px rgba(15, 23, 42, 0.10);
+}
+
+.profile-page-bg {
+  background:
+    radial-gradient(circle at 20% 0%, rgba(34,197,94,0.10), transparent 30%),
+    radial-gradient(circle at 85% 10%, rgba(59,130,246,0.12), transparent 28%),
+    linear-gradient(180deg, #f8fbff 0%, #f6f8fb 42%, #ffffff 100%);
+}
+
+.profile-glass-card {
+  background: var(--profile-card-bg);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--profile-border-glass);
+  box-shadow: var(--profile-shadow-main), inset 0 1px 0 rgba(255,255,255,0.70);
+  border-radius: var(--profile-radius-3xl);
+}
+
+.profile-soft-card {
+  background: #fff;
+  border: 1px solid var(--profile-border-soft);
+  box-shadow: var(--profile-shadow-card);
+  border-radius: var(--profile-radius-2xl);
+}
+
+.profile-progress {
+  height: 6px;
+  background: #e5e7eb;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.profile-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #16a34a, #22c55e);
+  transition: width 0.8s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
