@@ -86,8 +86,8 @@ function getRankDeltaMeta(delta?: number) {
 function PodiumCard({ item, rank, tabKey }: { item: LeaderboardEntry; rank: 1 | 2 | 3; tabKey: LeaderboardKey }) {
   const rankMeta = {
     1: { bg: 'from-amber-300 to-yellow-100', badge: 'bg-amber-500 text-white', height: 'h-28' },
-    2: { bg: 'from-slate-300 to-slate-50', badge: 'bg-slate-500 text-white', height: 'h-20' },
-    3: { bg: 'from-orange-300 to-amber-50', badge: 'bg-orange-500 text-white', height: 'h-16' },
+    2: { bg: 'from-slate-300 to-slate-50', badge: 'bg-slate-500 text-white', height: 'h-24' },
+    3: { bg: 'from-orange-300 to-amber-50', badge: 'bg-orange-500 text-white', height: 'h-20' },
   }[rank];
 
   // 根据榜单类型显示对应的核心数据
@@ -131,8 +131,8 @@ function PodiumCard({ item, rank, tabKey }: { item: LeaderboardEntry; rank: 1 | 
 function PodiumPlaceholder({ rank }: { rank: 1 | 2 | 3 }) {
   const rankMeta = {
     1: { bg: 'from-amber-300 to-yellow-100', badge: 'bg-amber-500 text-white', height: 'h-28' },
-    2: { bg: 'from-slate-300 to-slate-50', badge: 'bg-slate-500 text-white', height: 'h-20' },
-    3: { bg: 'from-orange-300 to-amber-50', badge: 'bg-orange-500 text-white', height: 'h-16' },
+    2: { bg: 'from-slate-300 to-slate-50', badge: 'bg-slate-500 text-white', height: 'h-24' },
+    3: { bg: 'from-orange-300 to-amber-50', badge: 'bg-orange-500 text-white', height: 'h-20' },
   }[rank];
 
   return (

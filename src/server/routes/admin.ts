@@ -578,7 +578,62 @@ router.post('/api/admin/users/:id/adjust-points', (req: Request, res: Response) 
   res.json({ success: true, balance: wallet.balance });
 });
 
-// 鈹€鈹€鈹€ 缁存姢锛氳瘎浼版墍鏈夊窘绔犱笌绉板彿 鈹€鈹€鈹€
+// ─── 统一发配积分给全员 ───
+router.post('/api/admin/users/bulk-adjust-points', (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const amount = Number(req.body.amount);
+  if (!Number.isFinite(amount) || amount === 0) {
+    return res.status(400).json({ error: '发配额度必须是非 0 数字。' });
+  }
+
+  const db = dbService.getData();
+  const reason = req.body.reason || '管理员统一发配积分';
+  let affectedCount = 0;
+
+  for (const wallet of db.wallets) {
+    const oldBalance = wallet.balance;
+    wallet.balance = Math.max(0, wallet.balance + amount);
+
+    db.transactions.push({
+      id: createId('blk'),
+      userId: wallet.userId,
+      type: 'ADMIN_ADJUST',
+      amount,
+      balanceBefore: oldBalance,
+      balanceAfter: wallet.balance,
+      note: reason,
+      createdAt: new Date().toISOString(),
+    });
+
+    const user = db.users.find((u) => u.id === wallet.userId);
+    if (user) {
+      try {
+        emitPointsAdjusted({
+          userId: user.id,
+          displayName: user.displayName,
+          avatarUrl: user.avatarUrl,
+          amount,
+          reason,
+          balanceAfter: wallet.balance,
+          groupId: user.groupId,
+        });
+      } catch (e) {
+        logger.admin('[Admin] Bulk points adjustment - failed to emit activity', {
+          error: e instanceof Error ? e.message : String(e),
+          userId: user.id,
+        });
+      }
+    }
+
+    affectedCount += 1;
+  }
+
+  dbService.save();
+  logger.admin('[Admin] Bulk points adjustment completed', { amount, reason, affectedCount });
+  res.json({ success: true, affectedCount, amount, reason });
+});
+
+// ─── maintenance badges and titles ───
 router.post('/api/admin/badges/reevaluate', (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
   const badgeResult = evaluateAllBadges();

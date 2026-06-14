@@ -62,6 +62,11 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
   const [adjustAmount, setAdjustAmount] = useState('1000');
   const [adjustReason, setAdjustReason] = useState('群友有奖问答答对奖励');
 
+  // Bulk points distribution
+  const [bulkAmount, setBulkAmount] = useState('500');
+  const [bulkReason, setBulkReason] = useState('管理员统一福利发放');
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+
   // Match edit helpers
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const [homeScore, setHomeScore] = useState('0');
@@ -354,6 +359,30 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
       toast.success('调整成功', '用户积分已经更新。');
     } catch (e: unknown) {
       toast.error('调整积分失败', e.message);
+    } finally {
+      setIsWorking(false);
+    }
+  };
+
+  // Bulk adjust points for all users
+  const handleBulkAdjust = async () => {
+    const amountNum = Number(bulkAmount);
+    if (!Number.isFinite(amountNum) || amountNum === 0) {
+      toast.error('参数错误', '请输入有效的非零数字。');
+      return;
+    }
+    setIsWorking(true);
+    setBulkConfirmOpen(false);
+    try {
+      const result = await apiRequest('/api/admin/users/bulk-adjust-points', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: amountNum, reason: bulkReason }),
+      });
+      await loadAdminData();
+      toast.success('发配成功', `已向 ${result.affectedCount} 名用户各发配 ${amountNum > 0 ? '+' : ''}${amountNum} 积分。`);
+    } catch (e: unknown) {
+      toast.error('统一发配失败', e.message);
     } finally {
       setIsWorking(false);
     }
@@ -1532,6 +1561,78 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* 统一发配积分 */}
+          <div className="bg-white p-5 rounded-3xl border border-slate-200 space-y-4 shadow-2xs">
+            <h4 className="text-xs font-black text-slate-800 flex items-center gap-1.5 font-display border-b border-slate-100 pb-2">
+              <Coins className="w-5 h-5 text-amber-500" />
+              统一发配积分给全员
+            </h4>
+            <p className="text-[10.5px] text-slate-450 leading-relaxed font-bold">
+              一键给所有已注册用户统一发放或扣除积分，请谨慎操作。
+            </p>
+
+            {bulkConfirmOpen ? (
+              <div className="bg-amber-50/50 border border-amber-200 rounded-2xl p-4 space-y-3">
+                <p className="text-[11px] font-bold text-amber-700">
+                  确认向 <strong>所有用户</strong> {Number(bulkAmount) > 0 ? '发放' : '扣除'} {Math.abs(Number(bulkAmount))} 积分？
+                </p>
+                <div className="flex justify-end space-x-2">
+                  <button
+                    onClick={() => setBulkConfirmOpen(false)}
+                    disabled={isWorking}
+                    className="px-3 py-1.5 text-[10px] font-bold text-slate-500 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={handleBulkAdjust}
+                    disabled={isWorking}
+                    className={`px-3 py-1.5 text-[10px] font-bold text-white rounded-lg transition ${Number(bulkAmount) > 0 ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'}`}
+                  >
+                    {isWorking ? '处理中...' : `确认${Number(bulkAmount) > 0 ? '发放' : '扣除'}`}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="text-[9px] text-slate-400 block mb-1 font-bold">积分额度（负数为扣减）</label>
+                  <input
+                    type="text"
+                    value={bulkAmount}
+                    onChange={(e) => setBulkAmount(e.target.value)}
+                    className="bg-slate-50 px-2.5 py-2 border border-slate-200 rounded-xl text-xs font-mono text-slate-800 w-full font-bold focus:outline-none focus:bg-white focus:border-amber-400 transition"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-[9px] text-slate-400 block mb-1 font-bold">备注说明</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={bulkReason}
+                      onChange={(e) => setBulkReason(e.target.value)}
+                      className="flex-1 bg-slate-50 px-2.5 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:bg-white focus:border-amber-400 transition"
+                    />
+                    <button
+                      onClick={() => {
+                        const n = Number(bulkAmount);
+                        if (!Number.isFinite(n) || n === 0) {
+                          toast.error('参数错误', '请输入有效的非零额度。');
+                          return;
+                        }
+                        setBulkConfirmOpen(true);
+                      }}
+                      disabled={isWorking}
+                      className={`shrink-0 px-4 py-2 text-[10px] font-bold text-white rounded-xl transition ${Number(bulkAmount) > 0 ? 'bg-amber-500 hover:bg-amber-600' : 'bg-rose-500 hover:bg-rose-600'}`}
+                    >
+                      执行发配
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 用户列表 */}

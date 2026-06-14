@@ -28,6 +28,7 @@ import { apiRequest, formatDate } from '../utils/api';
 import SmartAvatar from './SmartAvatar';
 import FlagBadge from './home/FlagBadge';
 import { useGameContext } from './GameContext';
+import { getLevelByNetProfit, LEVEL_CONFIGS } from '../server/config';
 
 interface MeTabProps {
   onLogout: () => void;
@@ -500,7 +501,13 @@ export default function MeTab({ onLogout, onAdminLogin }: MeTabProps) {
     );
   }
 
-  const expPercent = Math.max(12, Math.min(100, wallet?.balance ? (wallet.balance / Math.max(wallet.initialPoints || 10000, wallet.balance)) * 100 : 12));
+  // 等级系统：基于净收益阈值，只升不降
+  const gameNetProfit = (wallet?.balance || 0) - (wallet?.initialPoints || 10000);
+  const currentLevel = getLevelByNetProfit(gameNetProfit);
+  const nextLevel = LEVEL_CONFIGS.find(l => l.level === currentLevel.level + 1);
+  const levelProgress = nextLevel
+    ? Math.min(100, Math.max(0, ((gameNetProfit - currentLevel.minNetProfit) / (nextLevel.minNetProfit - currentLevel.minNetProfit)) * 100))
+    : 100;
 
   return (
     <div className="relative min-h-screen text-[#111827]" style={{ overflow: 'hidden' }}>
@@ -579,18 +586,19 @@ export default function MeTab({ onLogout, onAdminLogin }: MeTabProps) {
               </div>
               <div className="flex-1 min-w-0 pl-3 border-l border-slate-100">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">等级进度</span>
-                  <span className="text-[11px] font-bold tabular-nums text-emerald-600">{Math.round(expPercent)}%</span>
+                  <span className={`text-[11px] font-bold tracking-wider whitespace-nowrap ${currentLevel.color}`}>
+                    Lv.{currentLevel.level} {currentLevel.label}
+                  </span>
+                  {nextLevel && (
+                    <span className="text-[10px] font-bold tabular-nums text-slate-400">{Math.round(levelProgress)}%</span>
+                  )}
                 </div>
                 <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
                   <div
-                    className="metab-bar-animate h-full rounded-full bg-gradient-to-r from-emerald-500 to-green-400"
-                    style={{ width: `${expPercent}%` }}
+                    className={`metab-bar-animate h-full rounded-full bg-gradient-to-r ${currentLevel.barGradient}`}
+                    style={{ width: `${levelProgress}%` }}
                   />
                 </div>
-                <p className="text-[10px] font-semibold text-slate-400 mt-1 tabular-nums">
-                  Lv.{Math.max(1, Math.floor((wallet?.balance || 0) / 1000))}
-                </p>
               </div>
             </div>
           </div>
