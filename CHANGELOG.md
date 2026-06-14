@@ -2,7 +2,7 @@
 
 ## v2.5.1 - 2026-06-14
 
-### 热修复：syncLog 持久化修复 + 战报卡片 UI 优化
+### 热修复：syncLog 持久化修复 + 战报卡片 UI 优化 + 性能优化
 
 #### 1. syncLog MySQL 写入修复（7 commits）
 - **根因**：竞彩网同步日志缺少必填字段（`id`/`requestSummary`/`responseSummary`/`createdAt`）+ `detail` 字段不在 Prisma schema 中 + `targetMatchId` 超长溢出 VARCHAR(191)
@@ -18,7 +18,19 @@
 - 玩家行统一单列对称布局（emoji + 头像 + 标签/昵称 + 数值右对齐）
 - AI 点评轻量化（line-clamp-1/2）
 
+#### 3. 前端性能优化（5项）
+- **Tab 存活**：5 个核心 Tab 从条件渲染改为 CSS 隐藏，切 Tab 不再重建组件
+- **GameContext useMemo**：避免子组件无效重渲染
+- **Tab 懒加载**：改为 React.lazy 动态导入，首屏 JS 体积减少约 50%
+- **请求缓存+去重**：`apiRequest` 增加 2 分钟内存缓存 + 并发请求去重
+- **PredictionTab**：消除 `/api/tournament-bets` 重复请求
+- **WebSocket toast 节流**：同场比赛比分弹窗 30 秒内不重复
+- **HomeTab 定时器降频**：1 秒 → 5 秒，减少 80% 重新渲染
+- **MatchesTab 搜索防抖**：200ms 防抖优化
+
 ### 改动文件
+`src/App.tsx`, `src/utils/api.ts`, `src/components/PredictionTab.tsx`,
+`src/components/MatchesTab.tsx`, `src/components/HomeTab.tsx`,
 `src/server/sporttery_sync.ts`, `src/server/helpers.ts`, `src/db/db_service.ts`,
 `scripts/db-storage.mjs`, `src/components/BattleReportCard.tsx`
 
