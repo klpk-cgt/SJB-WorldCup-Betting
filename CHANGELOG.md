@@ -1,5 +1,24 @@
 # 更新日志 (Changelog)
 
+## v2.3.8 - 2026-06-14
+
+### 新增：账号禁用/启用功能
+
+管理员后台可一键禁用不活跃账号，全链路屏蔽：
+
+- **Admin UI**：用户列表每行新增「禁用/启用」开关按钮，调用 `PUT /api/admin/users/:id` 切换 `CLAIMED` ↔ `DISABLED`
+- **排行榜屏蔽**：`/api/leaderboards` 过滤 `status === 'DISABLED'` 的用户，5个榜单均不再出现
+- **群内动态屏蔽**：`getRecentActivities` 排除禁用用户的竞猜、签到、答题等动态
+- **徽章评估跳过**：`evaluateAllBadges` 循环内 `continue` 跳过禁用用户
+- **竞猜禁止**：`placePrediction` 开头校验，禁用用户下注直接抛 `'账号已被禁用'` 错误
+- **登录拦截**：已有 (`helpers.ts:148` + `auth.ts:26`) 拦截 DISABLED 用户登录
+
+### 改动文件
+
+`prediction_service.ts`, `matches.ts`, `activity_service.ts`, `badge_service.ts`, `AdminPanel.tsx`
+
+---
+
 ## v2.3.4 - 2026-06-14
 
 ### 修复

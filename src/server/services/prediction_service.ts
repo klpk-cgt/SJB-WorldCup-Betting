@@ -41,6 +41,12 @@ export function placePrediction(params: PlacePredictionParams): PlacePredictionR
   const { userId, groupId, matchId, optionKey, optionLabel, stakePoints, usedCard } = params;
   const market = normalizePredictionMarket(params.market);
 
+  // 禁用用户拦截
+  const user = db.users.find((u) => u.id === userId);
+  if (!user || user.status === 'DISABLED') {
+    throw new Error('账号已被禁用，无法进行竞猜。');
+  }
+
   if (!market) {
     throw new Error('Unsupported prediction market.');
   }

@@ -135,9 +135,15 @@ function archiveOldActivities(activities: Activity[], keep: number) {
  */
 export function getRecentActivities(limit = 30, groupId?: string): Activity[] {
   const activities = ensureActivities();
-  const filtered = groupId
-    ? activities.filter((item) => item.groupId === groupId || !item.groupId)
-    : activities;
+  // 构建禁用用户集合，一次性过滤
+  const { dbService } = require('../db/db_service');
+  const db = dbService.getData();
+  const disabledSet = new Set(db.users.filter((u: any) => u.status === 'DISABLED').map((u: any) => u.id));
+  const filtered = activities.filter((item) => {
+    if (groupId && item.groupId !== groupId && item.groupId) return false;
+    if (disabledSet.has(item.userId)) return false;
+    return true;
+  });
   // 按时间倒序
   return [...filtered]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())

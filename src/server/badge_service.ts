@@ -370,6 +370,7 @@ export function evaluateAllBadges(): { totalUnlocked: number; affectedUsers: num
   let affectedUsers = 0;
 
   for (const user of db.users) {
+    if (user.status === 'DISABLED') continue;
     const { newlyUnlocked } = evaluateUserBadges(user.id, user.displayName, user.avatarUrl);
     if (newlyUnlocked.length > 0) {
       totalUnlocked += newlyUnlocked.length;

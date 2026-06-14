@@ -1332,6 +1332,30 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
                       调账
                     </button>
                     <button
+                      onClick={async () => {
+                        const newStatus = u.status === 'DISABLED' ? 'CLAIMED' : 'DISABLED';
+                        try {
+                          await apiRequest(`/api/admin/users/${u.id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ status: newStatus }),
+                          });
+                          await loadAdminData();
+                          toast.success(newStatus === 'DISABLED' ? '账号已禁用' : '账号已启用', `${u.displayName}`);
+                        } catch (e: unknown) {
+                          toast.error('状态切换失败', e.message);
+                        }
+                      }}
+                      className={`text-[10px] px-2 py-1.5 rounded-lg font-bold cursor-pointer transition border ${
+                        u.status === 'DISABLED'
+                          ? 'bg-amber-50 hover:bg-amber-100 text-amber-600 border-amber-150'
+                          : 'bg-slate-50 hover:bg-slate-100 text-slate-500 border-slate-200'
+                      }`}
+                      title={u.status === 'DISABLED' ? '点击启用' : '点击禁用'}
+                    >
+                      {u.status === 'DISABLED' ? '启用' : '禁用'}
+                    </button>
+                    <button
                       onClick={() => setDeleteConfirmUserId(u.id)}
                       className="text-[10px] bg-red-50 hover:bg-red-100 text-red-600 border border-red-150 px-2 py-1.5 rounded-lg font-bold cursor-pointer transition"
                       title="删除账号"

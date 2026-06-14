@@ -436,7 +436,7 @@ router.post('/api/tournament-bets/golden-ball', (req: Request, res: Response) =>
 router.get('/api/leaderboards', (_req: Request, res: Response) => {
   const db = dbService.getData();
   const groupId = (_req.query.groupId as string) || dbService.getPrimaryRoomId();
-  const users = db.users.filter((item) => item.groupId === groupId);
+  const users = db.users.filter((item) => item.groupId === groupId && item.status !== 'DISABLED');
   const oneDay = 24 * 60 * 60 * 1000;
 
   // ── 预聚合：单次遍历构建索引 Map (O(P+T+W+B) vs 原来的 O(U×(P+T+W+B))) ──
