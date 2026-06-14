@@ -88,14 +88,23 @@ export async function settleMatchById(params: SettleMatchParams): Promise<Settle
   if (match.isSettled && params.forceResettle) {
     for (const prediction of matchPredictions) {
       if (prediction.status === 'WON' && prediction.settledReturn) {
-        adjustWalletBalance({
-          userId: prediction.userId,
-          amount: -prediction.settledReturn,
-          type: 'REFUND',
-          note: `重结回滚：${match.roundName}`,
-          relatedPredictionId: prediction.id,
-          relatedMatchId: match.id,
-        });
+        // 余额安全检查：用户可能已消费积分，跳过不足的回滚
+        const wallet = db.wallets.find((w) => w.userId === prediction.userId);
+        if (wallet && wallet.balance >= prediction.settledReturn) {
+          adjustWalletBalance({
+            userId: prediction.userId,
+            amount: -prediction.settledReturn,
+            type: 'REFUND',
+            note: `重结回滚：${match.roundName}`,
+            relatedPredictionId: prediction.id,
+            relatedMatchId: match.id,
+          });
+        } else {
+          logger.warn(`[SettleMatch] 重结回滚跳过（余额不足）: userId=${prediction.userId} balance=${wallet?.balance ?? 'N/A'} need=${prediction.settledReturn}`, {
+            matchId: match.id,
+            predictionId: prediction.id,
+          });
+        }
       }
       prediction.status = 'PENDING';
       prediction.settledReturn = 0;

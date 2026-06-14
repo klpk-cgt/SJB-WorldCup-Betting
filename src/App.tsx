@@ -13,6 +13,7 @@ import MatchesTab from './components/MatchesTab';
 import PredictionTab from './components/PredictionTab';
 import LeaderboardTab from './components/LeaderboardTab';
 import MeTab from './components/MeTab';
+import { GameProvider } from './components/GameContext';
 
 // 非首屏页面 - 懒加载
 const AdminPanel = React.lazy(() => import('./components/AdminPanel'));
@@ -295,6 +296,7 @@ export default function App() {
           className="flex-1 overflow-y-auto px-4 py-4"
           style={{ paddingBottom: 'calc(7.25rem + env(safe-area-inset-bottom, 0px))' }}
         >
+          <GameProvider value={{ user, wallet, onRefreshWallet: fetchUserProfileAndWallet }}>
           <Suspense fallback={SuspenseFallback}>
           {activeTab === 'home' && (
             <HomeTab user={user} wallet={wallet} onRefreshWallet={fetchUserProfileAndWallet} onNavigate={navigateTo} wsScoreUpdate={wsScoreUpdate} wsOddsChange={wsOddsChange} />
@@ -319,7 +321,7 @@ export default function App() {
           {activeTab === 'ai-recommend' && <AIRecommendations onNavigate={navigateTo} />}
           {activeTab === 'me' &&
             (user ? (
-              <MeTab user={user} wallet={wallet} onLogout={handleLogout} onAdminLogin={() => setActiveTab('admin')} />
+              <MeTab onLogout={handleLogout} onAdminLogin={() => setActiveTab('admin')} />
             ) : (
               <div className="space-y-6 pb-8 text-left">
                 <div className="relative overflow-hidden rounded-3xl border border-slate-800 bg-gradient-to-tr from-slate-950 to-slate-800 p-6 shadow-2xl">
@@ -394,6 +396,7 @@ export default function App() {
               </div>
             ))}
           </Suspense>
+          </GameProvider>
         </main>
       </div>
 

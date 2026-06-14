@@ -24,15 +24,14 @@ import {
   TrendingUp,
   Trophy,
 } from 'lucide-react';
-import { AchievementBadgeSummary, Prediction, TournamentBet, Transaction, User, Wallet } from '../types';
+import { AchievementBadgeSummary, Prediction, TournamentBet, Transaction } from '../types';
 import { apiRequest, formatDate } from '../utils/api';
 import { buildUserProfileSummary } from '../utils/achievements';
 import SmartAvatar from './SmartAvatar';
 import FlagBadge from './home/FlagBadge';
+import { useGameContext } from './GameContext';
 
 interface MeTabProps {
-  user: User | null;
-  wallet: Wallet | null;
   onLogout: () => void;
   onAdminLogin?: () => void;
 }
@@ -277,7 +276,8 @@ const METAB_CSS = `
   }
 `;
 
-export default function MeTab({ user, wallet, onLogout, onAdminLogin }: MeTabProps) {
+export default function MeTab({ onLogout, onAdminLogin }: MeTabProps) {
+  const { user, wallet } = useGameContext();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [predictions, setPredictions] = useState<PredictionWithMatch[]>([]);
   const [tournamentBets, setTournamentBets] = useState<TournamentBet[]>([]);
