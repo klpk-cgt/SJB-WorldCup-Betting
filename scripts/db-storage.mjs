@@ -316,7 +316,15 @@ async function saveSnapshot(snapshot) {
         await tx.shareCard.create({ data: shareCard });
       }
 
-      if (db.syncLogs.length > 0) await tx.syncLog.createMany({ data: db.syncLogs });
+      // 过滤脏 syncLog：去掉缺必填字段或 targetMatchId 超长的记录
+      const validSyncLogs = (db.syncLogs || []).filter((log) => {
+        if (!log.id || !log.requestSummary || !log.createdAt) return false;
+        if (log.targetMatchId && log.targetMatchId.length > 190) {
+          log.targetMatchId = log.targetMatchId.slice(0, 187) + '...';
+        }
+        return true;
+      });
+      if (validSyncLogs.length > 0) await tx.syncLog.createMany({ data: validSyncLogs });
       if (db.adminOverrides.length > 0) await tx.adminOverride.createMany({ data: db.adminOverrides });
       if (db.players.length > 0) await tx.player.createMany({ data: db.players });
       if (db.teamHistory.length > 0) await tx.teamHistory.createMany({ data: db.teamHistory });
