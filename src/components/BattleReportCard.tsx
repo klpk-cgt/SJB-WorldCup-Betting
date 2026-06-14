@@ -51,31 +51,31 @@ function formatPts(profit: number) {
   return profit.toString();
 }
 
-/** 用户角色行 */
-function PlayerBadge({
+/** 单个玩家行：avatar + 角色标签 + 昵称 + 数值 */
+function StatRow({
   emoji,
   label,
   name,
-  extra,
-  colorClass,
+  value,
+  valueColor = 'text-slate-700',
+  bgClass = 'bg-slate-50',
 }: {
   emoji: string;
   label: string;
   name: string;
-  extra?: string;
-  colorClass: string;
+  value: string;
+  valueColor?: string;
+  bgClass?: string;
 }) {
   return (
-    <div className={`flex items-center gap-2.5 rounded-2xl ${colorClass} px-3 py-2.5`}>
-      <span className="text-base">{emoji}</span>
-      <SmartAvatar name={name} size={28} className="shrink-0 ring-1 ring-white/60" />
+    <div className={`flex items-center gap-3 rounded-2xl ${bgClass} px-3 py-2.5`}>
+      <span className="text-lg leading-none">{emoji}</span>
+      <SmartAvatar name={name} size={32} className="shrink-0 ring-1 ring-white/70" />
       <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-medium text-slate-400 leading-tight">{label}</p>
+        <p className="text-[10px] font-semibold text-slate-400 leading-tight">{label}</p>
         <p className="text-xs font-black text-slate-800 truncate leading-tight">{name}</p>
       </div>
-      {extra && (
-        <span className="shrink-0 text-[11px] font-black tabular-nums text-slate-700">{extra}</span>
-      )}
+      <span className={`shrink-0 text-xs font-black tabular-nums ${valueColor}`}>{value}</span>
     </div>
   );
 }
@@ -89,6 +89,64 @@ export default function BattleReportCard({
   const { homeTeam, homeScore, awayScore, awayTeam } = parseScoreFromTitle(report.title);
   const isCompact = mode === 'compact';
   const hasAnyData = report.totalParticipants > 0;
+
+  const stats: React.ReactNode[] = [];
+
+  if (hasAnyData && report.biggestWinner) {
+    stats.push(
+      <StatRow
+        key="winner"
+        emoji="🏆"
+        label="最大赢家"
+        name={report.biggestWinner.displayName}
+        value={formatPts(report.biggestWinner.profit) + ' PTS'}
+        valueColor="text-emerald-600"
+        bgClass="bg-emerald-50/70"
+      />
+    );
+  }
+
+  if (hasAnyData && report.biggestLoss) {
+    stats.push(
+      <StatRow
+        key="loss"
+        emoji="📉"
+        label="最惨玩家"
+        name={report.biggestLoss.displayName}
+        value={formatPts(report.biggestLoss.profit) + ' PTS'}
+        valueColor="text-rose-600"
+        bgClass="bg-rose-50/70"
+      />
+    );
+  }
+
+  if (hasAnyData && report.exactPredictor) {
+    stats.push(
+      <StatRow
+        key="exact"
+        emoji="🎯"
+        label="最准预言家"
+        name={report.exactPredictor.displayName}
+        value={report.exactPredictor.guessedScore}
+        valueColor="text-blue-600"
+        bgClass="bg-blue-50/70"
+      />
+    );
+  }
+
+  if (hasAnyData && report.darkHorse) {
+    stats.push(
+      <StatRow
+        key="dark"
+        emoji="🕯️"
+        label="反向明灯"
+        name={report.darkHorse.displayName}
+        value={'连黑' + report.darkHorse.streak + '场'}
+        valueColor="text-violet-600"
+        bgClass="bg-violet-50/70"
+      />
+    );
+  }
 
   const cardContent = (
     <motion.div
@@ -107,7 +165,7 @@ export default function BattleReportCard({
       <div className="pointer-events-none absolute right-0 top-0 h-28 w-28 rounded-full bg-amber-400/5 blur-3xl" />
       <div className="pointer-events-none absolute bottom-0 left-0 h-20 w-20 rounded-full bg-orange-300/5 blur-2xl" />
 
-      {/* ── 标题行：比分 + 标签 ── */}
+      {/* ── 标题行 ── */}
       <div className="relative flex items-start justify-between">
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
@@ -134,7 +192,6 @@ export default function BattleReportCard({
             )}
           </div>
         </div>
-        {/* 命中率徽章 */}
         <div className="shrink-0 rounded-2xl bg-amber-100/70 px-3 py-1.5 text-center">
           <div className="text-[10px] font-bold text-amber-700">命中率</div>
           <div className="text-lg font-black tabular-nums text-amber-800">{report.hitRate}%</div>
@@ -148,58 +205,12 @@ export default function BattleReportCard({
         </div>
       )}
 
-      {/* ── 用户角色卡片 ── */}
-      {hasAnyData && (
-        <div className="relative mt-3 grid gap-2">
-          {/* 最大赢家 */}
-          {report.biggestWinner && (
-            <PlayerBadge
-              emoji="🏆"
-              label="最大赢家"
-              name={report.biggestWinner.displayName}
-              extra={formatPts(report.biggestWinner.profit) + ' PTS'}
-              colorClass="bg-emerald-50/70 border border-emerald-100/50"
-            />
-          )}
-
-          {/* 最惨玩家 */}
-          {report.biggestLoss && (
-            <PlayerBadge
-              emoji="📉"
-              label="最惨玩家"
-              name={report.biggestLoss.displayName}
-              extra={formatPts(report.biggestLoss.profit) + ' PTS'}
-              colorClass="bg-rose-50/70 border border-rose-100/50"
-            />
-          )}
-
-          {/* 最准预言家 + 反向明灯 (并排) */}
-          {(report.exactPredictor || report.darkHorse) && (
-            <div className={`grid ${isCompact ? 'grid-cols-2' : 'grid-cols-2'} gap-2`}>
-              {report.exactPredictor && (
-                <PlayerBadge
-                  emoji="🎯"
-                  label="最准预言家"
-                  name={report.exactPredictor.displayName}
-                  extra={report.exactPredictor.guessedScore}
-                  colorClass="bg-blue-50/70 border border-blue-100/50"
-                />
-              )}
-              {report.darkHorse && (
-                <PlayerBadge
-                  emoji="🕯️"
-                  label="反向明灯"
-                  name={report.darkHorse.displayName}
-                  extra={'连黑' + report.darkHorse.streak + '场'}
-                  colorClass="bg-violet-50/70 border border-violet-100/50"
-                />
-              )}
-            </div>
-          )}
-        </div>
+      {/* ── 玩家统计（单列，均匀排列） ── */}
+      {stats.length > 0 && (
+        <div className="relative mt-3 flex flex-col gap-2">{stats}</div>
       )}
 
-      {/* ── AI 点评（轻量） ── */}
+      {/* ── AI 点评 ── */}
       {report.aiCommentary && (
         <div className="relative mt-3 flex items-start gap-2 rounded-2xl bg-amber-50/40 border border-amber-100/30 px-3 py-2">
           <Brain className="h-3.5 w-3.5 shrink-0 text-amber-400 mt-0.5" />
@@ -209,7 +220,7 @@ export default function BattleReportCard({
         </div>
       )}
 
-      {/* 参与人数 */}
+      {/* ── 参与人数 ── */}
       <div className="relative mt-2.5 flex items-center gap-1 text-[10px] font-bold text-slate-400">
         <span>{report.totalParticipants} 人参与</span>
         {!isCompact && onClick && (
