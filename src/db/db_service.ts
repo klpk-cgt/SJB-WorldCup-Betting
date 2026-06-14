@@ -492,8 +492,22 @@ class DatabaseService {
     const db = this.getData();
     this.normalizeSingleRoomData(db);
     this.normalizePointState(db);
+    this.sanitizeSyncLogs(db);
     db.bracketState = buildBracketState(db.matches, db.teams);
     return db;
+  }
+
+  private sanitizeSyncLogs(db: DatabaseSchema) {
+    if (!Array.isArray(db.syncLogs)) return;
+    db.syncLogs = db.syncLogs.filter((log: any) => {
+      // 过滤缺少必填字段的记录
+      if (!log.id || !log.requestSummary || !log.createdAt) return false;
+      // 过滤 targetMatchId 超长记录
+      if (log.targetMatchId && log.targetMatchId.length > 190) {
+        log.targetMatchId = log.targetMatchId.slice(0, 187) + '...';
+      }
+      return true;
+    });
   }
 
   private normalizeSingleRoomData(db: DatabaseSchema) {
