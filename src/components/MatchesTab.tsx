@@ -55,6 +55,7 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
   const [syncing, setSyncing] = useState(false);
   const [showAllDays, setShowAllDays] = useState(false);
   const [filterTeam, setFilterTeam] = useState('');
+  const [filterStage, setFilterStage] = useState<'All' | Match['stage']>('All');
   const [debouncedFilterTeam, setDebouncedFilterTeam] = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const handleFilterChange = useCallback((value: string) => {
