@@ -237,7 +237,7 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate, wsS
   const toast = useToast();
 
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    const timer = window.setInterval(() => setNow(Date.now()), 5000); // 5秒粒度足够，减少重渲染
     return () => window.clearInterval(timer);
   }, []);
 

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, Calendar, ChevronDown, Filter, Info, RefreshCw, Sparkles } from 'lucide-react';
 import { Match, MatchStatus, Team } from '../types';
 import { apiRequest, formatDate } from '../utils/api';
@@ -55,7 +55,13 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
   const [syncing, setSyncing] = useState(false);
   const [showAllDays, setShowAllDays] = useState(false);
   const [filterTeam, setFilterTeam] = useState('');
-  const [filterStage, setFilterStage] = useState<'All' | Match['stage']>('All');
+  const [debouncedFilterTeam, setDebouncedFilterTeam] = useState('');
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const handleFilterChange = useCallback((value: string) => {
+    setFilterTeam(value);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setDebouncedFilterTeam(value), 200);
+  }, []);
   const [teamDetailId, setTeamDetailId] = useState<string | null>(null);
   const [teamDetailOpen, setTeamDetailOpen] = useState(false);
   const toast = useToast();
@@ -144,7 +150,7 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
       const homeName = match.homeTeam?.nameZh || '';
       const awayName = match.awayTeam?.nameZh || '';
 
-      if (filterTeam && !homeName.includes(filterTeam) && !awayName.includes(filterTeam)) {
+      if (debouncedFilterTeam && !homeName.includes(debouncedFilterTeam) && !awayName.includes(debouncedFilterTeam)) {
         return false;
       }
 
@@ -158,7 +164,7 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
 
       return visibleWindowIds.has(match.id);
     });
-  }, [filterStage, filterTeam, matches, showAllDays, visibleWindowIds]);
+  }, [filterStage, debouncedFilterTeam, matches, showAllDays, visibleWindowIds]);
 
   const groupedMatches = useMemo(() => groupMatchesByDay(filteredMatches), [filteredMatches]);
 
@@ -322,7 +328,7 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
             <input
               type="text"
               value={filterTeam}
-              onChange={(event) => setFilterTeam(event.target.value)}
+              onChange={(event) => handleFilterChange(event.target.value)}
               placeholder="搜索球队"
               className="w-full bg-transparent text-xs font-semibold text-slate-800 outline-none placeholder:text-slate-400"
             />

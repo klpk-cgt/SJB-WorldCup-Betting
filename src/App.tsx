@@ -3,16 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { Suspense, useEffect, useMemo, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Award, BarChart3, Calendar, Eye, FileText, GitBranch, History, Home, Menu, Settings, Sparkles, Trophy, UserRound, X } from 'lucide-react';
 
-// 首屏核心组件 - 静态导入（底部导航栏 tab，高频访问）
-import HomeTab from './components/HomeTab';
-import MatchesTab from './components/MatchesTab';
-import PredictionTab from './components/PredictionTab';
-import LeaderboardTab from './components/LeaderboardTab';
-import MeTab from './components/MeTab';
+// Tab 组件懒加载 - 按需加载减少首屏体积
+const HomeTab = React.lazy(() => import('./components/HomeTab'));
+const MatchesTab = React.lazy(() => import('./components/MatchesTab'));
+const PredictionTab = React.lazy(() => import('./components/PredictionTab'));
+const LeaderboardTab = React.lazy(() => import('./components/LeaderboardTab'));
+const MeTab = React.lazy(() => import('./components/MeTab'));
 import { GameProvider } from './components/GameContext';
 
 // 非首屏页面 - 懒加载
@@ -55,6 +55,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [loading, setLoading] = useState(true);
+  const lastScoreToast = useRef<Map<string, number>>(new Map()); // 比分 toast 节流
   const [loginCode, setLoginCode] = useState('');
   const [loginPin, setLoginPin] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -81,11 +82,16 @@ export default function App() {
       if (data.matchId && homeScore !== undefined && awayScore !== undefined && status) {
         setWsScoreUpdate({ matchId: data.matchId as string, homeScore, awayScore, status });
       }
-      // 开赛/进球提醒
+      // 开赛/进球提醒（同场比赛30秒内不重复弹）
       const home = (data.homeTeam as string) || '';
       const away = (data.awayTeam as string) || '';
       if (homeScore !== undefined && awayScore !== undefined) {
-        toast.info(`${home} ${homeScore} : ${awayScore} ${away}`, '比分更新');
+        const matchKey = data.matchId as string;
+        const lastToast = lastScoreToast.current.get(matchKey) || 0;
+        if (Date.now() - lastToast > 30000) {
+          toast.info(`${home} ${homeScore} : ${awayScore} ${away}`, '比分更新');
+          lastScoreToast.current.set(matchKey, Date.now());
+        }
       }
     },
     onPredictionResult: (data) => {
@@ -217,6 +223,11 @@ export default function App() {
     setActiveTab(target);
   };
 
+  const gameContextValue = useMemo(
+    () => ({ user, wallet, onRefreshWallet: fetchUserProfileAndWallet }),
+    [user, wallet],
+  );
+
   const drawerItems = useMemo(
     () => [
       { id: 'home' as PageTab, label: '首页', desc: '回到焦点战和最近赛程', icon: <Home className="h-5 w-5" /> },
@@ -298,12 +309,15 @@ export default function App() {
           className="flex-1 overflow-y-auto px-4 py-4"
           style={{ paddingBottom: 'calc(7.25rem + env(safe-area-inset-bottom, 0px))' }}
         >
-          <GameProvider value={{ user, wallet, onRefreshWallet: fetchUserProfileAndWallet }}>
+          <GameProvider value={gameContextValue}>
           <Suspense fallback={SuspenseFallback}>
-          {activeTab === 'home' && (
+          {/* 5个核心Tab保持挂载，CSS隐藏避免重复加载 */}
+          <div style={{ display: activeTab === 'home' ? 'block' : 'none' }}>
             <HomeTab user={user} wallet={wallet} onRefreshWallet={fetchUserProfileAndWallet} onNavigate={navigateTo} wsScoreUpdate={wsScoreUpdate} wsOddsChange={wsOddsChange} />
-          )}
-          {activeTab === 'matches' && <MatchesTab onNavigate={navigateTo} selectedMatchId={selectedMatchId} isAdmin={isAdmin} />}
+          </div>
+          <div style={{ display: activeTab === 'matches' ? 'block' : 'none' }}>
+            <MatchesTab onNavigate={navigateTo} selectedMatchId={selectedMatchId} isAdmin={isAdmin} />
+          </div>
           {activeTab === 'match-detail' && (
             <MatchDetailPage
               matchId={selectedMatchId}
@@ -312,18 +326,20 @@ export default function App() {
               onGoPrediction={(matchId) => navigateTo('prediction', matchId)}
             />
           )}
-          {activeTab === 'prediction' && (
+          <div style={{ display: activeTab === 'prediction' ? 'block' : 'none' }}>
             <PredictionTab user={user} wallet={wallet} focusedMatchId={selectedMatchId} onRefreshWallet={fetchUserProfileAndWallet} />
-          )}
-          {activeTab === 'leaderboard' && <LeaderboardTab user={user} />}
+          </div>
+          <div style={{ display: activeTab === 'leaderboard' ? 'block' : 'none' }}>
+            <LeaderboardTab user={user} />
+          </div>
           {activeTab === 'history-hall' && <HistoryHallPage user={user} />}
           {activeTab === 'bracket' && <BracketPage onOpenMatch={(matchId) => navigateTo('match-detail', matchId, 'overview')} />}
           {activeTab === 'stats' && <StatsPage />}
           {activeTab === 'watchguide' && <WatchGuidePage />}
           {activeTab === 'battle-reports' && <BattleReportWall onNavigate={navigateTo} />}
           {activeTab === 'ai-recommend' && <AIRecommendations onNavigate={navigateTo} />}
-          {activeTab === 'me' &&
-            (user ? (
+          <div style={{ display: activeTab === 'me' ? 'block' : 'none' }}>
+            {user ? (
               <MeTab onLogout={handleLogout} onAdminLogin={() => setActiveTab('admin')} />
             ) : (
               <div className="space-y-6 pb-8 text-left">
@@ -397,7 +413,8 @@ export default function App() {
                   </div>
                 </div>
               </div>
-            ))}
+            )}
+          </div>
           </Suspense>
           </GameProvider>
         </main>

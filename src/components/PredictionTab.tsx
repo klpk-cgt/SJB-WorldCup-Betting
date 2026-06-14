@@ -249,7 +249,7 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
       try {
         await fetchMatches();
         if (user) {
-          await Promise.all([fetchHistory(), fetchTournamentData()]);
+          await fetchHistory(); // fetchHistory 已包含 /api/tournament-bets，无需重复 fetchTournamentData
         }
       } catch (error) {
         console.error('Failed to load prediction data', error);
