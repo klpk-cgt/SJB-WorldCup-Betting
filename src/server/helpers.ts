@@ -522,7 +522,7 @@ export function appendSyncLog(log: SyncLog) {
   if (!log.id) log.id = createId('sync');
   if (!log.requestSummary) log.requestSummary = log.action || 'Unknown';
   if (!log.createdAt) log.createdAt = new Date().toISOString();
-  if (log.responseSummary === undefined) log.responseSummary = null;
+  if (log.responseSummary === undefined || log.responseSummary === null || log.responseSummary === '') log.responseSummary = '-';
   // 防御性截断：防止超长 targetMatchId 导致 MySQL VARCHAR(191) 写入失败
   if (log.targetMatchId && log.targetMatchId.length > MAX_TARGET_MATCH_ID) {
     log.targetMatchId = log.targetMatchId.slice(0, MAX_TARGET_MATCH_ID - 3) + '...';

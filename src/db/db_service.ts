@@ -499,17 +499,18 @@ class DatabaseService {
 
   private sanitizeSyncLogs(db: DatabaseSchema) {
     if (!Array.isArray(db.syncLogs)) return;
-    db.syncLogs = db.syncLogs.filter((log: any) => {
-      // 过滤缺少必填字段的记录
-      if (!log.id || !log.requestSummary || !log.createdAt) return false;
-      // 补全可能缺失的可空字段
-      if (log.responseSummary === undefined) log.responseSummary = null;
-      // 过滤 targetMatchId 超长记录
-      if (log.targetMatchId && log.targetMatchId.length > 190) {
-        log.targetMatchId = log.targetMatchId.slice(0, 187) + '...';
-      }
-      return true;
-    });
+    db.syncLogs = db.syncLogs
+      .map((log: any) => {
+        const { detail, ...clean } = log; // 去掉 Prisma schema 不认识的字段
+        return clean;
+      })
+      .filter((log: any) => {
+        if (!log.id || !log.requestSummary || !log.createdAt) return false;
+        if (!log.responseSummary) log.responseSummary = '-';
+        if (log.targetMatchId && log.targetMatchId.length > 190)
+          log.targetMatchId = log.targetMatchId.slice(0, 187) + '...';
+        return true;
+      });
   }
 
   private normalizeSingleRoomData(db: DatabaseSchema) {

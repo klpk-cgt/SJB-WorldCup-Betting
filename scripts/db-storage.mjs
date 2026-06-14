@@ -316,15 +316,18 @@ async function saveSnapshot(snapshot) {
         await tx.shareCard.create({ data: shareCard });
       }
 
-      // 过滤脏 syncLog：去掉缺必填字段的记录，补全可空字段
-      const validSyncLogs = (db.syncLogs || []).filter((log) => {
-        if (!log.id || !log.requestSummary || !log.createdAt) return false;
-        if (log.responseSummary === undefined) log.responseSummary = null;
-        if (log.targetMatchId && log.targetMatchId.length > 190) {
-          log.targetMatchId = log.targetMatchId.slice(0, 187) + '...';
-        }
-        return true;
-      });
+      // 过滤脏 syncLog：补全缺失字段，去掉未知字段，跳过缺必填字段的记录
+      const before = (db.syncLogs || []).length;
+      const validSyncLogs = (db.syncLogs || [])
+        .map((log) => {
+          const { detail, ...clean } = log; // 去掉 Prisma schema 不认识的字段
+          return {
+            ...clean,
+            responseSummary: clean.responseSummary || '-',
+          };
+        })
+        .filter((log) => log.id && log.requestSummary && log.createdAt);
+      console.error('[db-storage] syncLog filter: ' + before + ' -> ' + validSyncLogs.length);
       if (validSyncLogs.length > 0) await tx.syncLog.createMany({ data: validSyncLogs });
       if (db.adminOverrides.length > 0) await tx.adminOverride.createMany({ data: db.adminOverrides });
       if (db.players.length > 0) await tx.player.createMany({ data: db.players });
