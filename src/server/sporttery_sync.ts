@@ -4,6 +4,7 @@
  * 同步频率：1小时自动 + 管理员手动触发
  */
 import { DatabaseSchema } from '../db/db_service';
+import { createId } from './helpers';
 import { Match, MatchOdds, SyncLog, Team } from '../types';
 import { getRuntimeConfig } from './config';
 import { broadcastOddsChange } from './websocket';
@@ -111,6 +112,7 @@ function matchByTeamCodes(
 
 function buildLog(override: Partial<SyncLog>): Partial<SyncLog> {
   return {
+    id: createId('sync'),
     source: '竞彩网 Sporttery',
     ...override,
   };

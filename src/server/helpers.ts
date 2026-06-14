@@ -518,6 +518,8 @@ export function markRoomLeaderboardAiStale(roomId: string) {
 const MAX_TARGET_MATCH_ID = 180;
 
 export function appendSyncLog(log: SyncLog) {
+  // 防御性补全：如果调用方没传 id，自动生成
+  if (!log.id) log.id = createId('sync');
   // 防御性截断：防止超长 targetMatchId 导致 MySQL VARCHAR(191) 写入失败
   if (log.targetMatchId && log.targetMatchId.length > MAX_TARGET_MATCH_ID) {
     log.targetMatchId = log.targetMatchId.slice(0, MAX_TARGET_MATCH_ID - 3) + '...';
