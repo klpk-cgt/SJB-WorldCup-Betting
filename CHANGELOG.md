@@ -1,5 +1,22 @@
 # 更新日志 (Changelog)
 
+## v2.3.4 - 2026-06-14
+
+### 修复
+
+- **每日答题题库不更新** (helpers.ts)：`getDailyQuizQuestions()` 的 shuffle 逻辑存在严重 Bug —— 所有题目 id 以 "q" 开头，`charCodeAt(0)` 永远返回相同值，sort 永远返回 0，导致每天题目顺序完全不变。改用 **Fisher-Yates shuffle + 日期种子伪随机**，确保每日真随机打乱
+- **Prisma `correctScoreSource` 错误**：schema.prisma 已定义该字段 (第135行)，但服务器上的 Prisma Client 未重新生成。部署后需手动运行 `npx prisma generate`
+
+### 部署后操作
+
+服务器需执行：
+```bash
+npx prisma generate  # 重新生成 Prisma Client
+pm2 restart all      # 重启应用
+```
+
+---
+
 ## v2.3.3 - 2026-06-14
 
 ### 「我的」资料页全新设计

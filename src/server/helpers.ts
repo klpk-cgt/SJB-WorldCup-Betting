@@ -1013,10 +1013,13 @@ export function getDailyQuizQuestions(): typeof quizQuestionPool {
   for (let i = 0; i < seed.length; i++) {
     hash = ((hash << 5) - hash + seed.charCodeAt(i)) | 0;
   }
-  const shuffled = [...quizQuestionPool].sort((a, b) => {
-    const ha = (hash + a.id.charCodeAt(0)) | 0;
-    const hb = (hash + b.id.charCodeAt(0)) | 0;
-    return ha - hb;
-  });
+  // Fisher-Yates shuffle with seeded pseudo-random (每日期种子，真随机打乱)
+  const shuffled = [...quizQuestionPool];
+  let rng = Math.abs(hash);
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    rng = ((rng << 5) - rng + 1) | 0;
+    const j = Math.abs(rng) % (i + 1);
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
   return shuffled.slice(0, 3);
 }
