@@ -306,7 +306,7 @@ export async function syncSportteryOdds(db: DatabaseSchema): Promise<SyncResult>
     status: 'SUCCESS',
     syncType: 'odds',
     detail: `匹配 ${matched} 场，${unmatched} 场未匹配到本地比赛`,
-    targetMatchId: allMatchIds.join(','),
+    targetMatchId: `${matched}场匹配,${unmatched}场未匹配`,
   });
 
   logger.admin('[Sporttery] Sync completed', { matched, unmatched, updated: result.updatedMatchIds.length });

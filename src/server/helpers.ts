@@ -515,7 +515,13 @@ export function markRoomLeaderboardAiStale(roomId: string) {
 
 // ─── Sync Log Helpers ───
 
+const MAX_TARGET_MATCH_ID = 180;
+
 export function appendSyncLog(log: SyncLog) {
+  // 防御性截断：防止超长 targetMatchId 导致 MySQL VARCHAR(191) 写入失败
+  if (log.targetMatchId && log.targetMatchId.length > MAX_TARGET_MATCH_ID) {
+    log.targetMatchId = log.targetMatchId.slice(0, MAX_TARGET_MATCH_ID - 3) + '...';
+  }
   const db = dbService.getData();
   db.syncLogs.unshift(log);
   db.syncLogs = db.syncLogs.slice(0, 120);
