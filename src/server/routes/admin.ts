@@ -12,7 +12,8 @@ import {
   getOrGenerateMatchAnalysis,
   getOrGenerateMatchPrediction,
 } from '../ai';
-import { getRuntimeConfig } from '../config';
+import { getRuntimeConfig, hasProviderKey } from '../config';
+import { selectFeaturedHomeMatch } from '../../utils/homeMatchSelection';
 import {
   applyLifecycleUpdates,
   deriveOperationalStatus,
@@ -1378,6 +1379,154 @@ router.post('/api/admin/matches/:id/post-report/regenerate', (req: Request, res:
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : '战报重新生成失败。' });
   }
+});
+
+// ─── 焦点战实时监控 ───
+
+router.get('/api/admin/dashboard/featured-match', (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const db = dbService.getData();
+  const config = getRuntimeConfig();
+  const now = Date.now();
+
+  // 1. 使用同名算法选出焦点战
+  const matches = db.matches.map((m) => ({
+    id: m.id,
+    startTimeUtc: m.startTimeUtc,
+    status: m.status,
+    isSettled: m.isSettled,
+  }));
+  const featured = selectFeaturedHomeMatch(matches, now);
+
+  // 2. 获取完整比赛数据
+  const match = featured ? db.matches.find((m) => m.id === featured.id) : undefined;
+  if (!match) {
+    return res.json({ hasMatch: false, message: '暂无赛程数据' });
+  }
+
+  const homeTeam = db.teams.find((t) => t.id === match.homeTeamId);
+  const awayTeam = db.teams.find((t) => t.id === match.awayTeamId);
+  const odds = db.matchOdds[match.id] || null;
+
+  // 3. 数据源状态
+  const hasApiKey = hasProviderKey(config.apiFootballKey);
+  const isFallbackActive = !hasApiKey;
+  const scoreUnknown = Boolean((match as any).scoreUnknown);
+
+  const providerMeta = match.providerMeta || {};
+  const nowIso = new Date().toISOString();
+
+  // 4. 上次同步时间（人性化展示）
+  const formatAge = (isoTime?: string) => {
+    if (!isoTime) return null;
+    const ms = Date.now() - new Date(isoTime).getTime();
+    if (ms < 60_000) return '刚刚';
+    if (ms < 3_600_000) return `${Math.round(ms / 60_000)}分钟前`;
+    if (ms < 86_400_000) return `${Math.round(ms / 3_600_000)}小时前`;
+    return `${Math.round(ms / 86_400_000)}天前`;
+  };
+
+  // 5. 评分是否有真实比分
+  const hasRealScore = typeof match.homeScore === 'number'
+    && typeof match.awayScore === 'number';
+
+  // 6. 运维建议
+  const recommendations: string[] = [];
+  if (isFallbackActive) {
+    recommendations.push('API Key 未配置，系统以兜底模式运行，将根据时间自动推断比赛状态');
+  }
+  if (scoreUnknown && match.status === 'FT') {
+    recommendations.push('本场比赛已结束但比分未知(兜底标记)，建议手动录入比分后触发结算');
+  }
+  if (odds && odds.syncStatus === 'MANUAL_FALLBACK') {
+    recommendations.push('赔率为本地兜底生成，建议核对赔率合理性');
+  }
+  if (odds && odds.syncStatus === 'FAILED') {
+    recommendations.push('赔率同步失败，请检查 The Odds API Key 配置');
+  }
+  if (match.status === 'FT' && !match.isSettled && !scoreUnknown) {
+    recommendations.push('比赛已结束且比分已知，可触发结算');
+  }
+  if (match.status === 'FT' && match.isSettled) {
+    // 一切正常，无需建议
+  }
+  if (recommendations.length === 0) {
+    recommendations.push('✅ 数据状态正常，无需手动干预');
+  }
+
+  res.json({
+    hasMatch: true,
+    generatedAt: nowIso,
+    match: {
+      id: match.id,
+      homeTeamName: homeTeam?.nameZh || homeTeam?.name || match.homeTeamId,
+      awayTeamName: awayTeam?.nameZh || awayTeam?.name || match.awayTeamId,
+      stage: match.stage,
+      roundName: match.roundName,
+      startTimeBeijing: match.startTimeBeijing || match.startTimeUtc,
+      venueName: match.venueName,
+      venueCity: match.venueCity,
+      status: match.status,
+      statusLabel:
+        match.status === 'LIVE' ? '进行中'
+        : match.status === 'HT' ? '中场休息'
+        : match.status === 'FT' ? '已结束'
+        : match.status === 'AET' ? '加时赛'
+        : match.status === 'PEN' ? '点球大战'
+        : match.status === 'CANCELLED' ? '已取消'
+        : '未开赛',
+      homeScore: typeof match.homeScore === 'number' ? match.homeScore : null,
+      awayScore: typeof match.awayScore === 'number' ? match.awayScore : null,
+      hasRealScore,
+      scoreUnknown,
+      operationalStatus: match.operationalStatus || 'BETTABLE',
+      operationalStatusLabel:
+        match.operationalStatus === 'BETTABLE' ? '可竞猜'
+        : match.operationalStatus === 'LOCKING_SOON' ? '即将锁定'
+        : match.operationalStatus === 'LOCKED' ? '已锁定'
+        : match.operationalStatus === 'WAITING_SETTLEMENT' ? '待结算'
+        : match.operationalStatus === 'SETTLED' ? '已结算'
+        : match.operationalStatus === 'CANCELLED' ? '已取消'
+        : '可竞猜',
+      settlementStatus: match.settlementStatus || 'PENDING',
+      settlementStatusLabel:
+        match.settlementStatus === 'PENDING' ? '待处理'
+        : match.settlementStatus === 'WAITING_SETTLEMENT' ? '待结算'
+        : match.settlementStatus === 'SETTLED' ? '已结算'
+        : match.settlementStatus === 'ROLLED_BACK' ? '已回滚'
+        : '待处理',
+      isSettled: match.isSettled,
+    },
+    dataSource: {
+      apiFootballKeyConfigured: hasApiKey,
+      isFallbackActive,
+      fixturesLastSyncAt: providerMeta.lastFixturesSyncAt || null,
+      fixturesLastSyncAge: formatAge(providerMeta.lastFixturesSyncAt),
+      liveScoreLastSyncAt: providerMeta.lastLiveSyncAt || null,
+      liveScoreLastSyncAge: formatAge(providerMeta.lastLiveSyncAt),
+      oddsLastSyncAt: providerMeta.lastOddsSyncAt || null,
+      oddsLastSyncAge: formatAge(providerMeta.lastOddsSyncAt),
+      oddsSource: odds?.source || null,
+      oddsSyncStatus: odds?.syncStatus || null,
+      oddsSourceLabel:
+        odds?.source === 'The Odds API' ? 'The Odds API'
+        : odds?.source === 'API-Football' ? 'API-Football'
+        : odds?.source === 'MANUAL' ? '本地手动/兜底'
+        : '无数据',
+      oddsSyncStatusLabel:
+        odds?.syncStatus === 'SYNCED' ? '✅ 正常同步'
+        : odds?.syncStatus === 'PARTIAL' ? '⚠️ 部分同步'
+        : odds?.syncStatus === 'MANUAL_FALLBACK' ? '⚠️ 本地兜底'
+        : odds?.syncStatus === 'FAILED' ? '❌ 同步失败'
+        : odds?.syncStatus === 'UNSYNCED' ? '未同步'
+        : '无数据',
+    },
+    recommendations,
+    severity:
+      scoreUnknown && match.status === 'FT' ? 'critical'
+      : isFallbackActive || odds?.syncStatus === 'MANUAL_FALLBACK' ? 'warning'
+      : 'normal',
+  });
 });
 
 export default router;

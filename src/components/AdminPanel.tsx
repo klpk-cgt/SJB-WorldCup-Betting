@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Shield, Users, Play, RefreshCw, BarChart3, Database, Coins, FileText, Plus, Trash2, Upload, X } from 'lucide-react';
+import { Settings, Shield, Users, Play, RefreshCw, BarChart3, Database, Coins, FileText, Plus, Trash2, Upload, X, Activity } from 'lucide-react';
 import { ADMIN_KEY_STORAGE, apiRequest } from '../utils/api';
 import { Match, SyncLog } from '../types';
 import { useToast } from './ToastProvider';
@@ -35,6 +35,8 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
   const [opsStatusMsg, setOpsStatusMsg] = useState('');
   const [healthCheckResult, setHealthCheckResult] = useState<any | null>(null);
   const [isHealthChecking, setIsHealthChecking] = useState(false);
+  const [featuredMatchData, setFeaturedMatchData] = useState<any | null>(null);
+  const [featuredMatchLoading, setFeaturedMatchLoading] = useState(false);
 
   // User provisioning helpers
   const [pasteNames, setPasteNames] = useState('');
@@ -105,6 +107,13 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
     if (isAuthed) {
       loadAdminData();
     }
+  }, [isAuthed]);
+
+  useEffect(() => {
+    if (!isAuthed) return;
+    fetchFeaturedMatch();
+    const timer = setInterval(fetchFeaturedMatch, 30000);
+    return () => clearInterval(timer);
   }, [isAuthed]);
 
   const clearAdminSession = (message?: string) => {
@@ -537,6 +546,18 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
       toast.error('API检测失败', e instanceof Error ? e.message : '请稍后重试');
     } finally {
       setIsHealthChecking(false);
+    }
+  };
+
+  const fetchFeaturedMatch = async () => {
+    setFeaturedMatchLoading(true);
+    try {
+      const result = await apiRequest('/api/admin/dashboard/featured-match');
+      setFeaturedMatchData(result);
+    } catch {
+      // silently fail
+    } finally {
+      setFeaturedMatchLoading(false);
     }
   };
 
@@ -1169,6 +1190,240 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* 焦点战实时监控面板 */}
+          <div
+            className={`rounded-3xl border bg-white p-5 shadow-2xs space-y-4 ${
+              featuredMatchData?.severity === 'critical'
+                ? 'border-rose-400'
+                : featuredMatchData?.severity === 'warning'
+                  ? 'border-amber-300'
+                  : 'border-slate-200'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                  <Activity className={`w-4 h-4 ${
+                    featuredMatchData?.severity === 'critical' ? 'text-rose-500'
+                    : featuredMatchData?.severity === 'warning' ? 'text-amber-500'
+                    : 'text-emerald-500'
+                  }`} />
+                  焦点战实时监控
+                </h4>
+                <p className="mt-1 text-[11px] text-slate-500 font-bold">
+                  首页焦点战数据来源、实时比分、结算状态，辅助判断是否需要手动兜底。
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {featuredMatchData?.generatedAt && (
+                  <span className="text-[10px] text-slate-400 font-bold">
+                    更新于 {new Date(featuredMatchData.generatedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                  </span>
+                )}
+                <button
+                  onClick={fetchFeaturedMatch}
+                  disabled={featuredMatchLoading}
+                  className={`inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-600 transition hover:bg-slate-50 cursor-pointer ${
+                    featuredMatchLoading ? 'animate-pulse' : ''
+                  }`}
+                >
+                  <RefreshCw className={`h-3 w-3 ${featuredMatchLoading ? 'animate-spin' : ''}`} />
+                  刷新
+                </button>
+              </div>
+            </div>
+
+            {featuredMatchLoading && !featuredMatchData ? (
+              <div className="flex items-center justify-center py-6">
+                <div className="animate-pulse text-xs text-slate-400">加载焦点战数据...</div>
+              </div>
+            ) : !featuredMatchData?.hasMatch ? (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6 text-center">
+                <div className="text-xs font-bold text-slate-500">{featuredMatchData?.message || '暂无赛程数据'}</div>
+              </div>
+            ) : (
+              <>
+                {/* 对阵信息 & 比分 */}
+                <div className={`rounded-2xl border p-4 ${
+                  featuredMatchData.severity === 'critical' ? 'border-rose-200 bg-rose-50/30'
+                  : featuredMatchData.severity === 'warning' ? 'border-amber-200 bg-amber-50/30'
+                  : 'border-emerald-200 bg-emerald-50/30'
+                }`}>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="flex items-center gap-4">
+                      <div className="text-right min-w-[80px]">
+                        <div className="text-sm font-black text-slate-900">{featuredMatchData.match.homeTeamName}</div>
+                      </div>
+                      <div className="text-center">
+                        {featuredMatchData.match.status === 'NS' ? (
+                          <span className="text-xl font-black text-slate-400 font-mono">VS</span>
+                        ) : featuredMatchData.match.hasRealScore ? (
+                          <div className="flex items-center gap-3">
+                            <span className="text-3xl font-black text-slate-900 font-mono">{featuredMatchData.match.homeScore}</span>
+                            <span className="text-sm font-bold text-slate-400">:</span>
+                            <span className="text-3xl font-black text-slate-900 font-mono">{featuredMatchData.match.awayScore}</span>
+                          </div>
+                        ) : (
+                          <span className="text-xl font-black text-slate-400 font-mono">VS</span>
+                        )}
+                        {featuredMatchData.match.scoreUnknown && (
+                          <div className="mt-1 text-[10px] font-bold text-rose-600 bg-rose-100 rounded-full px-2 py-0.5">
+                            ⚠️ 比分未知
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-left min-w-[80px]">
+                        <div className="text-sm font-black text-slate-900">{featuredMatchData.match.awayTeamName}</div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`rounded-full px-3 py-1 text-[10px] font-black ${
+                        featuredMatchData.match.status === 'LIVE' || featuredMatchData.match.status === 'HT'
+                          ? 'bg-rose-100 text-rose-700 animate-pulse'
+                          : featuredMatchData.match.status === 'FT'
+                            ? 'bg-slate-100 text-slate-600'
+                            : 'bg-blue-100 text-blue-700'
+                      }`}>
+                        {featuredMatchData.match.statusLabel}
+                      </span>
+                      <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-500">
+                        {featuredMatchData.match.stage}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-slate-500 font-bold">
+                    <span>{featuredMatchData.match.roundName}</span>
+                    <span>🕐 {featuredMatchData.match.startTimeBeijing}</span>
+                    {featuredMatchData.match.venueName && (
+                      <span>📍 {featuredMatchData.match.venueName}{featuredMatchData.match.venueCity ? `, ${featuredMatchData.match.venueCity}` : ''}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* 数据源 & 结算状态 双栏 */}
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {/* 数据源状态 */}
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="text-[11px] font-black text-slate-700 mb-3">📡 数据源状态</div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-500">API-Football Key</span>
+                        <span className={`font-bold ${featuredMatchData.dataSource.apiFootballKeyConfigured ? 'text-emerald-600' : 'text-amber-600'}`}>
+                          {featuredMatchData.dataSource.apiFootballKeyConfigured ? '✅ 已配置' : '⚠️ 未配置'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-500">兜底模式</span>
+                        <span className={`font-bold ${featuredMatchData.dataSource.isFallbackActive ? 'text-amber-600' : 'text-emerald-600'}`}>
+                          {featuredMatchData.dataSource.isFallbackActive ? '⚠️ 活跃中' : '✅ 正常'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-500">赛程同步</span>
+                        <span className="font-bold text-slate-700">
+                          {featuredMatchData.dataSource.fixturesLastSyncAge || '无记录'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-500">比分同步</span>
+                        <span className="font-bold text-slate-700">
+                          {featuredMatchData.dataSource.liveScoreLastSyncAge || '无记录'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-500">赔率同步</span>
+                        <span className="font-bold text-slate-700">
+                          {featuredMatchData.dataSource.oddsLastSyncAge || '无记录'}
+                        </span>
+                      </div>
+                      <div className="pt-1 border-t border-slate-200 flex items-center justify-between text-xs">
+                        <span className="text-slate-500">赔率来源</span>
+                        <span className={`font-bold ${
+                          featuredMatchData.dataSource.oddsSyncStatus === 'MANUAL_FALLBACK' ? 'text-amber-600'
+                          : featuredMatchData.dataSource.oddsSyncStatus === 'FAILED' ? 'text-rose-600'
+                          : 'text-emerald-600'
+                        }`}>
+                          {featuredMatchData.dataSource.oddsSourceLabel}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-500">赔率同步状态</span>
+                        <span className={`font-bold ${
+                          featuredMatchData.dataSource.oddsSyncStatus === 'MANUAL_FALLBACK' ? 'text-amber-600'
+                          : featuredMatchData.dataSource.oddsSyncStatus === 'FAILED' ? 'text-rose-600'
+                          : 'text-slate-700'
+                        }`}>
+                          {featuredMatchData.dataSource.oddsSyncStatusLabel}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 结算状态 */}
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="text-[11px] font-black text-slate-700 mb-3">💰 结算状态</div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-500">运营状态</span>
+                        <span className={`font-bold ${
+                          featuredMatchData.match.operationalStatus === 'WAITING_SETTLEMENT' ? 'text-amber-600'
+                          : featuredMatchData.match.operationalStatus === 'SETTLED' ? 'text-emerald-600'
+                          : 'text-slate-700'
+                        }`}>
+                          {featuredMatchData.match.operationalStatusLabel}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-500">结算状态</span>
+                        <span className={`font-bold ${
+                          featuredMatchData.match.settlementStatus === 'SETTLED' ? 'text-emerald-600'
+                          : featuredMatchData.match.settlementStatus === 'ROLLED_BACK' ? 'text-rose-600'
+                          : 'text-amber-600'
+                        }`}>
+                          {featuredMatchData.match.settlementStatusLabel}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-500">比分已知</span>
+                        <span className={`font-bold ${featuredMatchData.match.hasRealScore ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          {featuredMatchData.match.hasRealScore
+                            ? `✅ ${featuredMatchData.match.homeScore} : ${featuredMatchData.match.awayScore}`
+                            : featuredMatchData.match.scoreUnknown ? '⚠️ 兜底未知' : '⏳ 尚未产生'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-500">已结算</span>
+                        <span className={`font-bold ${featuredMatchData.match.isSettled ? 'text-emerald-600' : 'text-slate-500'}`}>
+                          {featuredMatchData.match.isSettled ? '✅ 是' : '❌ 否'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 运维建议 */}
+                <div className={`rounded-2xl border p-4 ${
+                  featuredMatchData.severity === 'critical' ? 'border-rose-200 bg-rose-50'
+                  : featuredMatchData.severity === 'warning' ? 'border-amber-200 bg-amber-50'
+                  : 'border-emerald-200 bg-emerald-50'
+                }`}>
+                  <div className="text-[11px] font-black text-slate-700 mb-2">🎯 运维建议</div>
+                  <ul className="space-y-1">
+                    {(featuredMatchData.recommendations || []).map((rec: string, i: number) => (
+                      <li key={i} className={`text-xs font-bold ${
+                        rec.startsWith('✅') ? 'text-emerald-700'
+                        : rec.startsWith('⚠️') || rec.includes('⚠️') ? 'text-amber-700'
+                        : 'text-rose-700'
+                      }`}>
+                        {rec}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </>
+            )}
           </div>
 
           <AdminDashboard />

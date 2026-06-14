@@ -68,19 +68,19 @@ const PRIORITY_INTERVALS: Record<SyncPriority, {
     liveScoreMs: 0,                  // 不执行
   },
   NORMAL: {
-    fixturesMs: 1 * MS_PER_HOUR,    // 1小时
+    fixturesMs: 2 * MS_PER_HOUR,    // 2小时（赛程变动不频繁）
     oddsMs: 30 * MS_PER_MINUTE,     // 30分钟
     liveScoreMs: 0,                  // 不执行
   },
   HIGH: {
-    fixturesMs: 15 * MS_PER_MINUTE, // 15分钟
+    fixturesMs: 30 * MS_PER_MINUTE, // 30分钟（赛程基本稳定，赔率更关键）
     oddsMs: 5 * MS_PER_MINUTE,      // 5分钟
     liveScoreMs: 0,                  // 不执行
   },
   LIVE: {
-    fixturesMs: 5 * MS_PER_MINUTE,  // 5分钟
+    fixturesMs: 0,                   // 比分同步已覆盖赛程更新，节省调用
     oddsMs: 0,                       // 进行中不需要赔率
-    liveScoreMs: 30 * 1000,          // 30秒
+    liveScoreMs: 60 * 1000,          // 60秒（30秒→60秒，调用量减半）
   },
 };
 

@@ -26,7 +26,7 @@ export function ensureDefaultOdds(db: DatabaseSchema): string[] {
 // ── 带超时和重试的 fetch ──
 const EXTERNAL_API_TIMEOUT_MS = 15_000; // 外部 API 请求超时 15 秒
 
-async function fetchWithRetry(url: string, options: RequestInit, retries = 2, delayMs = 1000): Promise<Response> {
+async function fetchWithRetry(url: string, options: RequestInit, retries = 1, delayMs = 1000): Promise<Response> {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const controller = new AbortController();
@@ -369,7 +369,7 @@ export async function syncFixturesForDateWindow(params: {
   pastDays?: number;
   futureDays?: number;
 }): Promise<{ updatedMatches: Match[]; createdMatches: Match[]; dates: string[]; log: SyncLog }> {
-  const { apiKey, db, anchorDate, pastDays = 1, futureDays = 10 } = params;
+  const { apiKey, db, anchorDate, pastDays = 1, futureDays = 5 } = params; // 未来5天（从10→5，减半API调用）
   const startedAt = new Date().toISOString();
   const anchor = anchorDate ? new Date(`${anchorDate}T00:00:00.000Z`) : new Date();
   const dates = buildWindowDates(anchor, pastDays, futureDays);
