@@ -64,6 +64,8 @@ export interface DatabaseSchema {
   quizLogs?: QuizLogRecord[];
   // 赛后战报（V1.4 新增）
   postMatchReports?: import('../server/services/post_match_report_service').PostMatchReport[];
+  // 竞彩网积分榜快照（V2.4 新增）
+  worldCupStandings?: import('../types').WorldCupStandings;
 }
 
 const DATA_DIR = process.env.APP_DATA_DIR
@@ -591,8 +593,9 @@ class DatabaseService {
     }
 
     if (market === 'TOTAL_GOALS') {
-      if (optionKeyLower === 'over_2_5') return odds.totalGoals.over25;
-      if (optionKeyLower === 'under_2_5') return odds.totalGoals.under25;
+      const legacy = odds.totalGoalsLegacy;
+      if (optionKeyLower === 'over_2_5') return legacy?.over25 || 1.9;
+      if (optionKeyLower === 'under_2_5') return legacy?.under25 || 1.9;
       return null;
     }
 

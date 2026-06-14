@@ -533,18 +533,34 @@ export async function syncOddsForMatches(params: {
       );
       const poissonCorrectScore = generateCorrectScoreOddsFromXG(xg.homeXG, xg.awayXG);
 
+      const existingOdds = db.matchOdds[match.id];
+      // The Odds API 只提供 over/under 2.5，作为辅助数据源不覆盖竞彩网精细数据
+      const theOddsTotalGoalsLegacy = {
+        over25: over25 || existingOdds?.totalGoalsLegacy?.over25 || 1.9,
+        under25: under25 || existingOdds?.totalGoalsLegacy?.under25 || 1.9,
+      };
+
+      // 如果竞彩网已提供精确总进球赔率，保留之
+      const hasSportteryTotalGoals = Array.isArray(existingOdds?.totalGoals) && existingOdds!.totalGoals.length >= 2;
+      const preservedTotalGoals = hasSportteryTotalGoals
+        ? existingOdds!.totalGoals
+        : existingOdds?.totalGoals || [
+            { goals: '3-', odds: theOddsTotalGoalsLegacy.under25 },
+            { goals: '3+', odds: theOddsTotalGoalsLegacy.over25 },
+          ];
+
       db.matchOdds[match.id] = {
         matchId: match.id,
         h2h: newH2h,
-        totalGoals: {
-          over25: over25 || db.matchOdds[match.id]?.totalGoals.over25 || 1.9,
-          under25: under25 || db.matchOdds[match.id]?.totalGoals.under25 || 1.9,
-        },
+        totalGoals: preservedTotalGoals,
+        totalGoalsLegacy: theOddsTotalGoalsLegacy,
         correctScore: mergeCorrectScoreOdds(
           poissonCorrectScore,
           DEFAULT_CORRECT_SCORE_OPTIONS,
         ).map(({ score, odds }) => ({ score, odds })),
-        qualify: db.matchOdds[match.id]?.qualify,
+        qualify: existingOdds?.qualify,
+        handicap: existingOdds?.handicap,
+        halfFullTime: existingOdds?.halfFullTime,
         lastUpdated: new Date().toISOString(),
         source: 'The Odds API',
         syncStatus: buildOddsSyncStatus(Boolean(scoreMarket?.outcomes?.length), Boolean(over25 && under25)),

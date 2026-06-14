@@ -32,7 +32,7 @@ interface PredictionTabProps {
   focusedMatchId?: string;
 }
 
-type ModeFilter = 'H2H' | 'CORRECT_SCORE' | 'TOTAL_GOALS';
+type ModeFilter = 'H2H' | 'HANDICAP' | 'CORRECT_SCORE' | 'TOTAL_GOALS' | 'HAFU';
 type MatchCategory = 'BETTABLE' | 'LOCKED' | 'WAITING_SETTLEMENT' | 'SETTLED';
 type BetSurface = 'single' | 'tournament';
 
@@ -57,8 +57,10 @@ interface TournamentMarketConfig {
 
 const MARKET_LABELS: Record<ModeFilter, string> = {
   H2H: '胜平负',
+  HANDICAP: '让球',
   CORRECT_SCORE: '比分',
   TOTAL_GOALS: '总进球',
+  HAFU: '半全场',
 };
 
 const STAKE_SUGGESTIONS = [200, 500, 1000, 2000];
@@ -89,11 +91,59 @@ function buildOptions(match: Match, mode: ModeFilter): BetOption[] {
     ];
   }
 
+  if (mode === 'HANDICAP') {
+    if (odds.handicap) {
+      const gl = odds.handicap.goalLine;
+      // 主队让球数 = gl (负数为让球，正数为受让)
+      // 客队让球数 = -gl (符号相反)
+      const homeSpread = gl !== 0 ? (gl > 0 ? `+${gl}` : `${gl}`) : '';
+      const awaySpread = gl !== 0 ? (gl > 0 ? `${-gl}` : `+${-gl}`) : '';
+      const homeLabel = homeSpread ? `${match.homeTeam?.nameZh}(${homeSpread}) 胜` : `${match.homeTeam?.nameZh} 胜`;
+      const awayLabel = awaySpread ? `${match.awayTeam?.nameZh}(${awaySpread}) 胜` : `${match.awayTeam?.nameZh} 胜`;
+      return [
+        { key: 'home', label: homeLabel, odds: odds.handicap.homeWin },
+        { key: 'draw', label: '让球平', odds: odds.handicap.draw },
+        { key: 'away', label: awayLabel, odds: odds.handicap.awayWin },
+      ];
+    }
+    return [];
+  }
+
   if (mode === 'TOTAL_GOALS') {
-    return [
-      { key: 'over_2_5', label: '大于 2.5 球', odds: odds.totalGoals.over25 },
-      { key: 'under_2_5', label: '小于 2.5 球', odds: odds.totalGoals.under25 },
-    ];
+    // 兼容旧格式 {over25, under25} 和新格式 Array<{goals, odds}>
+    if (Array.isArray(odds.totalGoals)) {
+      return odds.totalGoals.map((item) => ({
+        key: `totalGoals_${item.goals}`,
+        label: `${item.goals} 球`,
+        odds: item.odds,
+      }));
+    }
+    // 旧格式兜底：over/under 2.5 → "3+" / "3-" 两项
+    const legacy = odds.totalGoalsLegacy || (odds.totalGoals as any as { over25?: number; under25?: number });
+    if (legacy && typeof legacy.over25 === 'number') {
+      return [
+        { key: 'totalGoals_3+', label: '3+ 球', odds: legacy.over25 },
+        { key: 'totalGoals_3-', label: '3- 球', odds: legacy.under25 },
+      ];
+    }
+    return [];
+  }
+
+  if (mode === 'HAFU') {
+    if (odds.halfFullTime) {
+      const hft = odds.halfFullTime;
+      const hafuLabels: Record<string, string> = {
+        hh: '胜胜', hd: '胜平', ha: '胜负',
+        dh: '平胜', dd: '平平', da: '平负',
+        ah: '负胜', ad: '负平', aa: '负负',
+      };
+      return Object.entries(hft).map(([key, oddsVal]) => ({
+        key,
+        label: hafuLabels[key] || key,
+        odds: oddsVal as number,
+      }));
+    }
+    return [];
   }
 
   return odds.correctScore.map((score) => {
@@ -404,12 +454,12 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
             </div>
 
             {betSurface === 'single' && (
-              <div className="grid grid-cols-3 gap-2 rounded-2xl bg-slate-100 p-1">
-                {(['H2H', 'CORRECT_SCORE', 'TOTAL_GOALS'] as ModeFilter[]).map((mode) => (
+              <div className="overflow-x-auto rounded-2xl bg-slate-100 p-1 flex justify-center gap-1 scrollbar-hide">
+                {(['H2H', 'HANDICAP', 'CORRECT_SCORE', 'TOTAL_GOALS', 'HAFU'] as ModeFilter[]).map((mode) => (
                   <button
                     key={mode}
                     onClick={() => setActiveMode(mode)}
-                    className={`rounded-xl px-3 py-2 text-xs font-bold transition ${
+                    className={`shrink-0 rounded-xl px-3 py-2 text-xs font-bold whitespace-nowrap transition ${
                       activeMode === mode ? 'bg-white text-emerald-700 shadow-xs' : 'text-slate-500 hover:text-slate-800'
                     }`}
                   >
@@ -611,8 +661,61 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
                           );
                         })}
                       </div>
+                    ) : activeMode === 'HAFU' ? (
+                      match.odds?.halfFullTime ? (
+                        // 半全场：3×3 网格（按行分组：上半场胜/平/负）
+                        <div className="mt-4 space-y-2">
+                          {(['上半场主胜', '上半场平局', '上半场客胜'] as const).map((rowLabel, ri) => {
+                            const rowKeys = [['hh', 'hd', 'ha'], ['dh', 'dd', 'da'], ['ah', 'ad', 'aa']][ri];
+                            const rowOptions = options.filter((o) => rowKeys.includes(o.key));
+                            if (rowOptions.length === 0) return null;
+                            return (
+                              <div key={rowLabel}>
+                                <div className="mb-1.5 text-[10px] font-bold text-slate-400">{rowLabel}</div>
+                                <div className="grid grid-cols-3 gap-1.5">
+                                  {rowOptions.map((option) => (
+                                    <button
+                                      key={option.key}
+                                      onClick={() => handleOpenBetModal(match, option)}
+                                      className="rounded-xl border border-slate-200 bg-slate-50 px-2 py-2 text-left transition hover:border-emerald-200 hover:bg-emerald-50"
+                                    >
+                                      <div className="text-xs font-bold text-slate-700">{option.label}</div>
+                                      <div className="mt-1 text-sm font-black text-slate-900">{option.odds.toFixed(2)}</div>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-4 text-center text-xs text-slate-400 font-bold">
+                          本场未开售半全场玩法
+                        </div>
+                      )
+                    ) : activeMode === 'HANDICAP' ? (
+                      <>
+                        {match.odds?.handicap ? (
+                          <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                            {options.map((option) => (
+                              <button
+                                key={option.key}
+                                onClick={() => handleOpenBetModal(match, option)}
+                                className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-left transition hover:border-emerald-200 hover:bg-emerald-50"
+                              >
+                                <div className="text-xs font-bold text-slate-700">{option.label}</div>
+                                <div className="mt-2 text-base font-black text-slate-900">{option.odds.toFixed(2)}</div>
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-4 text-center text-xs text-slate-400 font-bold">
+                            本场未开售让球盘
+                          </div>
+                        )}
+                      </>
                     ) : (
-                      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                      <div className={`mt-4 grid gap-2 ${activeMode === 'TOTAL_GOALS' ? 'grid-cols-4' : 'sm:grid-cols-3'}`}>
                         {options.map((option) => (
                           <button
                             key={option.key}

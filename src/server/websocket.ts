@@ -209,6 +209,14 @@ export function broadcastNotification(message: string, level: 'info' | 'warn' | 
 }
 
 /**
+ * 推送积分榜更新（竞彩网或本地计算后调用）
+ */
+export function broadcastStandingsUpdate(standings: unknown) {
+  broadcast('standings:update', { standings, updatedAt: new Date().toISOString() }, 'match:*');
+  broadcast('standings:update', { standings, updatedAt: new Date().toISOString() });
+}
+
+/**
  * 获取在线用户数
  */
 export function getOnlineCount(): number {

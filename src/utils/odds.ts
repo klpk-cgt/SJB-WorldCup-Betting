@@ -114,12 +114,16 @@ export function generateDefaultOdds(matchId: string, homeRank?: number, awayRank
   // Poisson + Elo xG 生成比分赔率（兜底时无场地信息，用基础计算）
   const xg = calculateExpectedGoals(homeRank, awayRank);
   const correctScore = generateCorrectScoreOddsFromXG(xg.homeXG, xg.awayXG);
+  const totalGoalsArr = generateDefaultTotalGoals(xg.homeXG, xg.awayXG);
+  const halfFullTime = generateDefaultHalfFullTime(h2h);
 
   return {
     matchId,
     h2h,
     correctScore,
-    totalGoals: { over25: 1.9, under25: 1.9 },
+    totalGoals: totalGoalsArr,
+    totalGoalsLegacy: { over25: 1.9, under25: 1.9 },
+    halfFullTime,
     lastUpdated: new Date().toISOString(),
     source: 'MANUAL',
     syncStatus: 'MANUAL_FALLBACK',
@@ -327,4 +331,161 @@ export function generateCorrectScoreOddsFromXG(
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+// ─── 竞彩网 API 赔率解析函数 ───
+
+/**
+ * 解析竞彩网 CRS 比分赔率
+ * sXXsYY → "{XX}-{YY}" key 格式
+ * s1sh → "HOME_OTHER", s1sd → "DRAW_OTHER", s1sa → "AWAY_OTHER"
+ */
+export function parseCrsToScoreOptions(crs: Record<string, string>): Array<{ score: string; odds: number }> {
+  const options: Array<{ score: string; odds: number }> = [];
+  const ignoredKeys = new Set(['goalLine', 'goalLineValue', 'updateDate', 'updateTime', 'id']);
+
+  // 胜其他/平其他/负其他 映射
+  const otherKeyMap: Record<string, string> = {
+    s1sh: 'HOME_OTHER',
+    s1sd: 'DRAW_OTHER',
+    s1sa: 'AWAY_OTHER',
+  };
+
+  for (const [key, value] of Object.entries(crs)) {
+    if (ignoredKeys.has(key)) continue;
+
+    // sXXsYY 格式的精确比分
+    const match = key.match(/^s(\d{2})s(\d{2})$/);
+    if (match) {
+      const home = parseInt(match[1], 10);
+      const away = parseInt(match[2], 10);
+      const odds = Number(value);
+      if (Number.isFinite(odds) && odds > 0) {
+        options.push({ score: `${home}-${away}`, odds });
+      }
+      continue;
+    }
+
+    // 胜/平/负其他
+    if (otherKeyMap[key]) {
+      const odds = Number(value);
+      if (Number.isFinite(odds) && odds > 0) {
+        options.push({ score: otherKeyMap[key], odds });
+      }
+    }
+  }
+
+  // 按主胜/平局/客胜分组排序
+  return options.sort((a, b) => {
+    const order = (s: string) => {
+      if (s === 'HOME_OTHER') return -1;
+      if (s === 'DRAW_OTHER') return 0;
+      if (s === 'AWAY_OTHER') return 1;
+      const [h, a] = s.split('-').map(Number);
+      if (h > a) return -1;
+      if (h === a) return 0;
+      return 1;
+    };
+    return order(a.score) - order(b.score);
+  });
+}
+
+/**
+ * 解析竞彩网 TTG 总进球数赔率
+ * s0~s7 → 0球~7+球
+ */
+export function parseTtgToGoals(ttg: Record<string, string>): Array<{ goals: string; odds: number }> {
+  const ignoredKeys = new Set(['goalLine', 'goalLineValue', 'updateDate', 'updateTime']);
+  const goalsMap: Record<string, string> = {
+    s0: '0', s1: '1', s2: '2', s3: '3',
+    s4: '4', s5: '5', s6: '6', s7: '7+',
+  };
+
+  const result: Array<{ goals: string; odds: number }> = [];
+
+  for (const [key, value] of Object.entries(ttg)) {
+    if (ignoredKeys.has(key) || !goalsMap[key]) continue;
+    const odds = Number(value);
+    if (Number.isFinite(odds) && odds > 0) {
+      result.push({ goals: goalsMap[key], odds });
+    }
+  }
+
+  // 按进球数升序排列
+  result.sort((a, b) => {
+    const aNum = a.goals === '7+' ? 7 : parseInt(a.goals, 10);
+    const bNum = b.goals === '7+' ? 7 : parseInt(b.goals, 10);
+    return aNum - bNum;
+  });
+
+  return result;
+}
+
+/**
+ * 解析竞彩网 HAFU 半全场赔率
+ * hh/hd/ha/dh/dd/da/ah/ad/aa → 9项半全场对象
+ */
+export function parseHafuToHalfFullTime(hafu: Record<string, string>): {
+  hh: number; hd: number; ha: number;
+  dh: number; dd: number; da: number;
+  ah: number; ad: number; aa: number;
+} {
+  const ignoredKeys = new Set(['goalLine', 'goalLineValue', 'updateDate', 'updateTime', 'id']);
+  const parseOddsOrFallback = (key: string, fallback = 3.0): number => {
+    const v = hafu[key];
+    if (!v) return fallback;
+    const n = Number(v);
+    return (Number.isFinite(n) && n > 0) ? n : fallback;
+  };
+
+  return {
+    hh: parseOddsOrFallback('hh'), hd: parseOddsOrFallback('hd', 12.0), ha: parseOddsOrFallback('ha', 25.0),
+    dh: parseOddsOrFallback('dh', 5.5), dd: parseOddsOrFallback('dd', 5.0), da: parseOddsOrFallback('da', 7.0),
+    ah: parseOddsOrFallback('ah', 30.0), ad: parseOddsOrFallback('ad', 13.0), aa: parseOddsOrFallback('aa', 6.0),
+  };
+}
+
+/**
+ * Elo 降级：生成默认半全场赔率（基于 H2H 概率）
+ */
+export function generateDefaultHalfFullTime(h2h: { homeWin: number; draw: number; awayWin: number }) {
+  const pH = 1 / h2h.homeWin;
+  const pD = 1 / h2h.draw;
+  const pA = 1 / h2h.awayWin;
+  const total = pH + pD + pA;
+  const pH2 = pH / total;
+  const pD2 = pD / total;
+  const pA2 = pA / total;
+
+  const margin = 0.92;
+
+  // 半场×全场概率 = 独立假设(简化)
+  const calc = (p1: number, p2: number) => Math.max(1.1, round2(1 / Math.max(p1 * p2, 0.001) * margin));
+
+  return {
+    hh: calc(pH2, pH2), hd: calc(pH2, pD2), ha: calc(pH2, pA2),
+    dh: calc(pD2, pH2), dd: calc(pD2, pD2), da: calc(pD2, pA2),
+    ah: calc(pA2, pH2), ad: calc(pA2, pD2), aa: calc(pA2, pA2),
+  };
+}
+
+/**
+ * Elo 降级：生成默认精确总进球赔率
+ */
+export function generateDefaultTotalGoals(homeXG: number, awayXG: number): Array<{ goals: string; odds: number }> {
+  const totalXG = homeXG + awayXG;
+  const margin = 0.92;
+  const result: Array<{ goals: string; odds: number }> = [];
+
+  for (let g = 0; g <= 6; g++) {
+    const prob = poissonPMF(g, totalXG);
+    result.push({ goals: String(g), odds: round2(1 / Math.max(prob, 0.002) * margin) });
+  }
+
+  // 7+ = 1 - P(0..6)
+  let p06 = 0;
+  for (let g = 0; g <= 6; g++) p06 += poissonPMF(g, totalXG);
+  result.push({ goals: '7+', odds: round2(1 / Math.max(1 - p06, 0.002) * margin) });
+
+  return result;
 }

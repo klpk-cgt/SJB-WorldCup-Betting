@@ -47,6 +47,7 @@ export interface SyncRuntimeState {
   lastLiveScoreSyncAt: number;
   lastSettlementCheckAt: number;
   lastAiRefreshAt: number;
+  lastStandingsSyncAt: number;
   currentPriority: SyncPriority;
   currentReason: string;
 }
@@ -95,6 +96,7 @@ let runtimeState: SyncRuntimeState = {
   lastLiveScoreSyncAt: 0,
   lastSettlementCheckAt: 0,
   lastAiRefreshAt: 0,
+  lastStandingsSyncAt: 0,
   currentPriority: 'LOW',
   currentReason: '初始化',
 };
@@ -451,24 +453,47 @@ export async function runDynamicSyncTick() {
     }
   }
 
-  // 3. 赔率同步
+  // 3. 赔率同步（竞彩网 > The Odds API > Elo 降级）
   if (shouldSyncOdds(plan)) {
     if (acquireLock('odds')) {
       try {
+        const { syncSportteryOdds } = await import('../sporttery_sync');
         const { syncOddsForMatches } = await import('../sync');
         const { appendSyncLog } = await import('../helpers');
         const db = dbService.getData();
         const config = getRuntimeConfig();
 
-        const result = await syncOddsForMatches({
-          apiKey: config.theOddsApiKey,
-          db,
-        });
-        appendSyncLog(result.log);
+        // 第一步：竞彩网 API（主赔率源）
+        let sportteryResult = null;
+        try {
+          sportteryResult = await syncSportteryOdds(db);
+          if (sportteryResult.log) appendSyncLog(sportteryResult.log);
+          logger.info(`[SyncScheduler] Sporttery synced: ${sportteryResult.updatedMatchIds.length} matches`);
+        } catch (e) {
+          logger.warn('[SyncScheduler] Sporttery sync failed, falling back to The Odds API', {
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
+
+        // 第二步：The Odds API（辅助兜底，补充竞彩网未覆盖的比赛）
+        if (config.theOddsApiKey && hasProviderKey(config.theOddsApiKey)) {
+          try {
+            const oddsResult = await syncOddsForMatches({
+              apiKey: config.theOddsApiKey,
+              db,
+            });
+            appendSyncLog(oddsResult.log);
+            logger.info(`[SyncScheduler] The Odds synced: ${oddsResult.log.responseSummary}`);
+          } catch (e) {
+            logger.warn('[SyncScheduler] The Odds API sync failed', {
+              error: e instanceof Error ? e.message : String(e),
+            });
+          }
+        }
+
         markOddsSynced();
         resetOddsFailures();
         dbService.save();
-        logger.info(`[SyncScheduler] Odds synced: ${result.log.responseSummary}`);
       } catch (error) {
         recordOddsFailure();
         logger.error('[SyncScheduler] Odds sync failed', {
@@ -476,6 +501,34 @@ export async function runDynamicSyncTick() {
         });
       } finally {
         releaseLock('odds');
+      }
+    }
+  }
+
+  // 4. 竞彩网积分榜同步（每 2 小时，NORMAL 及以上）
+  if (plan.priority !== 'LOW') {
+    const standingsInterval = 2 * MS_PER_HOUR;
+    const shouldSyncStandings = !runtimeState.lastStandingsSyncAt || (Date.now() - runtimeState.lastStandingsSyncAt >= standingsInterval);
+    if (shouldSyncStandings && acquireLock('standings')) {
+      try {
+        const { syncWorldCupStandings } = await import('../sporttery_sync');
+        const db = dbService.getData();
+        const result = await syncWorldCupStandings(db);
+        if (result.synced) {
+          runtimeState.lastStandingsSyncAt = Date.now();
+          dbService.save();
+          try {
+            const { broadcastStandingsUpdate } = await import('../websocket');
+            broadcastStandingsUpdate(db.worldCupStandings);
+          } catch { /* ignore */ }
+          logger.info(`[SyncScheduler] Sporttery standings synced: ${result.groupCount} groups`);
+        }
+      } catch (e) {
+        logger.warn('[SyncScheduler] Standings sync failed', {
+          error: e instanceof Error ? e.message : String(e),
+        });
+      } finally {
+        releaseLock('standings');
       }
     }
   }

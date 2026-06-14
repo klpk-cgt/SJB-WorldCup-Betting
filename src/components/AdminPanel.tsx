@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Shield, Users, Play, RefreshCw, BarChart3, Database, Coins, FileText, Plus, Trash2, Upload, X, Activity } from 'lucide-react';
+import { Settings, Shield, Users, Play, RefreshCw, BarChart3, Database, Coins, FileText, Plus, Trash2, Upload, X, Activity, Trophy } from 'lucide-react';
 import { ADMIN_KEY_STORAGE, apiRequest } from '../utils/api';
 import { Match, SyncLog } from '../types';
 import { useToast } from './ToastProvider';
@@ -420,8 +420,8 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
       setOddsHomeWin(match.odds.h2h.homeWin?.toString() || '2.0');
       setOddsDraw(match.odds.h2h.draw?.toString() || '3.2');
       setOddsAwayWin(match.odds.h2h.awayWin?.toString() || '3.0');
-      setOddsOver(match.odds.totalGoals.over25?.toString() || '1.9');
-      setOddsUnder(match.odds.totalGoals.under25?.toString() || '1.9');
+      setOddsOver(match.odds.totalGoalsLegacy?.over25?.toString() || '1.9');
+      setOddsUnder(match.odds.totalGoalsLegacy?.under25?.toString() || '1.9');
     }
     setSettleStatusMsg('');
   };
@@ -557,6 +557,42 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
       await loadAdminData();
     } catch (e: unknown) {
       toast.error('同步校验失败', e.message || '请稍后重试。');
+    } finally {
+      setIsWorking(false);
+    }
+  };
+
+  const handleSportterySync = async () => {
+    setIsWorking(true);
+    setOpsStatusMsg('正在同步竞彩网赔率数据...');
+    try {
+      const result = await apiRequest('/api/admin/sync/sporttery', { method: 'POST' });
+      toast.success('竞彩网同步完成', `成功更新 ${result.updatedCount} 场比赛赔率，${result.unsyncedCount} 场未匹配。`);
+      setOpsStatusMsg(`竞彩网同步完成：${result.updatedCount} 场已更新`);
+      await loadAdminData();
+    } catch (e: unknown) {
+      toast.error('竞彩网同步失败', e instanceof Error ? e.message : String(e));
+      setOpsStatusMsg('竞彩网同步失败，请检查网络或稍后重试。');
+    } finally {
+      setIsWorking(false);
+    }
+  };
+
+  const handleSportteryStandingsSync = async () => {
+    setIsWorking(true);
+    setOpsStatusMsg('正在同步竞彩网积分榜...');
+    try {
+      const result = await apiRequest('/api/admin/sync/sporttery-standings', { method: 'POST' });
+      if (result.synced) {
+        toast.success('积分榜同步完成', `${result.groupCount} 个小组排名已更新`);
+        setOpsStatusMsg(`积分榜同步完成：${result.groupCount} 组`);
+      } else {
+        toast.error('积分榜同步失败', result.error || '未知错误');
+        setOpsStatusMsg('积分榜同步失败，将使用本地计算');
+      }
+    } catch (e: unknown) {
+      toast.error('积分榜同步失败', e instanceof Error ? e.message : String(e));
+      setOpsStatusMsg('积分榜同步失败，请检查网络或稍后重试。');
     } finally {
       setIsWorking(false);
     }
@@ -1114,6 +1150,22 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
                 >
                   <Play className="h-3.5 w-3.5" />
                   运行同步校验
+                </button>
+                <button
+                  onClick={handleSportterySync}
+                  disabled={isWorking}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-3 text-xs font-black text-white transition hover:bg-orange-600 disabled:opacity-60 sm:col-span-2"
+                >
+                  <Database className="h-3.5 w-3.5" />
+                  同步竞彩网赔率
+                </button>
+                <button
+                  onClick={handleSportteryStandingsSync}
+                  disabled={isWorking}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-4 py-3 text-xs font-black text-white transition hover:bg-emerald-600 disabled:opacity-60"
+                >
+                  <Trophy className="h-3.5 w-3.5" />
+                  同步竞彩网积分榜
                 </button>
                 <button
                   onClick={handleHealthCheck}

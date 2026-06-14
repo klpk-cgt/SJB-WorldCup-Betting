@@ -597,10 +597,38 @@ router.get('/api/leaderboards', (_req: Request, res: Response) => {
 
 router.get('/api/group-standings', (req: Request, res: Response) => {
   const db = dbService.getData();
+
+  // 优先使用竞彩网积分榜数据
+  if (db.worldCupStandings?.source === 'Sporttery') {
+    const sn = db.worldCupStandings;
+    const age = Date.now() - new Date(sn.lastUpdated).getTime();
+    // 数据在 6 小时内有效
+    if (age < 6 * 60 * 60 * 1000) {
+      const result: Record<string, Array<Record<string, unknown>>> = {};
+      for (const [groupKey, rows] of Object.entries(sn.groups)) {
+        result[groupKey] = rows.map((r) => ({
+          teamId: r.teamId,
+          name: r.teamName,
+          code: r.teamCode,
+          rank: r.rank,
+          played: r.played,
+          won: r.won,
+          drawn: r.drawn,
+          lost: r.lost,
+          gf: r.gf,
+          ga: r.ga,
+          gd: r.gd,
+          points: r.points,
+        }));
+      }
+      return res.json(result);
+    }
+  }
+
+  // 兜底：本地动态计算积分榜
   const groupMatches = db.matches.filter((m) => m.stage === 'Group Stage');
   const teamMap = new Map(db.teams.map((t) => [t.id, t]));
 
-  // 按小组分组
   const groups = new Map<string, Map<string, { teamId: string; name: string; code: string; played: number; won: number; drawn: number; lost: number; gf: number; ga: number; points: number }>>();
 
   for (const match of groupMatches) {
@@ -612,7 +640,6 @@ router.get('/api/group-standings', (req: Request, res: Response) => {
 
     const groupData = groups.get(groupKey)!;
 
-    // 初始化球队
     for (const teamId of [match.homeTeamId, match.awayTeamId]) {
       if (!teamId || groupData.has(teamId)) continue;
       const team = teamMap.get(teamId);
@@ -624,7 +651,6 @@ router.get('/api/group-standings', (req: Request, res: Response) => {
       });
     }
 
-    // 只统计已完赛的比赛
     if (match.status !== 'FT' && match.status !== 'AET' && match.status !== 'PEN') continue;
     if (match.homeScore == null || match.awayScore == null) continue;
 
@@ -632,27 +658,16 @@ router.get('/api/group-standings', (req: Request, res: Response) => {
     const away = groupData.get(match.awayTeamId);
     if (!home || !away) continue;
 
-    home.played += 1;
-    away.played += 1;
-    home.gf += match.homeScore;
-    home.ga += match.awayScore;
-    away.gf += match.awayScore;
-    away.ga += match.homeScore;
+    home.played += 1; away.played += 1;
+    home.gf += match.homeScore; home.ga += match.awayScore;
+    away.gf += match.awayScore; away.ga += match.homeScore;
 
-    if (match.homeScore > match.awayScore) {
-      home.won += 1; home.points += 3;
-      away.lost += 1;
-    } else if (match.homeScore < match.awayScore) {
-      away.won += 1; away.points += 3;
-      home.lost += 1;
-    } else {
-      home.drawn += 1; home.points += 1;
-      away.drawn += 1; away.points += 1;
-    }
+    if (match.homeScore > match.awayScore) { home.won += 1; home.points += 3; away.lost += 1; }
+    else if (match.homeScore < match.awayScore) { away.won += 1; away.points += 3; home.lost += 1; }
+    else { home.drawn += 1; home.points += 1; away.drawn += 1; away.points += 1; }
   }
 
-  // 转换为排序后的数组
-  const result: Record<string, Array<{ teamId: string; name: string; code: string; played: number; won: number; drawn: number; lost: number; gf: number; ga: number; gd: number; points: number }>> = {};
+  const result: Record<string, Array<Record<string, unknown>>> = {};
   for (const [groupKey, teamMap2] of groups) {
     result[groupKey] = Array.from(teamMap2.values())
       .map((t) => ({ ...t, gd: t.gf - t.ga }))

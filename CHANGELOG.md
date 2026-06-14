@@ -1,5 +1,63 @@
 # 更新日志 (Changelog)
 
+## v2.4.0 - 2026-06-14
+
+### 重大更新：竞彩网集成 + 竞猜玩法扩展
+
+#### 1. 竞彩网赔率集成（主数据源）
+- 新建 `src/server/sporttery_sync.ts`：竞彩网 API 同步引擎，支持赔率/积分榜/赛果同步
+- 三级降级链：竞彩网(主) → The Odds API(辅) → Elo 兜底
+- 自动同步：积分榜每2小时，赔率通过调度器按优先级自动执行
+- 管理后台新增「同步竞彩网赔率」+「同步积分榜」按钮
+- 新增环境变量 `SPORTTERY_API_BASE_URL`、`SPORTTERY_SYNC_INTERVAL_MINUTES`
+
+#### 2. 新增玩法：让球胜平负 (HANDICAP)
+- 数据来自竞彩网 `hhad` 池，goalLine 让球数
+- 按钮标签格式：`德国(-3) 胜` / `让球平` / `库拉索(+3) 胜`
+- 未开盘比赛显示「本场未开售让球盘」
+
+#### 3. 新增玩法：半全场 (HAFU)
+- 数据来自竞彩网 `hafu` 池，9 种结果：胜胜/胜平/胜负/平胜/平平/平负/负胜/负平/负负
+- 3×3 矩阵布局，按上半场结果分三行
+- 半场比分暂不可用时结算自动 VOID 返还本金
+- 未开盘显示「本场未开售半全场玩法」
+
+#### 4. 完善：总进球数（2项→8项精确投注）
+- 从 over/under 2.5 → 0球/1球/2球/3球/4球/5球/6球/7+球
+- 竞彩网 `ttg` 池优先，兼容旧格式自动降级显示
+
+#### 5. 完善：比分赔率切换为竞彩网真实数据
+- 赔率来源从 Poisson 估算 → 竞彩网 `crs` 池标记 `SPORTTERY`
+- 覆盖 25 个精确比分 + 3 个兜底
+
+#### 6. 前端玩法 Tab 重构
+- 3 → 5 个玩法 Pill：胜平负 | 让球 | 比分 | 总进球 | 半全场
+- 水平可滚动容器 + `justify-center` 居中
+- 半全场 3×3 网格、总进球 4×2 网格
+
+#### 7. 玩法结算扩展
+- HANDICAP：实际比分 + goalLine 后判定主胜/平/客胜
+- HAFU：缺半场比分 → VOID 返还本金
+- TOTAL_GOALS：精确进球数匹配 0~7+
+- `judgePrediction` 支持 `null` 返回 → VOID 状态
+
+#### 8. 竞彩网积分榜
+- `syncWorldCupStandings()` 从 `getTablesV2` 拉取
+- `GET /api/group-standings` 竞彩网优先（6h有效）→ 本地计算兜底
+- WebSocket 新增 `standings:update` 广播事件
+- `DatabaseSchema` 新增 `worldCupStandings` 字段
+
+#### 9. 日期格式兼容
+- `normalizeDate()` 统一处理 `2026/6/15`、`2026-06-15` 等格式
+
+### 改动文件
+`types.ts`, `config.ts`, `db_service.ts`, `ai.ts`, `helpers.ts`, `sync.ts`,
+`settlement_service.ts`, `sync_scheduler_service.ts`, `websocket.ts`,
+`routes/admin.ts`, `routes/matches.ts`, `odds.ts`,
+`sporttery_sync.ts`(新), `PredictionTab.tsx`, `AdminPanel.tsx`
+
+---
+
 ## v2.3.13 - 2026-06-14
 
 ### 新增：等级系统重构 + 领奖台修复 + 管理员统一发配积分

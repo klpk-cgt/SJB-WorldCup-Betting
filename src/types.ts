@@ -170,23 +170,39 @@ export interface MatchOdds {
     draw: number;
     awayWin: number;
   };
+  handicap?: {
+    goalLine: number;   // 让球数，正数=主队让球，负数=客队让球
+    homeWin: number;
+    draw: number;
+    awayWin: number;
+  };
   correctScore: Array<{
     score: string;
     odds: number;
   }>;
-  totalGoals: {
+  totalGoals: Array<{
+    goals: string;      // "0"~"7+" 精确进球标签
+    odds: number;
+  }>;
+  /** @deprecated 保留向前兼容，新数据用 totalGoals 数组 */
+  totalGoalsLegacy?: {
     over25: number;
     under25: number;
+  };
+  halfFullTime?: {
+    hh: number; hd: number; ha: number;   // 胜胜/胜平/胜负
+    dh: number; dd: number; da: number;   // 平胜/平平/平负
+    ah: number; ad: number; aa: number;   // 负胜/负平/负负
   };
   qualify?: {
     homeQualify: number;
     awayQualify: number;
   };
   lastUpdated: string;
-  source?: 'API-Football' | 'The Odds API' | 'MANUAL';
+  source?: 'API-Football' | 'The Odds API' | 'MANUAL' | 'Sporttery';
   syncStatus?: 'SYNCED' | 'PARTIAL' | 'MANUAL_FALLBACK' | 'FAILED' | 'UNSYNCED';
   lastSyncedAt?: string;
-  correctScoreSource?: 'MANUAL' | 'INFERRED_FROM_H2H' | 'THIRD_PARTY';
+  correctScoreSource?: 'MANUAL' | 'INFERRED_FROM_H2H' | 'THIRD_PARTY' | 'SPORTTERY';
 }
 
 export interface GroupRoom {
@@ -301,7 +317,7 @@ export interface Transaction {
   createdAt: string;
 }
 
-export type PredictionMarket = 'H2H' | 'CORRECT_SCORE' | 'TOTAL_GOALS' | 'QUALIFY';
+export type PredictionMarket = 'H2H' | 'CORRECT_SCORE' | 'TOTAL_GOALS' | 'QUALIFY' | 'HANDICAP' | 'HAFU' | 'TOTAL_GOALS_PRECISE';
 
 export type PredictionStatus = 'PENDING' | 'LOCKED' | 'WON' | 'LOST' | 'VOID' | 'CANCELLED';
 
@@ -545,9 +561,9 @@ export interface ShareCardRecord {
   debugMeta?: Record<string, string | number | boolean | null>;
 }
 
-export type SyncProvider = 'API-Football' | 'The Odds API' | 'DeepSeek' | 'Mimo' | 'Gemini' | 'Local';
+export type SyncProvider = 'API-Football' | 'The Odds API' | 'DeepSeek' | 'Mimo' | 'Gemini' | 'Local' | 'Sporttery';
 export type SyncStatus = 'SUCCESS' | 'FAILED' | 'PARTIAL';
-export type SyncType = 'fixtures' | 'livescore' | 'lineups' | 'events' | 'odds' | 'ai';
+export type SyncType = 'fixtures' | 'livescore' | 'lineups' | 'events' | 'odds' | 'ai' | 'standings' | 'schedule';
 
 export interface SyncLog {
   id: string;
@@ -575,4 +591,30 @@ export interface AdminOverride {
   afterJson: string;
   reason: string;
   createdAt: string;
+}
+
+// ─── 竞彩网积分榜数据 ───
+
+export interface StandingTeamRow {
+  teamId: string;       // 本地 team.id
+  teamName: string;     // 中文队名
+  teamCode: string;     // 队伍代码 (GER, BRA...)
+  rank: number;         // 小组排名
+  played: number;
+  won: number;
+  drawn: number;
+  lost: number;
+  gf: number;           // 进球
+  ga: number;           // 失球
+  gd: number;           // 净胜球
+  points: number;
+}
+
+export interface WorldCupStandings {
+  /** 按小组 key (A-L) 分组的排名数据 */
+  groups: Record<string, StandingTeamRow[]>;
+  /** 数据来源 */
+  source: 'Sporttery' | 'COMPUTED';
+  /** 最后更新时间 */
+  lastUpdated: string;
 }

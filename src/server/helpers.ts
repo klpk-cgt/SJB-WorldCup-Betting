@@ -176,9 +176,14 @@ export function normalizePredictionMarket(input: string | null | undefined): Pre
       return 'CORRECT_SCORE';
     case 'TOTAL_GOALS':
     case 'TOTALGOALS':
-      return 'TOTAL_GOALS';
+    case 'TOTAL_GOALS_PRECISE':
+      return 'TOTAL_GOALS_PRECISE';
     case 'QUALIFY':
       return 'QUALIFY';
+    case 'HANDICAP':
+      return 'HANDICAP';
+    case 'HAFU':
+      return 'HAFU';
     default:
       return null;
   }
@@ -626,15 +631,25 @@ export function resolveOddsSnapshot(matchId: string, market: Prediction['market'
   const marketUpper = normalizePredictionMarket(market);
   if (!marketUpper) return null;
   let oddsDecimal = 1;
-  if (marketUpper === 'H2H') {
-    oddsDecimal = optionKey === 'home' ? odds.h2h.homeWin : optionKey === 'draw' ? odds.h2h.draw : odds.h2h.awayWin;
-  } else if (marketUpper === 'TOTAL_GOALS') {
-    oddsDecimal = optionKey === 'over_2_5' ? odds.totalGoals.over25 : odds.totalGoals.under25;
+  if (marketUpper === 'H2H' || marketUpper === 'HANDICAP') {
+    // 让球和胜平负共享 H2H/handicap 字段，按 optionKey 的前缀或 market 区分
+    const src = marketUpper === 'HANDICAP' ? (odds.handicap || odds.h2h) : odds.h2h;
+    oddsDecimal = optionKey === 'home' ? src.homeWin : optionKey === 'draw' ? src.draw : src.awayWin;
+  } else if (marketUpper === 'TOTAL_GOALS_PRECISE') {
+    const tg = odds.totalGoals.find((item) => `totalGoals_${item.goals}` === optionKey || item.goals === optionKey);
+    oddsDecimal = tg?.odds || odds.totalGoals.find(t => t.goals === '3')?.odds || 4.0;
   } else if (marketUpper === 'CORRECT_SCORE') {
     const score = odds.correctScore.find(
       (item) => `correctScore_${item.score.replace('-', '_')}` === optionKey || item.score === optionKey,
     );
     oddsDecimal = score?.odds || 9.5;
+  } else if (marketUpper === 'HAFU') {
+    const hft = odds.halfFullTime;
+    if (hft) {
+      oddsDecimal = (hft as any)[optionKey] || 3.0;
+    } else {
+      oddsDecimal = 3.0;
+    }
   } else if (marketUpper === 'QUALIFY') {
     oddsDecimal = optionKey === 'homeQualify' ? odds.qualify?.homeQualify || 1.8 : odds.qualify?.awayQualify || 1.8;
   }
@@ -961,7 +976,10 @@ export function formatMarketLabel(market: Prediction['market']) {
     H2H: '胜平负',
     CORRECT_SCORE: '比分',
     TOTAL_GOALS: '总进球',
+    TOTAL_GOALS_PRECISE: '总进球',
     QUALIFY: '晋级',
+    HANDICAP: '让球',
+    HAFU: '半全场',
   };
   return mapping[market] || market;
 }

@@ -184,6 +184,9 @@ export async function generateStructuredAiContent(params:
           syncIntervalMinutes: 5,
           activityMaxEntries: 1000,
           activityArchiveFile: 'db.activities.archive.json',
+          sportteryApiBaseUrl: 'https://webapi.sporttery.cn/gateway',
+          sportterySyncIntervalMinutes: 60,
+          defaultRoomId: 'room-1',
         } satisfies RuntimeConfig);
 
   try {

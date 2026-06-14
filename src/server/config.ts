@@ -37,6 +37,8 @@ export function getLevelByNetProfit(netProfit: number): LevelConfig {
 export interface RuntimeConfig {
   apiFootballKey: string;
   theOddsApiKey: string;
+  sportteryApiBaseUrl: string;
+  sportterySyncIntervalMinutes: number;
   deepSeekApiKey: string;
   geminiApiKey: string;
   mimoApiKey: string;
@@ -70,6 +72,8 @@ export function getRuntimeConfig(): RuntimeConfig {
   return {
     apiFootballKey: readEnv('API_FOOTBALL_KEY'),
     theOddsApiKey: readEnv('THE_ODDS_API_KEY'),
+    sportteryApiBaseUrl: readEnv('SPORTTERY_API_BASE_URL', 'https://webapi.sporttery.cn/gateway'),
+    sportterySyncIntervalMinutes: Math.max(5, Number(process.env.SPORTTERY_SYNC_INTERVAL_MINUTES || 60)),
     deepSeekApiKey: readEnv('DEEPSEEK_API_KEY'),
     geminiApiKey: readEnv('GEMINI_API_KEY'),
     mimoApiKey: readEnv('MIMO_API_KEY'),

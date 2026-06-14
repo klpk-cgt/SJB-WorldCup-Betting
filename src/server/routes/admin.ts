@@ -633,6 +633,57 @@ router.post('/api/admin/users/bulk-adjust-points', (req: Request, res: Response)
   res.json({ success: true, affectedCount, amount, reason });
 });
 
+// ─── 手动同步竞彩网赔率 ───
+router.post('/api/admin/sync/sporttery', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const { syncSportteryOdds } = await import('../sporttery_sync');
+    const { appendSyncLog } = await import('../helpers');
+    const db = dbService.getData();
+    const result = await syncSportteryOdds(db);
+    if (result.log) appendSyncLog(result.log as SyncLog);
+    dbService.save();
+    logger.admin('[Admin] Manual sporttery sync completed', {
+      updated: result.updatedMatchIds.length,
+    });
+    res.json({
+      success: true,
+      updatedCount: result.updatedMatchIds.length,
+      unsyncedCount: result.unsyncedMatchIds.length,
+      updatedMatchIds: result.updatedMatchIds,
+    });
+  } catch (e) {
+    logger.error('[Admin] Manual sporttery sync failed', {
+      error: e instanceof Error ? e.message : String(e),
+    });
+    res.status(500).json({ success: false, error: e instanceof Error ? e.message : String(e) });
+  }
+});
+
+// ─── 同步竞彩网积分榜 ───
+router.post('/api/admin/sync/sporttery-standings', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const { syncWorldCupStandings } = await import('../sporttery_sync');
+    const db = dbService.getData();
+    const result = await syncWorldCupStandings(db);
+    dbService.save();
+
+    // WebSocket 广播积分榜更新
+    if (result.synced) {
+      try {
+        const { broadcastStandingsUpdate } = await import('../websocket');
+        broadcastStandingsUpdate(db.worldCupStandings!);
+      } catch { /* ignore */ }
+    }
+
+    logger.admin('[Admin] Sporttery standings sync completed', result);
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ success: false, error: e instanceof Error ? e.message : String(e) });
+  }
+});
+
 // ─── maintenance badges and titles ───
 router.post('/api/admin/badges/reevaluate', (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
@@ -798,8 +849,10 @@ router.put('/api/admin/matches/:id/odds', (req: Request, res: Response) => {
   existing.h2h.homeWin = Number(req.body.homeWin ?? existing.h2h.homeWin);
   existing.h2h.draw = Number(req.body.draw ?? existing.h2h.draw);
   existing.h2h.awayWin = Number(req.body.awayWin ?? existing.h2h.awayWin);
-  existing.totalGoals.over25 = Number(req.body.over25 ?? existing.totalGoals.over25);
-  existing.totalGoals.under25 = Number(req.body.under25 ?? existing.totalGoals.under25);
+  existing.totalGoalsLegacy = {
+    over25: Number(req.body.over25 ?? existing.totalGoalsLegacy?.over25 ?? 1.9),
+    under25: Number(req.body.under25 ?? existing.totalGoalsLegacy?.under25 ?? 1.9),
+  };
   existing.lastUpdated = new Date().toISOString();
   existing.source = 'MANUAL';
 
