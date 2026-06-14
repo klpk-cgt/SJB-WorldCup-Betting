@@ -517,9 +517,22 @@ export async function runDynamicSyncTick() {
 
         markLiveScoreSynced();
         resetLiveScoreFailures();
-        if (changed) {
+
+        // 清除 scoreUnknown：如果之前兜底模式标记了比分未知，现在 API 拿到了真实比分就恢复
+        let scoreRecovered = 0;
+        for (const m of db.matches) {
+          if ((m as any).scoreUnknown && typeof m.homeScore === 'number' && typeof m.awayScore === 'number') {
+            delete (m as any).scoreUnknown;
+            scoreRecovered++;
+          }
+        }
+
+        if (changed || scoreRecovered > 0) {
           dbService.refreshBracketState();
           dbService.save();
+        }
+        if (scoreRecovered > 0) {
+          logger.info(`[SyncScheduler] Recovered ${scoreRecovered} scoreUnknown matches via live score sync`);
         }
         logger.info(`[SyncScheduler] Live score synced for ${liveDates.length} dates`);
       } catch (error) {
