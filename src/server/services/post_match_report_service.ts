@@ -426,7 +426,29 @@ export function getRecentReports(limit = 3): Array<{
   const db = dbService.getData();
   const reports = db.postMatchReports || [];
 
-  return reports
+  // 兜底：遍历已结算比赛，对缺失战报的自动生成
+  const existingReportIds = new Set(reports.map((r: PostMatchReport) => r.matchId));
+  const settledMatches = db.matches.filter(
+    (m) => m.isSettled && typeof m.homeScore === 'number' && typeof m.awayScore === 'number',
+  );
+  for (const match of settledMatches) {
+    if (!existingReportIds.has(match.id)) {
+      try {
+        generatePostMatchReport(match.id);
+        logger.info('getRecentReports 兜底生成战报', { matchId: match.id });
+      } catch (e) {
+        logger.error('getRecentReports 兜底生成战报失败', {
+          matchId: match.id,
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }
+  }
+
+  // 重新读取（兜底生成可能新增了战报）
+  const updatedReports = db.postMatchReports || [];
+
+  return updatedReports
     .slice(-limit)
     .reverse()
     .map((r: PostMatchReport) => ({

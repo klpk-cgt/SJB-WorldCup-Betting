@@ -354,6 +354,8 @@ export default function MeTab({ onLogout, onAdminLogin }: MeTabProps) {
   const [sharing, setSharing] = useState(false);
   const [activeTab, setActiveTab] = useState<ProfileTab>('overview');
   const [profileSummary, setProfileSummary] = useState<UserProfileSummary | null>(null);
+  const [showAllSettlements, setShowAllSettlements] = useState(false);
+  const [showAllTransactions, setShowAllTransactions] = useState(false);
   const shareCardRef = useRef<HTMLDivElement>(null);
 
   const handleShareCard = async () => {
@@ -446,12 +448,11 @@ export default function MeTab({ onLogout, onAdminLogin }: MeTabProps) {
     () =>
       predictions
         .filter((item) => item.status === 'WON' || item.status === 'LOST')
-        .sort((a, b) => (b.settledAt || b.placedAt).localeCompare(a.settledAt || a.placedAt))
-        .slice(0, 5),
+        .sort((a, b) => (b.settledAt || b.placedAt).localeCompare(a.settledAt || a.placedAt)),
     [predictions],
   );
 
-  const recentTransactions = useMemo(() => transactions.slice(0, 6), [transactions]);
+  const recentTransactions = useMemo(() => transactions, [transactions]);
 
   const safeProfileSummary: UserProfileSummary = profileSummary || {
     currentTitle: '群聊新星',
@@ -746,9 +747,25 @@ export default function MeTab({ onLogout, onAdminLogin }: MeTabProps) {
                 <EmptyState>暂无结算战报。</EmptyState>
               ) : (
                 <div className="space-y-2">
-                  {recentSettlements.map((prediction) => (
+                  {(showAllSettlements ? recentSettlements : recentSettlements.slice(0, 5)).map((prediction) => (
                     <SettlementRow key={prediction.id} prediction={prediction} />
                   ))}
+                  {!showAllSettlements && recentSettlements.length > 5 && (
+                    <button
+                      onClick={() => setShowAllSettlements(true)}
+                      className="w-full mt-2 rounded-xl border border-slate-200 bg-slate-50/80 py-2.5 text-xs font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition active:scale-[0.98]"
+                    >
+                      加载更多（共 {recentSettlements.length} 条）
+                    </button>
+                  )}
+                  {showAllSettlements && recentSettlements.length > 5 && (
+                    <button
+                      onClick={() => setShowAllSettlements(false)}
+                      className="w-full mt-2 rounded-xl border border-slate-200 bg-slate-50/80 py-2.5 text-xs font-semibold text-slate-400 hover:text-slate-600 transition active:scale-[0.98]"
+                    >
+                      收起
+                    </button>
+                  )}
                 </div>
               )}
             </section>
@@ -761,7 +778,29 @@ export default function MeTab({ onLogout, onAdminLogin }: MeTabProps) {
                 </div>
                 <Layers3 className="h-4 w-4 text-cyan-600" />
               </div>
-              <TransactionList transactions={recentTransactions} />
+              {recentTransactions.length === 0 ? (
+                <EmptyState>暂无积分流水。</EmptyState>
+              ) : (
+                <>
+                  <TransactionList transactions={showAllTransactions ? recentTransactions : recentTransactions.slice(0, 6)} />
+                  {!showAllTransactions && recentTransactions.length > 6 && (
+                    <button
+                      onClick={() => setShowAllTransactions(true)}
+                      className="w-full mt-3 rounded-xl border border-slate-200 bg-slate-50/80 py-2.5 text-xs font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition active:scale-[0.98]"
+                    >
+                      加载更多（共 {recentTransactions.length} 条）
+                    </button>
+                  )}
+                  {showAllTransactions && recentTransactions.length > 6 && (
+                    <button
+                      onClick={() => setShowAllTransactions(false)}
+                      className="w-full mt-3 rounded-xl border border-slate-200 bg-slate-50/80 py-2.5 text-xs font-semibold text-slate-400 hover:text-slate-600 transition active:scale-[0.98]"
+                    >
+                      收起
+                    </button>
+                  )}
+                </>
+              )}
             </section>
           </div>
         )}

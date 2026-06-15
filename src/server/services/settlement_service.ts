@@ -9,6 +9,7 @@ import { adjustWalletBalance } from './wallet_service';
 import { createId, roundPoints, normalizePredictionMarket } from '../helpers';
 import { applyCardToSettlement } from '../prediction_card_service';
 import { FINISHED_MATCH_STATUSES, hasResolvableScore } from '../operations';
+import { generatePostMatchReport } from './post_match_report_service';
 import {
   emitBigWin,
   emitPredictionLost,
@@ -46,6 +47,16 @@ export async function settleMatchById(params: SettleMatchParams): Promise<Settle
   }
 
   if (!FINISHED_MATCH_STATUSES.has(match.status)) {
+    logger.warn('结算被阻止：比赛状态不满足结算条件（需为 FT/AET/PEN 之一）', {
+      matchId: match.id,
+      currentStatus: match.status,
+      isSettled: match.isSettled,
+      homeTeamId: match.homeTeamId,
+      awayTeamId: match.awayTeamId,
+      homeScore: match.homeScore,
+      awayScore: match.awayScore,
+      source: params.source,
+    });
     throw new Error('比赛尚未正式结束，暂时不能结算。');
   }
 
@@ -335,6 +346,17 @@ export async function settleMatchById(params: SettleMatchParams): Promise<Settle
     }
   } catch {
     // Ignore websocket push failures.
+  }
+
+  // 结算完成后自动生成赛后战报
+  try {
+    generatePostMatchReport(match.id);
+    logger.info('赛后战报已自动生成', { matchId: match.id });
+  } catch (e) {
+    logger.error('结算后自动生成战报失败', {
+      matchId: match.id,
+      error: e instanceof Error ? e.message : String(e),
+    });
   }
 
   logger.settlement('Match settlement finished', {

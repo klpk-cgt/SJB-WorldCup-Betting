@@ -94,7 +94,7 @@ export default function MatchDetailPage({
         setMatch(data);
         setHeadToHead(data.headToHead || null);
         // 已结算比赛自动拉取战报
-        if (data?.isSettled || data?.status === 'FT' || data?.status === 'AET' || data?.status === 'PEN') {
+        if (data?.isSettled) {
           apiRequest(`/api/matches/${matchId}/post-report`)
             .then((report) => { if (report && !('status' in report)) setBattleReport(report); })
             .catch(() => {});

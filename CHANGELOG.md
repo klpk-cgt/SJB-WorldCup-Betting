@@ -1,5 +1,25 @@
 # 更新日志 (Changelog)
 
+## v2.5.2 - 2026-06-15
+
+### Bug 修复：战后战报生成链路修复 + 排行榜结算日志增强 + 资料页战报分页
+
+#### 1. 战后战报生成链路修复（三重防御）
+- **根因**：结算时未调用 `generatePostMatchReport()`，首页 `recent-reports` 只读缓存不触发生成，详情页前端条件限制
+- **修复**：
+  - `settlement_service.ts`：结算完成后自动调用 `generatePostMatchReport()` 生成战报
+  - `post_match_report_service.ts`：`getRecentReports()` 增加兜底逻辑，对已结算但缺战报的比赛自动生成
+  - `MatchDetailPage.tsx`：战报拉取条件从多重状态检查简化为仅 `isSettled`
+
+#### 2. 排行榜结算异常诊断增强
+- **修复**：`settlement_service.ts` 结算状态拦截处增加详细 logger.warn（含 matchId/status/score 等诊断字段），帮助管理员快速定位结算失败原因
+
+#### 3. 资料页战报 Tab 分页
+- **修复**：`MeTab.tsx` "战报"Tab 移除 5/6 条硬限制，新增"加载更多"按钮支持展开全部结算记录和积分流水
+
+### 改动文件
+`settlement_service.ts`, `post_match_report_service.ts`, `MatchDetailPage.tsx`, `MeTab.tsx`
+
 ## v2.5.1 - 2026-06-14
 
 ### 热修复：syncLog 持久化修复 + 战报卡片 UI 优化 + 性能优化
