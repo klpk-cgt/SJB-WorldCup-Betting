@@ -9,11 +9,7 @@
  *   1. SSH 登录云服务器
  *   2. 先备份数据库！
  *   3. cd 到项目根目录
- *   4. node scripts/repair_m9_duplicate_credits.mjs [--dry-run]
- * 
- * 选项：
- *   --dry-run  仅诊断不修改，查看哪些预测有重复积分
- *   --fix      执行修复
+ *   4. node scripts/repair_m9_duplicate_credits.mjs [--dry-run|--fix]
  */
 
 import { PrismaClient } from '@prisma/client';
@@ -50,11 +46,16 @@ async function main() {
   // 2. 查找所有 m-9 的预测
   const predictions = await prisma.prediction.findMany({
     where: { matchId: MATCH_ID },
-    include: {
-      user: { select: { id: true, displayName: true } },
-    },
     orderBy: { id: 'asc' },
   });
+
+  // 3. 批量获取用户信息
+  const userIds = [...new Set(predictions.map((p) => p.userId))];
+  const users = await prisma.user.findMany({
+    where: { id: { in: userIds } },
+    select: { id: true, displayName: true },
+  });
+  const userMap = new Map(users.map((u) => [u.id, u]));
 
   console.log(`找到 ${predictions.length} 条预测：`);
   const statusCounts = {};
@@ -64,7 +65,7 @@ async function main() {
   console.log('  状态分布：', JSON.stringify(statusCounts));
   console.log();
 
-  // 3. 分析每条预测的交易情况，检测重复积分
+  // 4. 分析每条预测的交易情况，检测重复积分
   const issues = [];
   const summaries = [];
 
@@ -80,13 +81,10 @@ async function main() {
     const stakeTxs = txs.filter((t) => t.type === 'PREDICTION_STAKE');
     const loseTxs = txs.filter((t) => t.type === 'PREDICTION_LOSE');
 
-    const expectedWinCount = prediction.status === 'WON' ? 1 : 0;
     const hasDuplicateWins = winTxs.length > 1;
     const hasDuplicateCards = cardTxs.length > 1;
 
     if (hasDuplicateWins || hasDuplicateCards) {
-      // 计算应扣回金额
-      // 每组重复：保留第一笔，扣除后续重复的
       const duplicateWinAmount = winTxs.slice(1).reduce((s, t) => s + t.amount, 0);
       const duplicateCardAmount = cardTxs.slice(1).reduce((s, t) => s + t.amount, 0);
       const totalDuplicate = duplicateWinAmount + duplicateCardAmount;
@@ -94,7 +92,7 @@ async function main() {
       issues.push({
         predictionId: prediction.id,
         userId: prediction.userId,
-        displayName: prediction.user.displayName,
+        displayName: userMap.get(prediction.userId)?.displayName || '未知',
         status: prediction.status,
         winCount: winTxs.length,
         cardCount: cardTxs.length,
@@ -109,10 +107,10 @@ async function main() {
 
     summaries.push({
       predictionId: prediction.id,
-      user: prediction.user.displayName,
+      user: userMap.get(prediction.userId)?.displayName || prediction.userId,
       status: prediction.status,
       stake: prediction.stakePoints,
-      settledReturn: prediction.settledReturn,
+      settledReturn: prediction.settledReturn ?? 0,
       winTxs: winTxs.length,
       cardTxs: cardTxs.length,
       loseTxs: loseTxs.length,
@@ -121,17 +119,17 @@ async function main() {
     });
   }
 
-  // 4. 输出诊断结果
+  // 输出诊断结果
   console.log('--- 预测摘要 ---');
   console.log(
     '用户'.padEnd(16),
     '状态'.padEnd(8),
     '本金'.padEnd(8),
     '结算返'.padEnd(8),
-    'WIN'.padEnd(6),
-    'CARD'.padEnd(6),
-    'LOSE'.padEnd(6),
-    'REFUND'.padEnd(8),
+    'WIN次'.padEnd(6),
+    'CARD次'.padEnd(6),
+    'LOSE次'.padEnd(6),
+    'REFUND次'.padEnd(8),
     '实收积分',
   );
   for (const s of summaries) {
@@ -218,13 +216,14 @@ async function main() {
       }
 
       const newBalance = wallet.balance - issue.totalDuplicate;
-      if (newBalance < 0) {
-        console.warn(
-          `  ${issue.displayName}: 警告 - 余额不足！当前=${wallet.balance}，需扣=${issue.totalDuplicate}，将扣至0`,
-        );
-      }
 
       const actualDeduct = Math.min(wallet.balance, issue.totalDuplicate);
+
+      if (wallet.balance < issue.totalDuplicate) {
+        console.warn(
+          `  ${issue.displayName}: 警告 - 余额不足！当前=${wallet.balance}，需扣=${issue.totalDuplicate}`,
+        );
+      }
 
       await prisma.wallet.update({
         where: { userId: issue.userId },
@@ -234,7 +233,7 @@ async function main() {
       // 记录扣款交易
       await prisma.transaction.create({
         data: {
-          id: `repair-${issue.predictionId}-${Date.now()}`,
+          id: `repair-${issue.predictionId}`,
           userId: issue.userId,
           type: 'REFUND',
           amount: -actualDeduct,
@@ -242,7 +241,7 @@ async function main() {
           balanceAfter: Math.max(0, newBalance),
           relatedPredictionId: issue.predictionId,
           relatedMatchId: MATCH_ID,
-          note: `[数据修复] 重结回滚重复积分修复：${match.roundName}`,
+          note: `[数据修复] 重结重复积分修复：${match.roundName}`,
           createdAt: new Date().toISOString(),
         },
       });
@@ -254,7 +253,9 @@ async function main() {
         balanceAfter: Math.max(0, newBalance),
       });
 
-      console.log(`  ${issue.displayName}: 扣除 ${actualDeduct} 积分 (${wallet.balance} → ${Math.max(0, newBalance)})`);
+      console.log(
+        `  ${issue.displayName}: 扣除 ${actualDeduct} 积分 (${wallet.balance} → ${Math.max(0, newBalance)})`,
+      );
     }
   }
 
@@ -262,12 +263,12 @@ async function main() {
   console.log('=== 修复完成 ===');
   console.log();
   console.log('修复摘要：');
-  console.log('用户'.padEnd(16), '扣回积分'.padEnd(10), '修复前'.padEnd(10), '修复后');
+  console.log('用户'.padEnd(16), '扣回积分'.padEnd(10), '修复前余额'.padEnd(12), '修复后余额');
   for (const r of fixResults) {
     console.log(
       r.user.slice(0, 16).padEnd(16),
       String(r.deducted).padEnd(10),
-      String(r.balanceBefore).padEnd(10),
+      String(r.balanceBefore).padEnd(12),
       r.balanceAfter,
     );
   }
