@@ -133,7 +133,7 @@ export async function settleMatchById(params: SettleMatchParams): Promise<Settle
         userId: prediction.userId,
         amount: prediction.stakePoints,
         type: 'SETTLEMENT_VOID',
-        note: `${prediction.optionLabel}（${marketLabel}）无法判定，返还本金`,
+        note: `${prediction.optionLabel}（${prediction.market || '未知玩法'}）无法判定，返还本金`,
         matchId: match.id,
         predictionId: prediction.id,
       });
@@ -390,7 +390,7 @@ function judgePrediction(prediction: Prediction, match: Match): boolean | null {
   if (market === 'HANDICAP') {
     // 获取让球数
     const db = dbService.getData();
-    const odds = db.matchOdds[matchId];
+    const odds = db.matchOdds[prediction.matchId];
     const goalLine = odds?.handicap?.goalLine || 0;
     // 应用让球: 主队实际得分 = hScore + goalLine
     const adjustedHScore = hScore + goalLine;
