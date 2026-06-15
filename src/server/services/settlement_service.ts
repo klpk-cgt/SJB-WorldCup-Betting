@@ -4,7 +4,7 @@
  */
 
 import { dbService } from '../../db/db_service';
-import { Match, Prediction } from '../../types';
+import { Match, Prediction, TransactionType } from '../../types';
 import { adjustWalletBalance } from './wallet_service';
 import { createId, roundPoints, normalizePredictionMarket } from '../helpers';
 import { applyCardToSettlement } from '../prediction_card_service';
@@ -97,26 +97,54 @@ export async function settleMatchById(params: SettleMatchParams): Promise<Settle
   const matchPredictions = db.predictions.filter((p) => p.matchId === match.id);
 
   if (match.isSettled && params.forceResettle) {
+    // 结算入库的交易类型（这些类型会向用户钱包添加积分）
+    const settlementCreditTypes: TransactionType[] = ['PREDICTION_WIN', 'CARD_EFFECT'];
+
     for (const prediction of matchPredictions) {
-      if (prediction.status === 'WON' && prediction.settledReturn) {
-        // 余额安全检查：用户可能已消费积分，跳过不足的回滚
+      // 基于实际交易记录回滚，而非仅检查 prediction.status === 'WON'
+      // 防止首次结算写入钱包但预测状态未更新（如 PENDING）时，回滚遗漏导致重复发放
+      const creditedTxs = db.transactions.filter(
+        (tx) =>
+          tx.relatedPredictionId === prediction.id &&
+          settlementCreditTypes.includes(tx.type as TransactionType) &&
+          tx.amount > 0,
+      );
+
+      // 按时间排序，排除之前力结已产生的 REFUND 回滚（避免回滚回滚）
+      const refundTxs = db.transactions.filter(
+        (tx) =>
+          tx.relatedPredictionId === prediction.id &&
+          tx.type === 'REFUND' &&
+          tx.amount < 0,
+      );
+      const refundedAmount = refundTxs.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+
+      // 净应收积分 = 结算发放 - 已回滚
+      const totalCredited = creditedTxs.reduce((sum, tx) => sum + tx.amount, 0);
+      const netToRefund = totalCredited - refundedAmount;
+
+      if (netToRefund > 0) {
         const wallet = db.wallets.find((w) => w.userId === prediction.userId);
-        if (wallet && wallet.balance >= prediction.settledReturn) {
+        if (wallet && wallet.balance >= netToRefund) {
           adjustWalletBalance({
             userId: prediction.userId,
-            amount: -prediction.settledReturn,
+            amount: -netToRefund,
             type: 'REFUND',
             note: `重结回滚：${match.roundName}`,
             relatedPredictionId: prediction.id,
             relatedMatchId: match.id,
           });
         } else {
-          logger.warn(`[SettleMatch] 重结回滚跳过（余额不足）: userId=${prediction.userId} balance=${wallet?.balance ?? 'N/A'} need=${prediction.settledReturn}`, {
+          logger.warn(`[SettleMatch] 重结回滚跳过（余额不足）: userId=${prediction.userId} balance=${wallet?.balance ?? 'N/A'} need=${netToRefund}`, {
             matchId: match.id,
             predictionId: prediction.id,
+            creditedTxs: creditedTxs.length,
+            totalCredited,
+            refundedAmount,
           });
         }
       }
+
       prediction.status = 'PENDING';
       prediction.settledReturn = 0;
       prediction.settledProfit = 0;
