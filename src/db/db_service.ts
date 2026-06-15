@@ -586,7 +586,12 @@ class DatabaseService {
         return 'CORRECT_SCORE';
       case 'TOTAL_GOALS':
       case 'TOTALGOALS':
+      case 'TOTAL_GOALS_PRECISE':
         return 'TOTAL_GOALS';
+      case 'HANDICAP':
+        return 'HANDICAP';
+      case 'HAFU':
+        return 'HAFU';
       case 'QUALIFY':
         return 'QUALIFY';
       default:
@@ -610,9 +615,18 @@ class DatabaseService {
     }
 
     if (market === 'TOTAL_GOALS') {
+      // 旧格式兼容 (over_2_5 / under_2_5)
       const legacy = odds.totalGoalsLegacy;
       if (optionKeyLower === 'over_2_5') return legacy?.over25 || 1.9;
       if (optionKeyLower === 'under_2_5') return legacy?.under25 || 1.9;
+      // 新精确进球格式 (totalGoals_0 ~ totalGoals_7+)
+      const goalsKey = optionKeyLower.replace(/^totalgoals_/, '').replace(/^total_goals_/, '');
+      const tg = odds.totalGoals?.find((item) => item.goals === goalsKey);
+      if (tg) return tg.odds;
+      // 旧赔率兜底
+      if (goalsKey === '0' || goalsKey === '1') return legacy?.under25 || 1.9;
+      if (goalsKey === '3' || goalsKey === '4' || goalsKey === '5' || goalsKey === '6' || goalsKey === '7+') return legacy?.over25 || 1.9;
+      if (goalsKey === '2') return 1.9; // 2球无明确方向，取中间值
       return null;
     }
 

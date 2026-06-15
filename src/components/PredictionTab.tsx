@@ -196,6 +196,7 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
   const [selectedTournamentOption, setSelectedTournamentOption] = useState<TournamentBetOption | null>(null);
   const [stake, setStake] = useState(500);
   const [submitting, setSubmitting] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [cardInventory, setCardInventory] = useState<any>(null);
@@ -314,14 +315,21 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
     setSelectedOption(null);
     setSelectedTournamentMarket(null);
     setSelectedTournamentOption(null);
+    setConfirming(false);
   };
 
-  const handleSubmitPrediction = async () => {
+  const handleOpenConfirm = () => {
     if (!selectedMatch || !selectedOption) return;
     if (stake <= 0) {
       setMessage({ type: 'error', text: '请输入有效的积分数量。' });
       return;
     }
+    setMessage(null);
+    setConfirming(true);
+  };
+
+  const handleSubmitPrediction = async () => {
+    if (!selectedMatch || !selectedOption) return;
 
     setSubmitting(true);
     setMessage(null);
@@ -996,14 +1004,70 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
                     </div>
                   )}
 
-                  <button
-                    onClick={handleSubmitPrediction}
-                    disabled={submitting}
-                    className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 py-3.5 text-sm font-black text-white shadow-[0_14px_28px_rgba(16,185,129,0.24)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {submitting ? '提交中...' : '确认提交'}
-                    {!submitting && <Sparkles className="h-4 w-4" />}
-                  </button>
+                  {/* 未确认：显示提交按钮 */}
+                  {!confirming && (
+                    <button
+                      onClick={handleOpenConfirm}
+                      className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 py-3.5 text-sm font-black text-white shadow-lg shadow-amber-200/60 transition active:scale-[0.98]"
+                    >
+                      确认提交
+                      <Sparkles className="h-4 w-4" />
+                    </button>
+                  )}
+
+                  {/* 确认中：显示汇总卡片 */}
+                  {confirming && (
+                    <div className="mt-4 rounded-2xl bg-gradient-to-br from-slate-50 to-amber-50/30 border border-slate-200/60 p-4 space-y-3">
+                      {/* 对阵 */}
+                      <div className="flex items-center justify-center gap-2 bg-white rounded-xl py-2 px-3 text-[10px] font-black text-slate-800">
+                        <FlagBadge flagCode={selectedMatch?.homeTeam?.code} size="sm" /> {selectedMatch?.homeTeam?.nameZh}
+                        <span className="text-[9px] font-bold text-slate-300">VS</span>
+                        {selectedMatch?.awayTeam?.nameZh} <FlagBadge flagCode={selectedMatch?.awayTeam?.code} size="sm" />
+                      </div>
+
+                      {/* 细节 */}
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div className="rounded-xl bg-white py-2">
+                          <p className="text-[8px] font-bold text-slate-400 uppercase">玩法</p>
+                          <p className="text-[10px] font-black text-slate-800 truncate">{selectedOption?.label}</p>
+                        </div>
+                        <div className="rounded-xl bg-white py-2">
+                          <p className="text-[8px] font-bold text-slate-400 uppercase">赔率</p>
+                          <p className="text-[10px] font-black text-amber-600">@{(selectedOption?.odds || 0).toFixed(2)}</p>
+                        </div>
+                        <div className="rounded-xl bg-white py-2">
+                          <p className="text-[8px] font-bold text-slate-400 uppercase">投入</p>
+                          <p className="text-[10px] font-black text-slate-800">{stake} PTS</p>
+                        </div>
+                      </div>
+
+                      {/* 预计回收 */}
+                      <div className="flex items-center justify-between rounded-xl bg-emerald-50/60 px-3 py-2.5">
+                        <span className="text-[10px] font-bold text-emerald-600">💰 预计回收</span>
+                        <span className="text-xs font-black text-emerald-700 tabular-nums">
+                          +{(stake * (selectedOption?.odds || 0)).toFixed(0)} PTS
+                        </span>
+                      </div>
+
+                      {/* 双按钮 */}
+                      <div className="flex gap-2.5 pt-1">
+                        <button
+                          onClick={() => setConfirming(false)}
+                          disabled={submitting}
+                          className="flex-1 rounded-xl bg-slate-100 py-3 text-xs font-black text-slate-500 active:scale-[0.98] transition"
+                        >
+                          返回修改
+                        </button>
+                        <button
+                          onClick={handleSubmitPrediction}
+                          disabled={submitting}
+                          className="flex-1 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 py-3 text-xs font-black text-white shadow-lg shadow-amber-200/40 active:scale-[0.98] transition disabled:opacity-60"
+                        >
+                          {submitting ? '提交中...' : '⚽ 确认下注'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </motion.div>

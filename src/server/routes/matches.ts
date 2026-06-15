@@ -153,11 +153,12 @@ router.get('/api/matches/:id', async (req: Request, res: Response) => {
     headToHead: getHeadToHead(match.homeTeamId, match.awayTeamId) || buildFallbackHeadToHead(match),
     sentiment:
       totalPoints === 0
-        ? { home: 45, draw: 10, away: 45 }
+        ? { home: 0, draw: 0, away: 0, total: predictions.length }
         : {
             home: Math.round((homeCount / totalPoints) * 100),
             draw: Math.round((drawCount / totalPoints) * 100),
             away: Math.round((awayCount / totalPoints) * 100),
+            total: predictions.length,
         },
   });
 });

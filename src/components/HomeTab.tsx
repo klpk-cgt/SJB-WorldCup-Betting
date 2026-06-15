@@ -231,7 +231,7 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate, wsS
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [activitiesLoading, setActivitiesLoading] = useState(true);
   const [battleReport, setBattleReport] = useState<BattleReportData | null>(null);
-  const [sentiment, setSentiment] = useState<{ home: number; draw: number; away: number } | null>(null);
+  const [sentiment, setSentiment] = useState<{ home: number; draw: number; away: number; total?: number } | null>(null);
   const [sentimentLoading, setSentimentLoading] = useState(true);
   const [activityExpanded, setActivityExpanded] = useState(false);
   const toast = useToast();
@@ -425,57 +425,45 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate, wsS
   }
 
   return (
+    <>
+      <style>{`@keyframes coinPulse{0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,.15)}50%{box-shadow:0 0 0 6px rgba(245,158,11,0)}}`}</style>
     <div className="space-y-5 pb-6">
-      <section ref={headerRef} className="flex items-center justify-between rounded-[28px] border border-slate-200 bg-white px-4 py-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-        <div className="flex items-center gap-3">
-          <SmartAvatar name={user?.displayName || '游客观赛模式'} src={user?.avatarUrl} size={48} className="ring-1 ring-emerald-100" />
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-black text-slate-900">{user?.displayName || '游客观赛模式'}</span>
-              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">群聊入口</span>
+      <section ref={headerRef} className="flex items-center justify-between rounded-[28px] border border-slate-200 bg-white px-4 py-3.5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+        <div className="flex items-center gap-3 min-w-0">
+          <SmartAvatar name={user?.displayName || '游客观赛模式'} src={user?.avatarUrl} size={40} className="shrink-0 rounded-full shadow-sm ring-2 ring-orange-100" />
+          <div className="min-w-0 flex-1">
+            <span className="text-sm font-black text-slate-900 truncate block">{user?.displayName || '游客观赛模式'}</span>
+            <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+              <span className="rounded-full bg-orange-50 border border-orange-100 px-2 py-0.5 text-[9px] font-bold text-orange-600">🔥 群聊入口</span>
+              {user && <span className="rounded-full bg-amber-50 border border-amber-100 px-2 py-0.5 text-[9px] font-bold text-amber-600">⭐ Lv.4</span>}
             </div>
-            <p className="mt-1 text-xs text-slate-500">
-              {user ? '最近赛程和焦点战已经就位。' : '先看焦点战和最近赛程，再决定要不要入场竞猜。'}
-            </p>
           </div>
         </div>
 
         {/* 积分余额 */}
-        <div className="relative shrink-0">
-          {/* 背景光晕 */}
-          <div className="pointer-events-none absolute inset-0 rounded-2xl bg-emerald-400/10 blur-xl" />
-          <div className="relative rounded-2xl bg-gradient-to-br from-emerald-50 via-emerald-50/70 to-teal-50/50 border border-emerald-200/60 px-4 py-3 shadow-[0_4px_20px_rgba(16,185,129,0.08)]">
-            <div className="flex items-center gap-2.5">
-              {/* 自定义积分图标 */}
-              <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" className="shrink-0 drop-shadow-sm">
+        <div className="shrink-0">
+          <div className="flex items-center gap-2.5">
+            {/* PTS 金币 */}
+            <div className="shrink-0 rounded-full animate-[coinPulse_2.5s_ease-in-out_infinite]" style={{ boxShadow: '0 0 12px rgba(245,158,11,0.15)' }}>
+              <svg width="42" height="42" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <defs>
-                  <linearGradient id="coinGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <linearGradient id="ptsGrad" x1="0%" y1="0%" x2="100%" y2="100%">
                     <stop offset="0%" stopColor="#F59E0B" />
                     <stop offset="50%" stopColor="#FBBF24" />
                     <stop offset="100%" stopColor="#D97706" />
                   </linearGradient>
-                  <linearGradient id="coinInner" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#FEF3C7" />
-                    <stop offset="100%" stopColor="#FDE68A" />
-                  </linearGradient>
                 </defs>
-                {/* 外圈 */}
-                <circle cx="18" cy="18" r="16" fill="url(#coinGrad)" />
-                <circle cx="18" cy="18" r="16" stroke="#B45309" strokeWidth="0.5" fill="none" />
-                {/* 内圈 */}
-                <circle cx="18" cy="18" r="11" fill="url(#coinInner)" />
-                <circle cx="18" cy="18" r="11" stroke="#D97706" strokeWidth="0.5" fill="none" />
-                {/* PTS 文字 */}
-                <text x="18" y="20.5" textAnchor="middle" fontSize="8.5" fontWeight="900" fill="#B45309" fontFamily="system-ui, sans-serif">PTS</text>
-                {/* 顶部高光 */}
+                <circle cx="18" cy="18" r="16" fill="url(#ptsGrad)" />
+                <circle cx="18" cy="18" r="11" fill="#FEF3C7" />
+                <text x="18" y="20.5" textAnchor="middle" fontSize="8" fontWeight="900" fill="#B45309" fontFamily="system-ui, sans-serif">PTS</text>
                 <ellipse cx="14" cy="9" rx="5" ry="2.5" fill="white" opacity="0.35" />
               </svg>
-              <div>
-                <p className="text-[10px] font-bold tracking-wider uppercase text-emerald-700/70">娱乐积分</p>
-                <p className="text-lg font-black tabular-nums tracking-tight text-emerald-900 leading-tight">
-                  {wallet?.balance?.toLocaleString() || '10,000'}
-                </p>
-              </div>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">积分</p>
+              <p className="text-xl font-black tabular-nums tracking-tight text-slate-900 leading-tight">
+                {wallet?.balance?.toLocaleString() || '10,000'}
+              </p>
             </div>
           </div>
         </div>
@@ -537,33 +525,82 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate, wsS
 
       <AIPredictionCard />
 
-      {/* 群内倾向 - 焦点战投注分布 */}
+      {/* 群内倾向 - SVG 环形图 + 国旗图例 + 进度条 */}
       {!sentimentLoading && sentiment && focusMatch && (
         <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-          <div className="flex items-center gap-2 mb-1">
-            <Users className="h-4.5 w-4.5 text-violet-500" />
-            <h3 className="text-sm font-black text-slate-900">群内倾向</h3>
-            <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-700 ring-1 ring-violet-100">
-              焦点战
-            </span>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className="text-sm">👥</span>
+              <h3 className="text-sm font-black text-slate-900">群内倾向</h3>
+              <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-700 ring-1 ring-violet-100">焦点战</span>
+            </div>
           </div>
-          <div className="mt-4 space-y-3">
-            {[
-              { label: `${focusMatch.homeTeam.name} 支持率`, value: sentiment.home, tone: 'bg-emerald-500' },
-              { label: '平局支持率', value: sentiment.draw, tone: 'bg-slate-500' },
-              { label: `${focusMatch.awayTeam.name} 支持率`, value: sentiment.away, tone: 'bg-cyan-500' },
-            ].map((row) => (
-              <div key={row.label}>
-                <div className="mb-1.5 flex items-center justify-between text-xs font-bold text-slate-600">
-                  <span>{row.label}</span>
-                  <span>{row.value}%</span>
+          <div className="flex items-start gap-4">
+            {/* 环形图 */}
+            <div className="relative w-[88px] h-[88px] shrink-0">
+              <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+                <circle cx="50" cy="50" r="38" stroke="#f1f5f9" strokeWidth="10" fill="none" />
+                <circle cx="50" cy="50" r="38" stroke="#34d399" strokeWidth="10" fill="none"
+                  strokeDasharray={`${(sentiment.home / 100) * 238.8} 238.8`}
+                  strokeDashoffset="0" strokeLinecap="round" />
+                <circle cx="50" cy="50" r="38" stroke="#94a3b8" strokeWidth="10" fill="none"
+                  strokeDasharray={`${(sentiment.draw / 100) * 238.8} 238.8`}
+                  strokeDashoffset={`${-(sentiment.home / 100) * 238.8}`} strokeLinecap="round" />
+                <circle cx="50" cy="50" r="38" stroke="#22d3ee" strokeWidth="10" fill="none"
+                  strokeDasharray={`${(sentiment.away / 100) * 238.8} 238.8`}
+                  strokeDashoffset={`${-((sentiment.home + sentiment.draw) / 100) * 238.8}`} strokeLinecap="round" />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-base font-black text-slate-700">{(sentiment.total ?? 0) > 0 ? sentiment.total : '0'}</span>
+                <span className="text-[8px] font-bold text-slate-400">人投注</span>
+              </div>
+            </div>
+            {/* 图例 + 进度条 */}
+            <div className="space-y-2 flex-1 min-w-0">
+              {/* 主队 */}
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <FlagBadge flagCode={focusMatch.homeTeam.flagCode} size="sm" />
+                  <span className="text-[10px] font-black text-slate-700 truncate">{focusMatch.homeTeam.name}</span>
+                  <span className="ml-auto text-[11px] font-black text-emerald-600">{sentiment.home}%</span>
                 </div>
-                <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
-                  <div className={`h-full rounded-full ${row.tone}`} style={{ width: `${row.value}%` }} />
+                <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                  <div className="h-full rounded-full bg-emerald-400 transition-all duration-700" style={{ width: `${sentiment.home}%` }} />
                 </div>
               </div>
-            ))}
+              {/* 平局 */}
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm leading-none">🤝</span>
+                  <span className="text-[10px] font-black text-slate-500">平局</span>
+                  <span className="ml-auto text-[11px] font-black text-slate-500">{sentiment.draw}%</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                  <div className="h-full rounded-full bg-slate-400 transition-all duration-700" style={{ width: `${sentiment.draw}%` }} />
+                </div>
+              </div>
+              {/* 客队 */}
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <FlagBadge flagCode={focusMatch.awayTeam.flagCode} size="sm" />
+                  <span className="text-[10px] font-black text-slate-700 truncate">{focusMatch.awayTeam.name}</span>
+                  <span className="ml-auto text-[11px] font-black text-cyan-600">{sentiment.away}%</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                  <div className="h-full rounded-full bg-cyan-400 transition-all duration-700" style={{ width: `${sentiment.away}%` }} />
+                </div>
+              </div>
+            </div>
           </div>
+          <p className="mt-3 text-[9px] font-bold text-slate-400 text-center">
+            {(sentiment.total ?? 0) === 0
+              ? '暂无投注数据，快来做第一个预言家吧！'
+              : sentiment.home > sentiment.away
+                ? `${sentiment.home}% 的群友看好主队 ${focusMatch.homeTeam.name}`
+                : sentiment.away > sentiment.home
+                  ? `${sentiment.away}% 的群友看好客队 ${focusMatch.awayTeam.name}`
+                  : '支持率不相上下，一场硬仗'}
+          </p>
         </section>
       )}
 
@@ -947,5 +984,6 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate, wsS
 
       <TeamDetailDrawer teamId={teamDetailId} open={teamDetailOpen} onClose={() => setTeamDetailOpen(false)} />
     </div>
+    </>
   );
 }

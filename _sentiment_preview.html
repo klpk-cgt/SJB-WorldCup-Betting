@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>群内倾向优化预览</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, sans-serif; background: #f1f5f9; }
+  .bar-anim { transition: width 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); }
+</style>
+</head>
+<body class="max-w-md mx-auto min-h-screen p-4 space-y-6">
+
+<h2 class="text-sm font-black text-slate-400 uppercase tracking-wider">当前设计</h2>
+<div class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+  <div class="flex items-center gap-2 mb-1">
+    <span class="text-sm">👥</span>
+    <h3 class="text-sm font-black text-slate-900">群内倾向</h3>
+    <span class="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-700 ring-1 ring-violet-100">焦点战</span>
+  </div>
+  <div class="mt-4 space-y-3">
+    <div>
+      <div class="mb-1.5 flex items-center justify-between text-xs font-bold text-slate-600"><span>德国 支持率</span><span>58%</span></div>
+      <div class="h-2.5 overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full bg-emerald-500" style="width:58%"></div></div>
+    </div>
+    <div>
+      <div class="mb-1.5 flex items-center justify-between text-xs font-bold text-slate-600"><span>平局支持率</span><span>18%</span></div>
+      <div class="h-2.5 overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full bg-slate-500" style="width:18%"></div></div>
+    </div>
+    <div>
+      <div class="mb-1.5 flex items-center justify-between text-xs font-bold text-slate-600"><span>库拉索 支持率</span><span>24%</span></div>
+      <div class="h-2.5 overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full bg-cyan-500" style="width:24%"></div></div>
+    </div>
+  </div>
+</div>
+
+<h2 class="text-sm font-black text-slate-400 uppercase tracking-wider mt-8">方案 A — 单条融合柱状图</h2>
+<div class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+  <div class="flex items-center gap-2 mb-3">
+    <span class="text-sm">👥</span>
+    <h3 class="text-sm font-black text-slate-900">群内倾向 · 德国 vs 库拉索</h3>
+  </div>
+  <!-- 一条融合进度条 -->
+  <div class="h-8 rounded-full bg-slate-100 overflow-hidden flex">
+    <div class="h-full bg-emerald-400 bar-anim flex items-center justify-center text-[10px] font-black text-white" style="width:58%">🇩🇪 58%</div>
+    <div class="h-full bg-slate-400 bar-anim flex items-center justify-center text-[10px] font-black text-white" style="width:18%">平 18%</div>
+    <div class="h-full bg-cyan-400 bar-anim flex items-center justify-center text-[10px] font-black text-white" style="width:24%">🇨🇼 24%</div>
+  </div>
+  <p class="mt-2 text-[10px] font-bold text-slate-400 text-center">数据基于 32 位群友的投注选择</p>
+</div>
+
+<h2 class="text-sm font-black text-slate-400 uppercase tracking-wider mt-8">方案 B — 国旗对阵进度条</h2>
+<div class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+  <div class="flex items-center gap-2 mb-4">
+    <span class="text-sm">👥</span>
+    <h3 class="text-sm font-black text-slate-900">群内倾向</h3>
+    <span class="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 ring-1 ring-amber-100">焦点战</span>
+  </div>
+  <!-- 主队 -->
+  <div class="flex items-center gap-3 mb-2">
+    <span class="text-xl shrink-0">🇩🇪</span>
+    <span class="text-xs font-black text-slate-800 w-10 shrink-0">德国</span>
+    <div class="flex-1 h-6 rounded-full bg-slate-100 overflow-hidden">
+      <div class="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-500 bar-anim flex items-center justify-end pr-2" style="width:58%">
+        <span class="text-[10px] font-black text-white">58%</span>
+      </div>
+    </div>
+  </div>
+  <!-- 平局 -->
+  <div class="flex items-center gap-3 mb-2">
+    <span class="text-xl shrink-0 opacity-30">🤝</span>
+    <span class="text-xs font-black text-slate-500 w-10 shrink-0">平局</span>
+    <div class="flex-1 h-5 rounded-full bg-slate-100 overflow-hidden">
+      <div class="h-full rounded-full bg-slate-400 bar-anim flex items-center justify-end pr-2" style="width:18%">
+        <span class="text-[10px] font-black text-white">18%</span>
+      </div>
+    </div>
+  </div>
+  <!-- 客队 -->
+  <div class="flex items-center gap-3">
+    <span class="text-xl shrink-0">🇨🇼</span>
+    <span class="text-xs font-black text-slate-800 w-10 shrink-0">库拉索</span>
+    <div class="flex-1 h-6 rounded-full bg-slate-100 overflow-hidden">
+      <div class="h-full rounded-full bg-gradient-to-r from-cyan-400 to-blue-400 bar-anim flex items-center justify-end pr-2" style="width:24%">
+        <span class="text-[10px] font-black text-white">24%</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2 class="text-sm font-black text-slate-400 uppercase tracking-wider mt-8">方案 C — 投票卡片风</h2>
+<div class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+  <div class="flex items-center justify-between mb-3">
+    <div class="flex items-center gap-2">
+      <span class="text-sm">👥</span>
+      <h3 class="text-sm font-black text-slate-900">群内倾向</h3>
+    </div>
+    <span class="text-[10px] font-bold text-slate-400">32人参与</span>
+  </div>
+  <div class="grid grid-cols-3 gap-2">
+    <!-- 主队 -->
+    <div class="rounded-2xl bg-gradient-to-b from-emerald-50 to-emerald-50/30 border border-emerald-100 p-3 text-center relative overflow-hidden">
+      <div class="absolute bottom-0 left-0 right-0 h-1 rounded-full bg-emerald-400 bar-anim" style="width:58%"></div>
+      <span class="text-2xl">🇩🇪</span>
+      <p class="mt-1 text-[10px] font-black text-emerald-700">德国 胜</p>
+      <p class="mt-1 text-lg font-black text-emerald-600">58<span class="text-xs">%</span></p>
+    </div>
+    <!-- 平局 -->
+    <div class="rounded-2xl bg-gradient-to-b from-slate-50 to-slate-50/30 border border-slate-100 p-3 text-center relative overflow-hidden">
+      <div class="absolute bottom-0 left-0 right-0 h-1 rounded-full bg-slate-400 bar-anim" style="width:18%"></div>
+      <span class="text-2xl">🤝</span>
+      <p class="mt-1 text-[10px] font-black text-slate-600">平局</p>
+      <p class="mt-1 text-lg font-black text-slate-500">18<span class="text-xs">%</span></p>
+    </div>
+    <!-- 客队 -->
+    <div class="rounded-2xl bg-gradient-to-b from-cyan-50 to-cyan-50/30 border border-cyan-100 p-3 text-center relative overflow-hidden">
+      <div class="absolute bottom-0 left-0 right-0 h-1 rounded-full bg-cyan-400 bar-anim" style="width:24%"></div>
+      <span class="text-2xl">🇨🇼</span>
+      <p class="mt-1 text-[10px] font-black text-cyan-700">库拉索 胜</p>
+      <p class="mt-1 text-lg font-black text-cyan-600">24<span class="text-xs">%</span></p>
+    </div>
+  </div>
+  <p class="mt-3 text-[9px] font-bold text-slate-400 text-center">58% 的群友看好主队德国</p>
+</div>
+
+<h2 class="text-sm font-black text-slate-400 uppercase tracking-wider mt-8">方案 D — 热度环形图</h2>
+<div class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+  <div class="flex items-center gap-2 mb-3">
+    <span class="text-sm">👥</span>
+    <h3 class="text-sm font-black text-slate-900">群内倾向 · 德国 vs 库拉索</h3>
+  </div>
+  <div class="flex items-center gap-4">
+    <!-- 环形图 -->
+    <div class="relative w-24 h-24 shrink-0">
+      <svg viewBox="0 0 100 100" class="w-full h-full -rotate-90">
+        <circle cx="50" cy="50" r="40" stroke="#f1f5f9" stroke-width="12" fill="none"/>
+        <circle cx="50" cy="50" r="40" stroke="#34d399" stroke-width="12" fill="none" stroke-dasharray="251.2" stroke-dashoffset="105.5" stroke-linecap="round"/>
+        <circle cx="50" cy="50" r="40" stroke="#cbd5e1" stroke-width="12" fill="none" stroke-dasharray="251.2" stroke-dashoffset="205.9" stroke-linecap="round"/>
+        <circle cx="50" cy="50" r="40" stroke="#22d3ee" stroke-width="12" fill="none" stroke-dasharray="251.2" stroke-dashoffset="251.2" stroke-linecap="round"/>
+      </svg>
+      <div class="absolute inset-0 flex items-center justify-center">
+        <span class="text-lg font-black text-slate-700">32<span class="text-[10px] text-slate-400">人</span></span>
+      </div>
+    </div>
+    <!-- 图例 -->
+    <div class="space-y-2 flex-1">
+      <div class="flex items-center gap-2">
+        <div class="w-3 h-3 rounded-full bg-emerald-400 shrink-0"></div>
+        <span class="text-xs font-bold text-slate-600">🇩🇪 德国</span>
+        <span class="ml-auto text-xs font-black text-emerald-600">58%</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <div class="w-3 h-3 rounded-full bg-slate-400 shrink-0"></div>
+        <span class="text-xs font-bold text-slate-600">🤝 平局</span>
+        <span class="ml-auto text-xs font-black text-slate-500">18%</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <div class="w-3 h-3 rounded-full bg-cyan-400 shrink-0"></div>
+        <span class="text-xs font-bold text-slate-600">🇨🇼 库拉索</span>
+        <span class="ml-auto text-xs font-black text-cyan-600">24%</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>积分UI预览</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, sans-serif; background: #f1f5f9; }
+  @keyframes coinPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(245,158,11,0.15); } 50% { box-shadow: 0 0 0 6px rgba(245,158,11,0); } }
+  .coin-pulse { animation: coinPulse 2.5s ease-in-out infinite; }
+</style>
+</head>
+<body class="max-w-md mx-auto min-h-screen flex items-center justify-center bg-slate-100 p-4">
+
+<!-- 方案A：温润金调，无边框 -->
+<div class="space-y-6 w-full">
+
+  <!-- 方案A -->
+  <div class="bg-white rounded-3xl p-5 shadow-sm">
+    <p class="text-xs font-bold text-slate-400 mb-4">方案 A — 温润金调无边框</p>
+    <div class="flex items-center gap-3 p-1">
+      <!-- 金币 -->
+      <div class="shrink-0 coin-pulse rounded-full">
+        <svg width="42" height="42" viewBox="0 0 36 36">
+          <defs>
+            <linearGradient id="gA1" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#F59E0B"/>
+              <stop offset="50%" stop-color="#FBBF24"/>
+              <stop offset="100%" stop-color="#D97706"/>
+            </linearGradient>
+            <linearGradient id="gA2" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#FEF3C7"/>
+              <stop offset="100%" stop-color="#FDE68A"/>
+            </linearGradient>
+          </defs>
+          <circle cx="18" cy="18" r="16" fill="url(#gA1)"/>
+          <circle cx="18" cy="18" r="11" fill="url(#gA2)"/>
+          <text x="18" y="20.5" text-anchor="middle" font-size="8" font-weight="900" fill="#B45309">PTS</text>
+          <ellipse cx="14" cy="9" rx="5" ry="2.5" fill="white" opacity="0.35"/>
+        </svg>
+      </div>
+      <div>
+        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">积分</p>
+        <p class="text-xl font-black tabular-nums text-slate-900 leading-tight">380,520</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 方案B -->
+  <div class="bg-white rounded-3xl p-5 shadow-sm">
+    <p class="text-xs font-bold text-slate-400 mb-4">方案 B — 琥珀渐变卡片</p>
+    <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-50 via-amber-50/50 to-white px-4 py-3">
+      <div class="absolute -right-2 -top-2 w-12 h-12 rounded-full bg-amber-200/20 blur-xl"></div>
+      <div class="flex items-center gap-3">
+        <svg width="42" height="42" viewBox="0 0 36 36">
+          <defs>
+            <linearGradient id="gB1" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#F59E0B"/><stop offset="50%" stop-color="#FBBF24"/><stop offset="100%" stop-color="#D97706"/>
+            </linearGradient>
+          </defs>
+          <circle cx="18" cy="18" r="16" fill="url(#gB1)"/>
+          <circle cx="18" cy="18" r="11" fill="#FEF3C7"/>
+          <text x="18" y="20.5" text-anchor="middle" font-size="8" font-weight="900" fill="#B45309">PTS</text>
+          <ellipse cx="14" cy="9" rx="5" ry="2.5" fill="white" opacity="0.35"/>
+        </svg>
+        <div>
+          <p class="text-[10px] font-bold text-amber-600 uppercase tracking-wider">积分</p>
+          <p class="text-xl font-black tabular-nums text-amber-800 leading-tight">380,520</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 方案C -->
+  <div class="bg-white rounded-3xl p-5 shadow-sm">
+    <p class="text-xs font-bold text-slate-400 mb-4">方案 C — 极简数据面板</p>
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center">
+          <svg width="20" height="20" viewBox="0 0 36 36">
+            <defs><linearGradient id="gC1" x1="0%" x2="100%" y1="0%" y2="100%"><stop offset="0%" stop-color="#F59E0B"/><stop offset="100%" stop-color="#D97706"/></linearGradient></defs>
+            <circle cx="18" cy="18" r="16" fill="url(#gC1)"/>
+            <circle cx="18" cy="18" r="11" fill="#FEF3C7"/>
+            <text x="18" y="20.5" text-anchor="middle" font-size="8" font-weight="900" fill="#B45309">PTS</text>
+          </svg>
+        </div>
+        <div>
+          <p class="text-[10px] font-bold text-slate-400">积分</p>
+          <p class="text-xl font-black tabular-nums text-slate-900 leading-tight">380,520</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 rounded-full px-2.5 py-1">
+        <span>+12.5K</span><span class="text-emerald-400">净收益</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

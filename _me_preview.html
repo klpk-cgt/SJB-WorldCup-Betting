@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>资料页优化预览</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, sans-serif; background: #f1f5f9; }
+  
+  /* 浮动装饰 */
+  .float-blob { animation: floatBlob 6s ease-in-out infinite; }
+  .float-blob-slow { animation: floatBlob 8s ease-in-out infinite; }
+  @keyframes floatBlob {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(8px, -10px) scale(1.05); }
+  }
+
+  /* 卡片阴影层级 */
+  .shadow-depth-1 { box-shadow: 0 2px 12px rgba(0,0,0,0.04), 0 0 0 1px rgba(0,0,0,0.03); }
+  .shadow-depth-2 { box-shadow: 0 4px 24px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.03); }
+  .shadow-glow-green { box-shadow: 0 0 30px rgba(16,185,129,0.08); }
+  .shadow-glow-amber { box-shadow: 0 0 30px rgba(245,158,11,0.06); }
+
+  /* 渐变衔接 */
+  .gradient-connect {
+    mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
+  }
+
+  /* 入场动画 */
+  .section-in {
+    animation: sectionIn 0.45s ease-out both;
+  }
+  .section-in:nth-child(1) { animation-delay: 0s }
+  .section-in:nth-child(2) { animation-delay: 0.06s }
+  .section-in:nth-child(3) { animation-delay: 0.12s }
+  .section-in:nth-child(4) { animation-delay: 0.18s }
+  .section-in:nth-child(5) { animation-delay: 0.24s }
+  @keyframes sectionIn {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+</style>
+</head>
+<body class="max-w-md mx-auto min-h-screen">
+
+<!-- 全局渐变背景 -->
+<div class="fixed inset-0 pointer-events-none" style="background: 
+  radial-gradient(ellipse 80% 50% at 50% 5%,  rgba(16,185,129,0.06) 0%, transparent 60%),
+  radial-gradient(ellipse 60% 40% at 30% 40%, rgba(245,158,11,0.04) 0%, transparent 60%),
+  radial-gradient(ellipse 50% 30% at 80% 75%, rgba(139,92,246,0.04) 0%, transparent 60%)
+"></div>
+
+<!-- ====== 顶部装饰光晕 ====== -->
+<div class="relative z-0">
+  <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[90%] h-40 bg-gradient-to-b from-emerald-200/20 via-transparent to-transparent rounded-full blur-3xl pointer-events-none"></div>
+  <div class="float-blob absolute top-8 right-6 w-12 h-12 rounded-full bg-amber-300/15 blur-xl pointer-events-none"></div>
+  <div class="float-blob-slow absolute top-20 left-8 w-16 h-16 rounded-full bg-violet-300/10 blur-xl pointer-events-none"></div>
+
+  <!-- ====== 1. 头像卡片 ====== -->
+  <section class="relative z-10 mx-3 mt-3 section-in">
+    <div class="rounded-[28px] bg-white/80 backdrop-blur-xl border border-white/60 shadow-depth-2 px-5 py-5">
+      <!-- 头像区 -->
+      <div class="flex items-center gap-3">
+        <div class="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-100 to-emerald-300 flex items-center justify-center text-lg font-black text-emerald-800 shrink-0 ring-2 ring-emerald-200/60">强</div>
+        <div>
+          <p class="text-sm font-black text-slate-900">阿强(常胜将军)</p>
+          <div class="mt-0.5 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 ring-1 ring-amber-200/60">
+            <span class="text-[10px] font-black text-amber-700">⚽ 绿茵新秀</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 积分/净收益/等级 - 三列卡片 -->
+      <div class="mt-4 grid grid-cols-3 gap-2">
+        <!-- 积分 -->
+        <div class="rounded-2xl bg-gradient-to-br from-emerald-50 via-emerald-50/80 to-white border border-emerald-100/50 shadow-depth-1 px-2.5 py-3 text-center relative overflow-hidden">
+          <div class="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-emerald-200/30 blur-md"></div>
+          <div class="relative">
+            <div class="flex items-center justify-center gap-1">
+              <svg width="14" height="14" viewBox="0 0 36 36"><defs><linearGradient id="ge" x1="0" x2="1" y1="0" y2="1"><stop offset="0%" stop-color="#F59E0B"/><stop offset="100%" stop-color="#D97706"/></linearGradient></defs><circle cx="18" cy="18" r="16" fill="url(#ge)"/><circle cx="18" cy="18" r="11" fill="#FEF3C7"/><text x="18" y="20.5" text-anchor="middle" font-size="8" font-weight="900" fill="#B45309">P</text></svg>
+              <span class="text-[9px] font-bold text-emerald-600">积分</span>
+            </div>
+            <p class="mt-1.5 text-sm font-black tabular-nums text-emerald-700">38.5<span class="text-[10px] font-bold text-emerald-400">K</span></p>
+          </div>
+        </div>
+        <!-- 净收益 -->
+        <div class="rounded-2xl bg-gradient-to-br from-amber-50 via-amber-50/80 to-white border border-amber-100/50 shadow-depth-1 px-2.5 py-3 text-center relative overflow-hidden">
+          <div class="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-amber-200/30 blur-md"></div>
+          <div class="relative">
+            <p class="text-[9px] font-bold text-amber-600 flex items-center justify-center gap-1">
+              <span class="text-[11px]">📈</span>净收益
+            </p>
+            <p class="mt-1.5 text-sm font-black tabular-nums text-amber-700">+25.5<span class="text-[10px] font-bold text-amber-400">K</span></p>
+          </div>
+        </div>
+        <!-- 等级 -->
+        <div class="rounded-2xl bg-gradient-to-br from-violet-50 via-violet-50/80 to-white border border-violet-100/50 shadow-depth-1 px-2.5 py-2.5 text-center relative overflow-hidden">
+          <div class="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-violet-200/30 blur-md"></div>
+          <div class="relative">
+            <p class="text-[9px] font-bold text-violet-500">🏅 等级</p>
+            <p class="mt-0.5 text-base font-black tabular-nums text-violet-700">Lv<span class="text-lg">4</span></p>
+            <div class="mt-1 h-1 rounded-full bg-violet-100 overflow-hidden">
+              <div class="h-full rounded-full bg-gradient-to-r from-violet-400 to-purple-500" style="width:73%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 渐变过渡 -->
+  <div class="h-4 bg-gradient-to-b from-white/80 to-transparent mx-3 rounded-b-3xl"></div>
+
+  <!-- ====== 2. Tab 导航 ====== -->
+  <section class="relative z-10 mx-3 section-in">
+    <div class="flex rounded-2xl bg-slate-100/80 backdrop-blur p-1 shadow-depth-1">
+      <div class="flex-1 rounded-xl py-2.5 text-center text-xs font-bold bg-white shadow-sm text-slate-900 flex items-center justify-center gap-1 transition">
+        <span>📊</span> 总览
+      </div>
+      <div class="flex-1 rounded-xl py-2.5 text-center text-xs font-bold text-slate-500 flex items-center justify-center gap-1 transition">
+        <span>📋</span> 战报
+      </div>
+      <div class="flex-1 rounded-xl py-2.5 text-center text-xs font-bold text-slate-500 flex items-center justify-center gap-1 transition">
+        <span>🏅</span> 徽章
+      </div>
+      <div class="flex-1 rounded-xl py-2.5 text-center text-xs font-bold text-slate-500 flex items-center justify-center gap-1 transition">
+        <span>🎁</span> 道具
+      </div>
+    </div>
+  </section>
+
+  <!-- ====== 3. 统计卡片 ====== -->
+  <section class="relative z-10 mx-3 mt-3 grid grid-cols-2 gap-2 section-in">
+    <div class="rounded-2xl bg-white/90 backdrop-blur border border-slate-100 shadow-depth-1 p-3.5 hover:-translate-y-0.5 transition">
+      <div class="flex items-center gap-1.5"><span class="text-sm">🎯</span><p class="text-[10px] font-bold text-slate-400">命中率</p></div>
+      <p class="mt-1.5 text-xl font-black text-slate-900">67<span class="text-sm font-bold text-slate-400">%</span></p>
+      <p class="mt-0.5 text-[9px] font-semibold text-emerald-500">超越 62% 群友</p>
+    </div>
+    <div class="rounded-2xl bg-white/90 backdrop-blur border border-slate-100 shadow-depth-1 p-3.5 hover:-translate-y-0.5 transition">
+      <div class="flex items-center gap-1.5"><span class="text-sm">💰</span><p class="text-[10px] font-bold text-slate-400">净收益</p></div>
+      <p class="mt-1.5 text-xl font-black text-emerald-600">+25.5<span class="text-sm font-bold text-emerald-400">K</span></p>
+      <p class="mt-0.5 text-[9px] font-semibold text-emerald-500">排名 #3</p>
+    </div>
+    <div class="rounded-2xl bg-white/90 backdrop-blur border border-slate-100 shadow-depth-1 p-3.5 hover:-translate-y-0.5 transition">
+      <div class="flex items-center gap-1.5"><span class="text-sm">🔥</span><p class="text-[10px] font-bold text-slate-400">最长连中</p></div>
+      <p class="mt-1.5 text-xl font-black text-orange-500">8<span class="text-sm font-bold text-slate-400">场</span></p>
+      <p class="mt-0.5 text-[9px] font-semibold text-orange-500">连赢纪录</p>
+    </div>
+    <div class="rounded-2xl bg-white/90 backdrop-blur border border-slate-100 shadow-depth-1 p-3.5 hover:-translate-y-0.5 transition">
+      <div class="flex items-center gap-1.5"><span class="text-sm">⭐</span><p class="text-[10px] font-bold text-slate-400">单场最高</p></div>
+      <p class="mt-1.5 text-xl font-black text-violet-500">+15.5<span class="text-sm font-bold text-violet-400">K</span></p>
+      <p class="mt-0.5 text-[9px] font-semibold text-violet-500">墨西哥 2-1 南非</p>
+    </div>
+  </section>
+
+  <!-- ====== 4. 徽章区 ====== -->
+  <section class="relative z-10 mx-3 mt-3 rounded-3xl bg-white/90 backdrop-blur border border-slate-100 shadow-depth-2 p-5 section-in overflow-hidden">
+    <!-- 装饰圆 -->
+    <div class="absolute -top-6 -right-6 w-20 h-20 rounded-full bg-amber-100/30 blur-2xl pointer-events-none"></div>
+    <div class="absolute -bottom-4 left-8 w-16 h-16 rounded-full bg-violet-100/20 blur-2xl pointer-events-none"></div>
+
+    <div class="relative flex items-center justify-between mb-3">
+      <div class="flex items-center gap-2">
+        <div class="w-7 h-7 rounded-xl bg-amber-100 flex items-center justify-center"><span class="text-sm">🏅</span></div>
+        <h3 class="text-sm font-black text-slate-900">成就徽章</h3>
+      </div>
+      <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-black text-slate-500">3 / 12</span>
+    </div>
+
+    <div class="flex gap-2.5 overflow-x-auto pb-1">
+      <div class="shrink-0 w-[72px] rounded-2xl bg-gradient-to-b from-amber-50 to-white border border-amber-200/80 shadow-depth-1 p-2.5 text-center relative overflow-hidden">
+        <div class="absolute top-0 right-0 w-4 h-4 rounded-bl-xl bg-amber-200/40"></div>
+        <span class="text-xl">🎯</span>
+        <p class="mt-1 text-[9px] font-black text-amber-700 leading-tight">精准射手</p>
+      </div>
+      <div class="shrink-0 w-[72px] rounded-2xl bg-gradient-to-b from-emerald-50 to-white border border-emerald-200/80 shadow-depth-1 p-2.5 text-center relative overflow-hidden">
+        <div class="absolute top-0 right-0 w-4 h-4 rounded-bl-xl bg-emerald-200/40"></div>
+        <span class="text-xl">💰</span>
+        <p class="mt-1 text-[9px] font-black text-emerald-700 leading-tight">万元户</p>
+      </div>
+      <div class="shrink-0 w-[72px] rounded-2xl bg-gradient-to-b from-violet-50 to-white border border-violet-200/80 shadow-depth-1 p-2.5 text-center relative overflow-hidden">
+        <div class="absolute top-0 right-0 w-4 h-4 rounded-bl-xl bg-violet-200/40"></div>
+        <span class="text-xl">🔥</span>
+        <p class="mt-1 text-[9px] font-black text-violet-700 leading-tight">连赢王</p>
+      </div>
+      <div class="shrink-0 w-[72px] rounded-2xl bg-slate-50 border border-dashed border-slate-200 p-2.5 text-center opacity-50">
+        <span class="text-xl grayscale">🔮</span>
+        <p class="mt-1 text-[9px] font-bold text-slate-400 leading-tight">预言大师</p>
+      </div>
+      <div class="shrink-0 w-[72px] rounded-2xl bg-slate-50 border border-dashed border-slate-200 p-2.5 text-center opacity-50">
+        <span class="text-xl grayscale">👑</span>
+        <p class="mt-1 text-[9px] font-bold text-slate-400 leading-tight">冠军教头</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====== 5. 战报列表 ====== -->
+  <section class="relative z-10 mx-3 mt-3 rounded-3xl bg-white/90 backdrop-blur border border-slate-100 shadow-depth-2 p-5 section-in overflow-hidden">
+    <div class="absolute top-0 right-0 w-24 h-24 rounded-full bg-emerald-100/20 blur-2xl pointer-events-none"></div>
+
+    <div class="relative flex items-center justify-between mb-3">
+      <div class="flex items-center gap-2">
+        <div class="w-7 h-7 rounded-xl bg-emerald-100 flex items-center justify-center"><span class="text-sm">📋</span></div>
+        <h3 class="text-sm font-black text-slate-900">最近战报</h3>
+      </div>
+      <span class="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-600">全部 →</span>
+    </div>
+
+    <div class="space-y-2">
+      <!-- 命中 -->
+      <div class="relative flex items-center gap-3 rounded-2xl bg-gradient-to-r from-emerald-50/60 to-white border border-emerald-100/50 px-3 py-2.5">
+        <div class="w-7 h-7 rounded-xl bg-emerald-100/80 flex items-center justify-center shrink-0"><span class="text-xs">🇲🇽</span></div>
+        <div class="min-w-0 flex-1"><p class="text-[11px] font-black text-slate-800 truncate">墨西哥 <span class="text-emerald-600">2:1</span> 南非</p></div>
+        <span class="shrink-0 px-2 py-0.5 rounded-full bg-emerald-100 text-[10px] font-black text-emerald-700">✓ 命中</span>
+        <span class="shrink-0 text-[11px] font-black text-emerald-600">+3.2K</span>
+      </div>
+      <!-- 未中 -->
+      <div class="relative flex items-center gap-3 rounded-2xl bg-gradient-to-r from-rose-50/60 to-white border border-rose-100/50 px-3 py-2.5">
+        <div class="w-7 h-7 rounded-xl bg-rose-100/80 flex items-center justify-center shrink-0"><span class="text-xs">🇨🇦</span></div>
+        <div class="min-w-0 flex-1"><p class="text-[11px] font-black text-slate-800 truncate">加拿大 <span class="text-slate-500">0:0</span> 波黑</p></div>
+        <span class="shrink-0 px-2 py-0.5 rounded-full bg-rose-100 text-[10px] font-black text-rose-700">✗ 未中</span>
+        <span class="shrink-0 text-[11px] font-black text-rose-500">-500</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====== 6. 道具卡片 ====== -->
+  <section class="relative z-10 mx-3 mt-3 rounded-3xl bg-white/90 backdrop-blur border border-slate-100 shadow-depth-2 p-5 section-in overflow-hidden mb-6">
+    <div class="absolute -bottom-4 -left-4 w-20 h-20 rounded-full bg-amber-100/20 blur-2xl pointer-events-none"></div>
+    <div class="absolute top-0 right-6 w-16 h-16 rounded-full bg-blue-100/20 blur-2xl pointer-events-none"></div>
+
+    <div class="relative flex items-center justify-between mb-3">
+      <div class="flex items-center gap-2">
+        <div class="w-7 h-7 rounded-xl bg-amber-100 flex items-center justify-center"><span class="text-sm">🎁</span></div>
+        <h3 class="text-sm font-black text-slate-900">我的道具</h3>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-2">
+      <div class="rounded-2xl bg-gradient-to-br from-amber-50 via-amber-50/80 to-orange-50/60 border border-amber-200/60 shadow-depth-1 p-3 text-center relative overflow-hidden">
+        <div class="absolute -top-1 -right-1 w-8 h-8 rounded-full bg-amber-200/30 blur-md"></div>
+        <span class="text-2xl">🔮</span>
+        <p class="mt-1 text-[10px] font-black text-amber-700 leading-tight">逆转卡</p>
+        <p class="text-[9px] font-bold text-amber-400">修改一次预测</p>
+        <div class="mt-1.5 inline-flex items-center justify-center w-6 h-6 rounded-lg bg-amber-100 text-[10px] font-black text-amber-600">2</div>
+      </div>
+      <div class="rounded-2xl bg-gradient-to-br from-blue-50 via-blue-50/80 to-cyan-50/60 border border-blue-200/60 shadow-depth-1 p-3 text-center relative overflow-hidden">
+        <div class="absolute -top-1 -right-1 w-8 h-8 rounded-full bg-blue-200/30 blur-md"></div>
+        <span class="text-2xl">✨</span>
+        <p class="mt-1 text-[10px] font-black text-blue-700 leading-tight">加倍卡</p>
+        <p class="text-[9px] font-bold text-blue-400">下注收益翻倍</p>
+        <div class="mt-1.5 inline-flex items-center justify-center w-6 h-6 rounded-lg bg-blue-100 text-[10px] font-black text-blue-600">1</div>
+      </div>
+      <div class="col-span-2 rounded-2xl bg-gradient-to-br from-violet-50 via-violet-50/80 to-purple-50/60 border border-violet-200/60 shadow-depth-1 p-3 flex items-center gap-3 relative overflow-hidden">
+        <div class="absolute top-0 right-0 w-10 h-10 rounded-full bg-violet-200/20 blur-lg"></div>
+        <span class="text-2xl">🎫</span>
+        <div class="min-w-0">
+          <p class="text-[10px] font-black text-violet-700 leading-tight">冠军竞猜券</p>
+          <p class="text-[9px] font-bold text-violet-400">猜中冠军额外奖励</p>
+        </div>
+        <div class="ml-auto inline-flex items-center justify-center w-6 h-6 rounded-lg bg-violet-100 text-[10px] font-black text-violet-600">1</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 底部留白 -->
+  <div class="h-16"></div>
+</div>
+
+</body>
+</html>
