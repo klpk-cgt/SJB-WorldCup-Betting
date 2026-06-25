@@ -29,6 +29,9 @@ import SmartAvatar from './SmartAvatar';
 import FlagBadge from './home/FlagBadge';
 import { useGameContext } from './GameContext';
 import { getLevelByNetProfit, LEVEL_CONFIGS } from '../server/config';
+import './profile/profileStyles.css';
+import NetProfitChart from './profile/NetProfitChart';
+import BadgeDetailModal from './profile/BadgeDetailModal';
 
 interface MeTabProps {
   onLogout: () => void;
@@ -284,64 +287,6 @@ function EmptyState({ children }: { children: React.ReactNode }) {
   );
 }
 
-const METAB_CSS = `
-  .metab-stadium-bg {
-    background-image:
-      linear-gradient(180deg, rgba(248,251,255,0.35) 0%, rgba(246,248,251,0.75) 60%, rgba(255,255,255,0.96) 100%),
-      url('/assets/player-profile/stadium-light-bg.svg');
-    background-size: cover;
-    background-position: center top;
-    background-repeat: no-repeat;
-  }
-  .metab-glass {
-    background: rgba(255,255,255,0.86);
-    backdrop-filter: blur(18px);
-    -webkit-backdrop-filter: blur(18px);
-    border: 1px solid rgba(255,255,255,0.72);
-    box-shadow: 0 24px 60px rgba(15,23,42,0.10), inset 0 1px 0 rgba(255,255,255,0.70);
-  }
-  @supports not (backdrop-filter: blur(18px)) {
-    .metab-glass { background: rgba(255,255,255,0.96); }
-  }
-  .metab-avatar-ring {
-    box-shadow: 0 14px 30px rgba(15,23,42,0.12);
-  }
-  .metab-bar-animate {
-    transition: width 1s cubic-bezier(0.22, 0.61, 0.36, 1);
-  }
-  .metab-btn-glass {
-    background: rgba(255,255,255,0.72);
-    border: 1px solid rgba(255,255,255,0.9);
-    box-shadow: 0 10px 28px rgba(15,23,42,0.08);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-  }
-  @supports not (backdrop-filter: blur(12px)) {
-    .metab-btn-glass { background: rgba(255,255,255,0.96); }
-  }
-  .metab-btn-glass:hover { transform: translateY(-1px); box-shadow: 0 14px 32px rgba(15,23,42,0.12); }
-  .metab-btn-glass:active { transform: scale(0.95); }
-  .metab-green-btn {
-    background: #16a34a;
-    box-shadow: 0 10px 26px rgba(22,163,74,0.20);
-  }
-  .metab-green-btn:hover { background: #15803d; transform: translateY(-1px); }
-  .metab-green-btn:active { transform: scale(0.98); }
-  .font-display { font-family: 'Bebas Neue', cursive; }
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(6px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  .metab-tab-enter {
-    animation: fadeIn 0.3s ease-out;
-  }
-  .metab-header-decor {
-    opacity: 0.5;
-    pointer-events: none;
-    user-select: none;
-  }
-`;
-
 export default function MeTab({ onLogout, onAdminLogin }: MeTabProps) {
   const { user, wallet } = useGameContext();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -356,6 +301,7 @@ export default function MeTab({ onLogout, onAdminLogin }: MeTabProps) {
   const [profileSummary, setProfileSummary] = useState<UserProfileSummary | null>(null);
   const [showAllSettlements, setShowAllSettlements] = useState(false);
   const [showAllTransactions, setShowAllTransactions] = useState(false);
+  const [selectedBadge, setSelectedBadge] = useState<AchievementBadgeSummary | null>(null);
   const shareCardRef = useRef<HTMLDivElement>(null);
 
   const handleShareCard = async () => {
@@ -516,7 +462,6 @@ export default function MeTab({ onLogout, onAdminLogin }: MeTabProps) {
       <div className="absolute inset-0 pointer-events-none -mx-4 sm:mx-0" style={{
         background: 'radial-gradient(circle at 20% 0%, rgba(34,197,94,0.10), transparent 30%), radial-gradient(circle at 85% 10%, rgba(59,130,246,0.12), transparent 28%), linear-gradient(180deg, #f8fbff 0%, #f6f8fb 42%, #ffffff 100%)',
       }} />
-      <style>{METAB_CSS}</style>
 
       {/* ===== 浅色体育场 Header 全宽 ===== */}
       <header className="metab-stadium-bg relative flex flex-col items-center justify-start pt-2 pb-8 -mx-4 sm:mx-0 sm:rounded-t-2xl">
@@ -531,8 +476,9 @@ export default function MeTab({ onLogout, onAdminLogin }: MeTabProps) {
           <div className="metab-glass w-full rounded-[28px] px-5 py-5 relative z-10">
             {/* 上半: 头像 + 信息 */}
             <div className="flex items-start gap-4">
-              {/* 头像 92px */}
+              {/* 头像 92px + 旋转光环 */}
               <div className="relative shrink-0">
+                <div className="profile-avatar-ring"></div>
                 <div className="avatar-box w-[92px] h-[92px] rounded-full border-4 border-white/90 overflow-hidden metab-avatar-ring bg-gradient-to-br from-emerald-50 to-emerald-100">
                   <SmartAvatar
                     name={user?.displayName || '世界杯玩家'}
@@ -542,7 +488,7 @@ export default function MeTab({ onLogout, onAdminLogin }: MeTabProps) {
                   />
                 </div>
                 {/* 认证角标 */}
-                <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-gradient-to-br from-green-400 to-green-600 border-[3px] border-white flex items-center justify-center shadow-sm">
+                <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-gradient-to-br from-green-400 to-green-600 border-[3px] border-white flex items-center justify-center shadow-sm z-10">
                   <svg width="12" height="12" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" fill="none"/></svg>
                 </div>
               </div>
@@ -594,7 +540,7 @@ export default function MeTab({ onLogout, onAdminLogin }: MeTabProps) {
                     <span className="text-[10px] font-bold tabular-nums text-slate-400">{Math.round(levelProgress)}%</span>
                   )}
                 </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
+                <div className="h-[7px] overflow-hidden rounded-full bg-slate-200">
                   <div
                     className={`metab-bar-animate h-full rounded-full bg-gradient-to-r ${currentLevel.barGradient}`}
                     style={{ width: `${levelProgress}%` }}
@@ -609,8 +555,8 @@ export default function MeTab({ onLogout, onAdminLogin }: MeTabProps) {
       {/* ===== 内容区 居中 ===== */}
       <div className="relative z-20 mx-auto max-w-xl space-y-3.5 pt-2">
 
-        {/* ===== Tab 导航 (底部下划线 active) ===== */}
-        <nav className="relative z-20 -mt-3 mx-4 flex items-center h-[52px] rounded-[22px] bg-white/90 border border-slate-200 px-1.5 shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
+        {/* ===== Tab 导航 (胶囊 active) ===== */}
+        <nav className="profile-tab-nav relative z-20 -mt-3 mx-4">
           {TABS.map((tab) => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
@@ -618,15 +564,10 @@ export default function MeTab({ onLogout, onAdminLogin }: MeTabProps) {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`relative flex-1 flex items-center justify-center gap-1 h-full text-sm font-semibold transition-all duration-300 ${
-                  active ? 'text-[#16a34a] font-bold' : 'text-slate-500 hover:text-slate-700'
-                }`}
+                className={`profile-tab-btn ${active ? 'active' : ''}`}
               >
-                <Icon className="h-[18px] w-[18px]" />
+                <Icon className="h-[16px] w-[16px]" />
                 {tab.label}
-                {active && (
-                  <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-7 h-[3px] bg-green-500 rounded-t-sm animate-[fadeIn_0.25s_ease-out]" />
-                )}
               </button>
             );
           })}
@@ -735,6 +676,7 @@ export default function MeTab({ onLogout, onAdminLogin }: MeTabProps) {
 
         {activeTab === 'reports' && (
           <div className="space-y-3.5 metab-tab-enter">
+            <NetProfitChart transactions={transactions} />
             <section className="soft-card bg-white border border-slate-200 rounded-[20px] p-4 shadow-[0_12px_32px_rgba(15,23,42,0.06)]">
               <div className="flex items-center justify-between mb-3.5">
                 <div className="flex items-center gap-1.5">
@@ -849,7 +791,7 @@ export default function MeTab({ onLogout, onAdminLogin }: MeTabProps) {
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       {badgeGroups[category].map((badge) => (
-                        <BadgeCard key={badge.id} badge={badge} unlocked={badge.unlocked} />
+                        <BadgeCard key={badge.id} badge={badge} unlocked={badge.unlocked} onClick={() => setSelectedBadge(badge)} />
                       ))}
                     </div>
                   </div>
@@ -915,6 +857,8 @@ export default function MeTab({ onLogout, onAdminLogin }: MeTabProps) {
             退出
           </button>
         </div>
+
+      <BadgeDetailModal badge={selectedBadge} onClose={() => setSelectedBadge(null)} />
     </div>
   );
 }
@@ -969,13 +913,17 @@ function TransactionList({ transactions }: { transactions: Transaction[] }) {
   );
 }
 
-function BadgeCard({ badge, unlocked = false }: { badge: AchievementBadgeSummary; unlocked?: boolean; key?: React.Key }) {
+function BadgeCard({ badge, unlocked = false, onClick }: { badge: AchievementBadgeSummary; unlocked?: boolean; key?: React.Key; onClick?: () => void }) {
   const progress = getProgressPercent(badge);
   const polarityLabel = badge.polarity === 'negative' ? '反向公开' : badge.polarity === 'funny' ? '名场面' : '成就';
+  const rarityClass = badge.rarity ? `badge-${badge.rarity}` : 'badge-common';
   return (
-    <div className={`rounded-2xl border p-3 transition ${unlocked ? 'border-emerald-100 bg-emerald-50/70' : 'border-slate-100 bg-slate-50 opacity-80'}`}>
+    <div
+      onClick={onClick}
+      className={`rounded-2xl border p-3 transition cursor-pointer active:scale-[0.97] ${rarityClass} ${!unlocked ? 'badge-locked' : ''}`}
+    >
       <div className="flex items-center gap-2">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-white/70">
+        <div className="profile-badge-icon-wrap flex h-10 w-10 shrink-0 items-center justify-center">
           <ProfileImageIcon src={getBadgeImageSrc(badge)} alt={badge.label} size={32} fallback={<span className="text-lg">{badge.icon}</span>} />
         </div>
         <div className="min-w-0">

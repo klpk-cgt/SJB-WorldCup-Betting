@@ -1,0 +1,296 @@
+/* ===== 资料页玻璃态升级版样式 ===== */
+
+/* 体育场背景 */
+.metab-stadium-bg {
+  background-image:
+    linear-gradient(180deg, rgba(248,251,255,0.35) 0%, rgba(246,248,251,0.75) 60%, rgba(255,255,255,0.96) 100%),
+    linear-gradient(135deg, #dbeafe 0%, #ede9fe 50%, #fef3c7 100%);
+  background-size: cover;
+  background-position: center top;
+  background-repeat: no-repeat;
+}
+
+/* 毛玻璃主卡 */
+.metab-glass {
+  background: rgba(255,255,255,0.86);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255,255,255,0.72);
+  box-shadow: 0 24px 60px rgba(15,23,42,0.10), inset 0 1px 0 rgba(255,255,255,0.70);
+}
+@supports not (backdrop-filter: blur(18px)) {
+  .metab-glass { background: rgba(255,255,255,0.96); }
+}
+
+.metab-avatar-ring {
+  box-shadow: 0 14px 30px rgba(15,23,42,0.12);
+}
+
+/* 头像旋转光环 */
+.profile-avatar-ring {
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  border: 2px dashed #fbbf24;
+  opacity: 0.6;
+  animation: profile-ring-rotate 12s linear infinite;
+  pointer-events: none;
+}
+@keyframes profile-ring-rotate {
+  to { transform: rotate(360deg); }
+}
+
+/* 等级条加粗动画 */
+.metab-bar-animate {
+  transition: width 1s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+/* 玻璃按钮 */
+.metab-btn-glass {
+  background: rgba(255,255,255,0.72);
+  border: 1px solid rgba(255,255,255,0.9);
+  box-shadow: 0 10px 28px rgba(15,23,42,0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+@supports not (backdrop-filter: blur(12px)) {
+  .metab-btn-glass { background: rgba(255,255,255,0.96); }
+}
+.metab-btn-glass:hover { transform: translateY(-1px); box-shadow: 0 14px 32px rgba(15,23,42,0.12); }
+.metab-btn-glass:active { transform: scale(0.95); }
+
+.metab-green-btn {
+  background: #16a34a;
+  box-shadow: 0 10px 26px rgba(22,163,74,0.20);
+}
+.metab-green-btn:hover { background: #15803d; transform: translateY(-1px); }
+.metab-green-btn:active { transform: scale(0.98); }
+
+.font-display { font-family: 'Bebas Neue', cursive; }
+
+/* fadeIn 动画 */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.metab-tab-enter {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.metab-header-decor {
+  opacity: 0.5;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ===== Tab 胶囊导航 ===== */
+.profile-tab-nav {
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  background: rgba(255,255,255,0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 22px;
+  border: 1px solid rgba(226,232,240,0.8);
+  box-shadow: 0 10px 28px rgba(15,23,42,0.05);
+}
+.profile-tab-btn {
+  flex: 1;
+  padding: 9px 6px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.25s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.profile-tab-btn:hover {
+  background: rgba(241,245,249,0.8);
+  color: #334155;
+}
+.profile-tab-btn.active {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(16,185,129,0.30);
+}
+
+/* ===== 统计卡趋势箭头 ===== */
+.profile-stat-tile {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 14px 12px;
+  position: relative;
+  box-shadow: 0 8px 20px rgba(15,23,42,0.05);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.profile-stat-tile:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px rgba(15,23,42,0.10);
+}
+.profile-tile-icon {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tile-emerald { background: #ecfdf5; }
+.tile-rose { background: #fff1f2; }
+.tile-amber { background: #fffbeb; }
+.tile-cyan { background: #ecfeff; }
+.tile-orange { background: #fff7ed; }
+
+/* ===== 收益曲线卡 ===== */
+.profile-chart-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 14px;
+  box-shadow: 0 8px 20px rgba(15,23,42,0.05);
+}
+
+/* ===== 徽章稀有度 ===== */
+.badge-legendary {
+  border: 2px solid #fbbf24 !important;
+  background: linear-gradient(135deg, #fffbeb, #fef3c7) !important;
+  box-shadow: 0 4px 16px rgba(251,191,36,0.3);
+}
+.badge-legendary .profile-badge-icon-wrap {
+  animation: legendary-pulse 2.5s ease-in-out infinite;
+}
+@keyframes legendary-pulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(251,191,36,0.4); }
+  50% { box-shadow: 0 0 32px rgba(251,191,36,0.7), 0 0 8px rgba(251,191,36,0.9); }
+}
+
+.badge-epic {
+  border: 2px solid #a78bfa !important;
+  background: linear-gradient(135deg, #f5f3ff, #ede9fe) !important;
+  box-shadow: 0 3px 12px rgba(167,139,250,0.2);
+}
+.badge-epic .profile-badge-icon-wrap {
+  animation: epic-glow 3s ease-in-out infinite;
+}
+@keyframes epic-glow {
+  0%, 100% { box-shadow: 0 2px 8px rgba(167,139,250,0.15); }
+  50% { box-shadow: 0 2px 16px rgba(167,139,250,0.35); }
+}
+
+.badge-rare {
+  border: 1.5px solid #22d3ee !important;
+  background: #ecfeff !important;
+}
+
+.badge-common {
+  border: 1px solid #cbd5e1 !important;
+  background: #f8fafc !important;
+}
+
+.profile-badge-icon-wrap {
+  border-radius: 12px;
+  background: rgba(255,255,255,0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.badge-locked {
+  filter: grayscale(0.8);
+  opacity: 0.55;
+}
+
+/* ===== 徽章详情弹窗（底部抽屉） ===== */
+.profile-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.profile-modal-content {
+  background: #fff;
+  border-radius: 24px 24px 0 0;
+  width: 100%;
+  max-width: 420px;
+  padding: 20px 18px 28px;
+  transform: translateY(100%);
+  transition: transform 0.35s cubic-bezier(0.32,0.72,0,1);
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.profile-modal-overlay.active .profile-modal-content {
+  transform: translateY(0);
+}
+.profile-modal-handle {
+  width: 40px;
+  height: 4px;
+  background: #cbd5e1;
+  border-radius: 999px;
+  margin: 0 auto 18px;
+}
+.profile-modal-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: #64748b;
+  cursor: pointer;
+  border: none;
+}
+.profile-modal-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+
+/* ===== 道具卡渐变 ===== */
+.item-emerald {
+  background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+  border-color: #6ee7b7 !important;
+}
+.item-amber {
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  border-color: #fcd34d !important;
+}
+.item-rose {
+  background: linear-gradient(135deg, #fee2e2, #fecaca);
+  border-color: #fca5a5 !important;
+}
+.item-cyan {
+  background: linear-gradient(135deg, #cffafe, #a5f3fc);
+  border-color: #67e8f9 !important;
+}
+
+/* ===== 无障碍：关闭动效 ===== */
+@media (prefers-reduced-motion: reduce) {
+  .badge-legendary .profile-badge-icon-wrap,
+  .badge-epic .profile-badge-icon-wrap,
+  .profile-avatar-ring {
+    animation: none !important;
+  }
+}
