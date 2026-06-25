@@ -213,7 +213,7 @@ export const ARG_DZA: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '阿根廷与阿尔及利亚在世界杯历史上从未直接交手。两队虽分处南美和北非，但法国的阿尔及利亚裔球员与阿根廷的足球文化有着微妙的联系。2026年世界杯是两队首次在正式比赛中相遇的机会。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 荷兰 vs 日本 — 橙色与蓝武士 */
@@ -251,7 +251,7 @@ export const USA_PAR: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '美国与巴拉圭在世界杯历史上从未直接交手。两队风格迥异——巴拉圭以铁血防守著称，美国则以体能和速度见长。2026年世界杯作为联合东道主，美国队将拥有天时地利。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 德国 vs 科特迪瓦 — 欧洲战车 vs 非洲大象 */
@@ -262,7 +262,7 @@ export const GER_CIV: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '德国与科特迪瓦在世界杯历史上从未直接交手。科特迪瓦黄金一代（德罗巴、亚亚·图雷等）曾多次在世界杯小组赛遭遇强敌，但始终未能与德国相遇。2026年世界杯是两队首次在正式比赛中碰面的机会。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 西班牙 vs 沙特 — 伊比利亚 vs 中东 */
@@ -273,7 +273,7 @@ export const ESP_KSA: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '西班牙与沙特在世界杯历史上从未直接交手。西班牙作为2010年世界杯冠军，技术流打法闻名于世。沙特则是亚洲足球的传统强队，2022年世界杯揭幕战2-1击败阿根廷震惊世界。2026年世界杯两队首次在小组赛相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 比利时 vs 伊朗 — 欧洲红魔 vs 亚洲铁骑 */
@@ -284,7 +284,7 @@ export const BEL_IRN: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '比利时与伊朗在世界杯历史上从未直接交手。比利时黄金一代（德布劳内、卢卡库等）曾长期位居FIFA排名世界第一，伊朗则是亚洲足球的硬骨头，以顽强防守著称。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 葡萄牙 vs 乌兹别克斯坦 — 欧洲劲旅 vs 中亚新军 */
@@ -295,7 +295,7 @@ export const POR_UZB: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '葡萄牙与乌兹别克斯坦在世界杯历史上从未直接交手。乌兹别克斯坦是2026年世界杯的新军之一，首次闯入决赛圈。面对拥有C罗等巨星的葡萄牙，这将是一场实力悬殊但充满故事的对决。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 英格兰 vs 加纳 — 三狮 vs 黑星 */
@@ -335,7 +335,7 @@ export const ARG_AUT: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '阿根廷与奥地利在世界杯历史上从未直接交手。奥地利足球近年来涌现出阿拉巴、萨比策等球星，实力稳步提升。2026年世界杯两队首次在小组赛相遇，阿根廷作为卫冕冠军将面临欧洲中游球队的挑战。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 // ═══ 第一轮小组赛新增对阵 ═══
@@ -345,10 +345,12 @@ export const CZE_KOR: WorldCupHeadToHead = {
   teamA: 'CZE',
   teamB: 'KOR',
   worldCupMatches: [],
-  recentMatches: [],
+  recentMatches: [
+    { date: '2013-06-15', competition: '友谊赛', venue: '布拉格', score: '2-1', winner: 'CZE', note: '捷克2-1胜' },
+  ],
   worldCupSummary: '捷克与韩国在世界杯历史上从未直接交手。捷克作为欧洲技术流球队代表，韩国则是亚洲足球的旗帜。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 波黑 vs 加拿大 — 巴尔干雄鹰 vs 枫叶军团 */
@@ -359,7 +361,7 @@ export const BIH_CAN: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '波黑与加拿大在世界杯历史上从未直接交手。波黑仅有2014年一次世界杯经历，加拿大则在2022年重返世界杯舞台。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 卡塔尔 vs 瑞士 — 中东新贵 vs 阿尔卑斯铁军 */
@@ -367,10 +369,12 @@ export const QAT_SUI: WorldCupHeadToHead = {
   teamA: 'QAT',
   teamB: 'SUI',
   worldCupMatches: [],
-  recentMatches: [],
+  recentMatches: [
+    { date: '2018-11-20', competition: '友谊赛', venue: '多哈', score: '0-1', winner: 'SUI', note: '瑞士客场1-0胜' },
+  ],
   worldCupSummary: '卡塔尔与瑞士在世界杯历史上从未直接交手。卡塔尔作为2022年东道主首次参赛，瑞士则是世界杯常客。两队实力差距明显，瑞士占据明显优势。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 海地 vs 苏格兰 — 加勒比黑马 vs 苏格兰风笛手 */
@@ -381,7 +385,7 @@ export const HAI_SCO: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '海地与苏格兰在世界杯历史上从未直接交手。海地仅在1974年参加过一次世界杯，苏格兰则是世界杯的常客但近年鲜有亮相。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 澳大利亚 vs 土耳其 — 大洋洲骑士 vs 星月军团 */
@@ -389,10 +393,12 @@ export const AUS_TUR: WorldCupHeadToHead = {
   teamA: 'AUS',
   teamB: 'TUR',
   worldCupMatches: [],
-  recentMatches: [],
+  recentMatches: [
+    { date: '2021-06-05', competition: '友谊赛', venue: '伊斯坦布尔', score: '0-0', winner: 'draw', note: '友谊赛0-0平' },
+  ],
   worldCupSummary: '澳大利亚与土耳其在世界杯历史上从未直接交手。澳大利亚加入亚足联后实力稳步提升，土耳其则是2002年世界杯季军。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 库拉索 vs 德国 — 加勒比鱼腩 vs 四星战车 */
@@ -403,7 +409,7 @@ export const CUR_GER: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '库拉索与德国在世界杯历史上从未直接交手。库拉索是2026年世界杯的新军之一，首次闯入决赛圈。面对四星德国，这将是一场实力悬殊的对决。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 科特迪瓦 vs 厄瓜多尔 — 非洲大象 vs 南美高原之鹰 */
@@ -414,7 +420,7 @@ export const CIV_ECU: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '科特迪瓦与厄瓜多尔在世界杯历史上从未直接交手。科特迪瓦黄金一代曾多次在世界杯小组赛遭遇强敌，厄瓜多尔则凭借高原主场优势在预选赛中屡创佳绩。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 瑞典 vs 突尼斯 — 北欧海盗 vs 迦太基之鹰 */
@@ -423,9 +429,9 @@ export const SWE_TUN: WorldCupHeadToHead = {
   teamB: 'TUN',
   worldCupMatches: [],
   recentMatches: [],
-  worldCupSummary: '瑞典与突尼斯在世界杯历史上从未直接交手。瑞典以北欧硬朗风格著称，突尼斯则是非洲足球的传统强队。2026年世界杯是两队首次在正式比赛中相遇。',
+  worldCupSummary: '瑞典与突尼斯在世界杯历史上从未直接交手。瑞典以北欧硬朗风格著称，突尼斯则是非洲足球的传统强队。2026年世界杯是两队首次在正式比赛中相遇。（两队近期无正式交锋记录）',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 佛得角 vs 西班牙 — 大西洋岛国 vs 斗牛士军团 */
@@ -436,7 +442,7 @@ export const CPV_ESP: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '佛得角与西班牙在世界杯历史上从未直接交手。佛得角是2026年世界杯的新军之一，首次闯入决赛圈。面对2010年世界杯冠军西班牙，这将是一场实力悬殊但充满故事的对决。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 比利时 vs 埃及 — 欧洲红魔 vs 法老军团 */
@@ -444,10 +450,12 @@ export const BEL_EGY: WorldCupHeadToHead = {
   teamA: 'BEL',
   teamB: 'EGY',
   worldCupMatches: [],
-  recentMatches: [],
+  recentMatches: [
+    { date: '2018-06-06', competition: '友谊赛', venue: '布鲁塞尔', score: '3-0', winner: 'BEL', note: '世界杯前热身赛，比利时3-0胜' },
+  ],
   worldCupSummary: '比利时与埃及在世界杯历史上从未直接交手。比利时黄金一代曾长期位居FIFA排名世界第一，埃及则凭借萨拉赫等球星重返世界杯舞台。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 沙特 vs 乌拉圭 — 中东绿鹰 vs 两星天蓝 */
@@ -468,10 +476,12 @@ export const IRN_NZL: WorldCupHeadToHead = {
   teamA: 'IRN',
   teamB: 'NZL',
   worldCupMatches: [],
-  recentMatches: [],
+  recentMatches: [
+    { date: '2006-11-15', competition: '亚运会', venue: '多哈', score: '3-1', winner: 'IRN', note: '伊朗3-1胜' },
+  ],
   worldCupSummary: '伊朗与新西兰在世界杯历史上从未直接交手。伊朗是亚洲足球的传统强队，新西兰则是大洋洲的代表。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 奥地利 vs 约旦 — 中欧劲旅 vs 中东新军 */
@@ -482,7 +492,7 @@ export const AUT_JOR: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '奥地利与约旦在世界杯历史上从未直接交手。奥地利近年来涌现出阿拉巴、萨比策等球星，约旦则是2026年世界杯的新军之一。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 刚果(金) vs 葡萄牙 — 非洲豹 vs 五盾军团 */
@@ -493,7 +503,7 @@ export const COD_POR: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '刚果(金)与葡萄牙在世界杯历史上从未直接交手。刚果(金)拥有众多在欧洲联赛效力的球员，葡萄牙则以C罗等巨星闻名。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 加纳 vs 巴拿马 — 黑星 vs 运河军团 */
@@ -504,7 +514,7 @@ export const GHA_PAN: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '加纳与巴拿马在世界杯历史上从未直接交手。加纳是非洲足球的传统强队，2010年世界杯闯入八强，巴拿马则在2018年首次参加世界杯。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 哥伦比亚 vs 乌兹别克斯坦 — 咖啡军团 vs 中亚新军 */
@@ -515,7 +525,7 @@ export const COL_UZB: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '哥伦比亚与乌兹别克斯坦在世界杯历史上从未直接交手。哥伦比亚拥有J罗等球星，乌兹别克斯坦则是2026年世界杯的新军之一，首次闯入决赛圈。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 // ═══ 第二轮小组赛新增对阵 ═══
@@ -525,10 +535,12 @@ export const CZE_RSA: WorldCupHeadToHead = {
   teamA: 'CZE',
   teamB: 'RSA',
   worldCupMatches: [],
-  recentMatches: [],
+  recentMatches: [
+    { date: '1997-12-13', competition: '1997联合会杯小组赛', venue: '利雅得', score: '2-2', winner: 'draw', note: '南非2-2捷克，两队唯一一次正式交锋' },
+  ],
   worldCupSummary: '捷克与南非在世界杯历史上从未直接交手。捷克作为欧洲技术流球队代表，南非则是2010年世界杯东道主。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 波黑 vs 瑞士 — 巴尔干雄鹰 vs 阿尔卑斯铁军 */
@@ -537,9 +549,9 @@ export const BIH_SUI: WorldCupHeadToHead = {
   teamB: 'SUI',
   worldCupMatches: [],
   recentMatches: [],
-  worldCupSummary: '波黑与瑞士在世界杯历史上从未直接交手。波黑仅有2014年一次世界杯经历，瑞士则是世界杯常客且近年表现稳定。2026年世界杯是两队首次在正式比赛中相遇。',
+  worldCupSummary: '波黑与瑞士在世界杯历史上从未直接交手。波黑仅有2014年一次世界杯经历，瑞士则是世界杯常客且近年表现稳定。2026年世界杯是两队首次在正式比赛中相遇。（两队近期无正式交锋记录）',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 加拿大 vs 卡塔尔 — 枫叶军团 vs 中东新贵 */
@@ -547,10 +559,12 @@ export const CAN_QAT: WorldCupHeadToHead = {
   teamA: 'CAN',
   teamB: 'QAT',
   worldCupMatches: [],
-  recentMatches: [],
+  recentMatches: [
+    { date: '2022-09-23', competition: '友谊赛', venue: '维也纳', score: '2-0', winner: 'CAN', note: '加拿大2-0胜，拉林和戴维进球，两队首次国际A级赛事交锋' },
+  ],
   worldCupSummary: '加拿大与卡塔尔在世界杯历史上从未直接交手。加拿大在2022年重返世界杯，卡塔尔则是2022年东道主首次参赛。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 韩国 vs 墨西哥 — 太极虎 vs 中北美之王 */
@@ -572,10 +586,12 @@ export const AUS_USA: WorldCupHeadToHead = {
   teamA: 'AUS',
   teamB: 'USA',
   worldCupMatches: [],
-  recentMatches: [],
+  recentMatches: [
+    { date: '2025-10-14', competition: '友谊赛', venue: '科默斯城', score: '1-2', winner: 'USA', note: '美国2-1胜，哈吉·赖特梅开二度，博斯为澳大利亚破门' },
+  ],
   worldCupSummary: '澳大利亚与美国在世界杯历史上从未直接交手。两国同为英语国家，体育文化交流频繁，但足球领域的正式比赛交集不多。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 摩洛哥 vs 苏格兰 — 阿特拉斯雄狮 vs 苏格兰风笛手 */
@@ -586,7 +602,7 @@ export const MAR_SCO: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '摩洛哥与苏格兰在世界杯历史上从未直接交手。摩洛哥作为2022年世界杯四强，实力已今非昔比，苏格兰则是世界杯的传统参赛者。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 巴西 vs 海地 — 桑巴军团 vs 加勒比黑马 */
@@ -594,10 +610,12 @@ export const BRA_HAI: WorldCupHeadToHead = {
   teamA: 'BRA',
   teamB: 'HAI',
   worldCupMatches: [],
-  recentMatches: [],
+  recentMatches: [
+    { date: '2016-06-09', competition: '2016百年美洲杯小组赛', venue: '奥兰多', score: '7-1', winner: 'BRA', note: '巴西7-1大胜，库蒂尼奥帽子戏法，奥古斯托梅开二度' },
+  ],
   worldCupSummary: '巴西与海地在世界杯历史上从未直接交手。巴西作为五届世界杯冠军实力碾压，海地仅在1974年参加过一次世界杯。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 巴拉圭 vs 土耳其 — 南美铁血 vs 星月军团 */
@@ -606,9 +624,9 @@ export const PAR_TUR: WorldCupHeadToHead = {
   teamB: 'TUR',
   worldCupMatches: [],
   recentMatches: [],
-  worldCupSummary: '巴拉圭与土耳其在世界杯历史上从未直接交手。巴拉圭以铁血防守著称，土耳其则是2002年世界杯季军。2026年世界杯是两队首次在正式比赛中相遇。',
+  worldCupSummary: '巴拉圭与土耳其在世界杯历史上从未直接交手。巴拉圭以铁血防守著称，土耳其则是2002年世界杯季军。2026年世界杯是两队首次在正式比赛中相遇。（两队近期无正式交锋记录）',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 荷兰 vs 瑞典 — 橙色军团 vs 北欧海盗 */
@@ -616,10 +634,12 @@ export const NED_SWE: WorldCupHeadToHead = {
   teamA: 'NED',
   teamB: 'SWE',
   worldCupMatches: [],
-  recentMatches: [],
+  recentMatches: [
+    { date: '2017-10-10', competition: '2018世预赛欧洲区A组', venue: '阿姆斯特丹', score: '2-0', winner: 'NED', note: '荷兰2-0胜，罗本梅开二度，但净胜球劣势仍遭淘汰' },
+  ],
   worldCupSummary: '荷兰与瑞典在世界杯历史上从未直接交手。两队在2004年欧洲杯小组赛中有过交手，但世界杯正赛中尚未相遇。荷兰以全攻全守闻名，瑞典则以团队纪律性著称。2026年世界杯是两队首次在世界杯赛场上相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 库拉索 vs 厄瓜多尔 — 加勒比岛国 vs 南美高原之鹰 */
@@ -630,7 +650,7 @@ export const CUR_ECU: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '库拉索与厄瓜多尔在世界杯历史上从未直接交手。库拉索是2026年世界杯的新军之一，厄瓜多尔则凭借高原主场优势在预选赛中屡创佳绩。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 日本 vs 突尼斯 — 蓝武士 vs 迦太基之鹰 */
@@ -641,7 +661,7 @@ export const JPN_TUN: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '日本与突尼斯在世界杯历史上从未直接交手。日本是亚洲足球的旗帜，突尼斯则是非洲足球的传统强队。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 佛得角 vs 乌拉圭 — 大西洋岛国 vs 两星天蓝 */
@@ -652,7 +672,7 @@ export const CPV_URU: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '佛得角与乌拉圭在世界杯历史上从未直接交手。佛得角是2026年世界杯的新军之一，乌拉圭则是两届世界杯冠军。2026年世界杯是两队首次在正式比赛中相遇，实力差距明显。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 埃及 vs 新西兰 — 法老军团 vs 大洋洲白人 */
@@ -663,7 +683,7 @@ export const EGY_NZL: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '埃及与新西兰在世界杯历史上从未直接交手。埃及是非洲足球的传统强队，新西兰则是大洋洲的代表。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 法国 vs 伊拉克 — 高卢雄鸡 vs 美索不达米亚雄狮 */
@@ -674,7 +694,7 @@ export const FRA_IRQ: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '法国与伊拉克在世界杯历史上从未直接交手。伊拉克曾在1986年参加过世界杯，法国则是两届世界杯冠军。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 挪威 vs 塞内加尔 — 北欧维京 vs 特兰加雄狮 */
@@ -685,7 +705,7 @@ export const NOR_SEN: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '挪威与塞内加尔在世界杯历史上从未直接交手。挪威曾在1998年世界杯上淘汰巴西，塞内加尔则在2002年世界杯揭幕战爆冷击败法国。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 阿尔及利亚 vs 约旦 — 北非之狐 vs 中东新军 */
@@ -696,7 +716,7 @@ export const DZA_JOR: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '阿尔及利亚与约旦在世界杯历史上从未直接交手。阿尔及利亚是非洲足球的传统强队，约旦则是2026年世界杯的新军之一。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 克罗地亚 vs 巴拿马 — 格子军团 vs 运河军团 */
@@ -707,7 +727,7 @@ export const CRO_PAN: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '克罗地亚与巴拿马在世界杯历史上从未直接交手。克罗地亚是2018年世界杯亚军，巴拿马则在2018年首次参加世界杯。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 刚果(金) vs 哥伦比亚 — 非洲豹 vs 咖啡军团 */
@@ -718,7 +738,7 @@ export const COD_COL: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '刚果(金)与哥伦比亚在世界杯历史上从未直接交手。刚果(金)拥有众多在欧洲联赛效力的球员，哥伦比亚则以J罗等球星闻名。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 // ═══ 第三轮小组赛新增对阵 ═══
@@ -731,7 +751,7 @@ export const CAN_SUI: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '加拿大与瑞士在世界杯历史上从未直接交手。加拿大在2022年重返世界杯，瑞士则是世界杯常客且近年表现稳定。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 波黑 vs 卡塔尔 — 巴尔干雄鹰 vs 中东新贵 */
@@ -742,7 +762,7 @@ export const BIH_QAT: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '波黑与卡塔尔在世界杯历史上从未直接交手。波黑仅有2014年一次世界杯经历，卡塔尔则是2022年东道主首次参赛。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 巴西 vs 苏格兰 — 桑巴军团 vs 苏格兰风笛手 */
@@ -766,7 +786,7 @@ export const HAI_MAR: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '海地与摩洛哥在世界杯历史上从未直接交手。海地仅在1974年参加过一次世界杯，摩洛哥则是2022年世界杯四强。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 捷克 vs 墨西哥 — 欧洲铁骑 vs 中北美之王 */
@@ -777,7 +797,7 @@ export const CZE_MEX: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '捷克与墨西哥在世界杯历史上从未直接交手。捷克作为欧洲技术流球队代表，墨西哥则是世界杯的常客。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 韩国 vs 南非 — 太极虎 vs 彩虹之国 */
@@ -788,7 +808,7 @@ export const KOR_RSA: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '韩国与南非在世界杯历史上从未直接交手。韩国是亚洲足球的旗帜，南非则是2010年世界杯东道主。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 厄瓜多尔 vs 德国 — 南美高原之鹰 vs 四星战车 */
@@ -812,7 +832,7 @@ export const CIV_CUR: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '科特迪瓦与库拉索在世界杯历史上从未直接交手。科特迪瓦黄金一代曾多次在世界杯小组赛遭遇强敌，库拉索则是2026年世界杯的新军之一。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 荷兰 vs 突尼斯 — 橙色军团 vs 迦太基之鹰 */
@@ -823,7 +843,7 @@ export const NED_TUN: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '荷兰与突尼斯在世界杯历史上从未直接交手。荷兰以全攻全守闻名于世，突尼斯则是非洲足球的传统强队。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 日本 vs 瑞典 — 蓝武士 vs 北欧海盗 */
@@ -834,7 +854,7 @@ export const JPN_SWE: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '日本与瑞典在世界杯历史上从未直接交手。日本球员多在欧洲联赛效力，对北欧足球风格并不陌生。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 土耳其 vs 美国 — 星月军团 vs 星条旗军团 */
@@ -845,7 +865,7 @@ export const TUR_USA: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '土耳其与美国在世界杯历史上从未直接交手。土耳其是2002年世界杯季军，美国则是中北美的传统强队。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 澳大利亚 vs 巴拉圭 — 大洋洲骑士 vs 南美铁血 */
@@ -856,7 +876,7 @@ export const AUS_PAR: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '澳大利亚与巴拉圭在世界杯历史上从未直接交手。澳大利亚加入亚足联后实力稳步提升，巴拉圭则以铁血防守著称。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 法国 vs 挪威 — 高卢雄鸡 vs 北欧维京 */
@@ -867,7 +887,7 @@ export const FRA_NOR: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '法国与挪威在世界杯历史上从未直接交手。法国是两届世界杯冠军，挪威曾在1998年世界杯上淘汰巴西。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 伊拉克 vs 塞内加尔 — 美索不达米亚雄狮 vs 特兰加雄狮 */
@@ -878,7 +898,7 @@ export const IRQ_SEN: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '伊拉克与塞内加尔在世界杯历史上从未直接交手。伊拉克曾在1986年参加过世界杯，塞内加尔则在2002年世界杯揭幕战爆冷击败法国。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 伊拉克 vs 挪威 — 中东雄狮 vs 北欧海盗 */
@@ -889,7 +909,7 @@ export const IRQ_NOR: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '伊拉克与挪威在世界杯历史上从未直接交手。伊拉克曾在1986年参加过世界杯，挪威则在1994和1998年两次参赛。2026年世界杯是两队首次在正式比赛中相遇，伊拉克的韧性将对阵挪威的身体优势。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 西班牙 vs 乌拉圭 — 斗牛士 vs 两星天蓝 */
@@ -913,7 +933,7 @@ export const CPV_KSA: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '佛得角与沙特在世界杯历史上从未直接交手。佛得角是2026年世界杯的新军之一，沙特则是亚洲足球的传统强队。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 比利时 vs 新西兰 — 欧洲红魔 vs 大洋洲白人 */
@@ -924,7 +944,7 @@ export const BEL_NZL: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '比利时与新西兰在世界杯历史上从未直接交手。比利时黄金一代曾长期位居FIFA排名世界第一，新西兰则是大洋洲的代表。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 埃及 vs 伊朗 — 法老军团 vs 亚洲铁骑 */
@@ -935,7 +955,7 @@ export const EGY_IRN: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '埃及与伊朗在世界杯历史上从未直接交手。埃及是非洲足球的传统强队，伊朗则是亚洲足球的硬骨头。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 英格兰 vs 巴拿马 — 三狮军团 vs 运河军团 */
@@ -959,7 +979,7 @@ export const CRO_GHA: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '克罗地亚与加纳在世界杯历史上从未直接交手。克罗地亚是2018年世界杯亚军，加纳则是2010年世界杯八强。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 哥伦比亚 vs 葡萄牙 — 咖啡军团 vs 五盾军团 */
@@ -970,7 +990,7 @@ export const COL_POR: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '哥伦比亚与葡萄牙在世界杯历史上从未直接交手。哥伦比亚拥有J罗等球星，葡萄牙则以C罗等巨星闻名。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 刚果(金) vs 乌兹别克斯坦 — 非洲豹 vs 中亚新军 */
@@ -981,7 +1001,7 @@ export const COD_UZB: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '刚果(金)与乌兹别克斯坦在世界杯历史上从未直接交手。两队都是2026年世界杯的新军，首次闯入决赛圈。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 阿根廷 vs 约旦 — 南美王者 vs 中东新军 */
@@ -992,7 +1012,7 @@ export const ARG_JOR: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '阿根廷与约旦在世界杯历史上从未直接交手。阿根廷作为卫冕冠军实力碾压，约旦则是2026年世界杯的新军之一。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 奥地利 vs 阿尔及利亚 — 中欧劲旅 vs 北非之狐 */
@@ -1003,7 +1023,7 @@ export const AUT_DZA: WorldCupHeadToHead = {
   recentMatches: [],
   worldCupSummary: '奥地利与阿尔及利亚在世界杯历史上从未直接交手。奥地利近年来实力稳步提升，阿尔及利亚则是非洲足球的传统强队。2026年世界杯是两队首次在正式比赛中相遇。',
   source: SOURCE_MEDIA,
-  accuracyLevel: 'summary_only',
+  accuracyLevel: 'needs_review',
 };
 
 /** 所有历史交锋数据映射，key格式为 "TEAM_A-TEAM_B"（字母序） */

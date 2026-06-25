@@ -369,7 +369,7 @@ export async function syncFixturesForDateWindow(params: {
   pastDays?: number;
   futureDays?: number;
 }): Promise<{ updatedMatches: Match[]; createdMatches: Match[]; dates: string[]; log: SyncLog }> {
-  const { apiKey, db, anchorDate, pastDays = 1, futureDays = 5 } = params; // 未来5天（从10→5，减半API调用）
+  const { apiKey, db, anchorDate, pastDays = 5, futureDays = 5 } = params; // 过去5天+未来5天（覆盖小组赛周期）
   const startedAt = new Date().toISOString();
   const anchor = anchorDate ? new Date(`${anchorDate}T00:00:00.000Z`) : new Date();
   const dates = buildWindowDates(anchor, pastDays, futureDays);

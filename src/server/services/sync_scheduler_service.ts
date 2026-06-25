@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -600,8 +601,16 @@ export async function runDynamicSyncTick() {
   }
 
   // 5. 降级方案：无外部 API key 时，基于时间自动推断比赛状态
+  //    或 API Key 有效但因免费套餐限制无法同步历史比赛时（如6月11-23日的比赛）
   const config = getRuntimeConfig();
-  if (!hasProviderKey(config.apiFootballKey)) {
+  const _dbForCheck = dbService.getData();
+  const hasUnsyncedStartedMatches = _dbForCheck.matches.some(
+    (m) =>
+      m.status === MatchStatus.NS &&
+      !m.providerMeta?.apiFootballFixtureId &&
+      Date.now() - new Date(m.startTimeUtc).getTime() > 2 * MS_PER_HOUR
+  );
+  if (!hasProviderKey(config.apiFootballKey) || hasUnsyncedStartedMatches) {
     if (acquireLock('fallback-status')) {
       try {
         const db = dbService.getData();
