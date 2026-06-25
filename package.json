@@ -21,7 +21,8 @@
     "db:summary:mysql": "node scripts/db-storage.mjs summary",
     "ops:check:home-ai": "node scripts/check-home-ai-prediction.mjs",
     "ops:debug:matches": "node scripts/debug-match-order.mjs",
-    "ops:diagnose": "node scripts/production-diagnostics.mjs"
+    "ops:diagnose": "node scripts/production-diagnostics.mjs",
+    "ops:audit:mysql": "node scripts/production-diagnostics.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

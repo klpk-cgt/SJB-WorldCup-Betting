@@ -20,43 +20,63 @@ function normalizeCheckinLog(rows) {
     if (!row || !row.userId || !row.date) continue;
     unique.set(`${row.userId}::${row.date}`, row);
   }
-  return Array.from(unique.values());
+  return sortByKey(Array.from(unique.values()), 'userId', 'date');
+}
+
+function normalizeQuizLog(rows) {
+  const unique = new Map();
+  for (const row of Array.isArray(rows) ? rows : []) {
+    if (!row || !row.userId || !row.date) continue;
+    unique.set(`${row.userId}::${row.date}`, row);
+  }
+  return sortByKey(Array.from(unique.values()), 'userId', 'date');
+}
+
+function sortByKey(rows, ...keys) {
+  return [...rows].sort((left, right) => {
+    for (const key of keys) {
+      const a = String(left?.[key] ?? '');
+      const b = String(right?.[key] ?? '');
+      const cmp = a.localeCompare(b);
+      if (cmp !== 0) return cmp;
+    }
+    return 0;
+  });
 }
 
 async function createPrisma() {
   const { PrismaClient } = await import('@prisma/client');
   const prisma = new PrismaClient();
-  // 确保 MySQL 连接使用 utf8mb4 字符集
   await prisma.$executeRawUnsafe('SET NAMES utf8mb4');
   return prisma;
 }
 
 function normalizeSnapshot(snapshot) {
   return {
-    rooms: Array.isArray(snapshot.rooms) ? snapshot.rooms : [],
-    users: Array.isArray(snapshot.users) ? snapshot.users : [],
+    rooms: Array.isArray(snapshot.rooms) ? sortByKey(snapshot.rooms, 'id') : [],
+    users: Array.isArray(snapshot.users) ? sortByKey(snapshot.users, 'id') : [],
     wallets: Array.isArray(snapshot.wallets)
-      ? snapshot.wallets.map((wallet) => ({
+      ? sortByKey(snapshot.wallets, 'userId').map((wallet) => ({
           ...wallet,
           balance: roundPoints(wallet.balance),
           initialPoints: roundPoints(wallet.initialPoints),
         }))
       : [],
     transactions: Array.isArray(snapshot.transactions)
-      ? snapshot.transactions.map((transaction) => ({
+      ? sortByKey(snapshot.transactions, 'createdAt', 'id').map((transaction) => ({
           ...transaction,
           amount: roundPoints(transaction.amount),
           balanceBefore: roundPoints(transaction.balanceBefore),
           balanceAfter: roundPoints(transaction.balanceAfter),
         }))
       : [],
-    teams: Array.isArray(snapshot.teams) ? snapshot.teams : [],
+    teams: Array.isArray(snapshot.teams) ? sortByKey(snapshot.teams, 'id') : [],
     matches: Array.isArray(snapshot.matches)
-      ? [...snapshot.matches].sort((a, b) => String(a.startTimeUtc || '').localeCompare(String(b.startTimeUtc || '')))
+      ? sortByKey(snapshot.matches, 'startTimeUtc', 'id')
       : [],
     matchOdds: snapshot.matchOdds && typeof snapshot.matchOdds === 'object' ? snapshot.matchOdds : {},
     predictions: Array.isArray(snapshot.predictions)
-      ? snapshot.predictions.map((prediction) => ({
+      ? sortByKey(snapshot.predictions, 'placedAt', 'id').map((prediction) => ({
           ...prediction,
           stakePoints: roundPoints(prediction.stakePoints),
           potentialReturn: roundPoints(prediction.potentialReturn),
@@ -67,7 +87,7 @@ function normalizeSnapshot(snapshot) {
         }))
       : [],
     tournamentBets: Array.isArray(snapshot.tournamentBets)
-      ? snapshot.tournamentBets.map((bet) => ({
+      ? sortByKey(snapshot.tournamentBets, 'placedAt', 'id').map((bet) => ({
           ...bet,
           stakePoints: roundPoints(bet.stakePoints),
           potentialReturn: roundPoints(bet.potentialReturn),
@@ -75,19 +95,21 @@ function normalizeSnapshot(snapshot) {
           settledProfit: typeof bet.settledProfit === 'number' ? roundPoints(bet.settledProfit) : bet.settledProfit,
         }))
       : [],
-    aiContents: Array.isArray(snapshot.aiContents) ? snapshot.aiContents : [],
-    shareCards: Array.isArray(snapshot.shareCards) ? snapshot.shareCards : [],
+    aiContents: Array.isArray(snapshot.aiContents) ? sortByKey(snapshot.aiContents, 'createdAt', 'id') : [],
+    shareCards: Array.isArray(snapshot.shareCards) ? sortByKey(snapshot.shareCards, 'createdAt', 'id') : [],
     bracketState: snapshot.bracketState || { generatedAt: new Date().toISOString(), rounds: [] },
-    syncLogs: Array.isArray(snapshot.syncLogs) ? snapshot.syncLogs : [],
-    adminOverrides: Array.isArray(snapshot.adminOverrides) ? snapshot.adminOverrides : [],
-    players: Array.isArray(snapshot.players) ? snapshot.players : [],
-    teamHistory: Array.isArray(snapshot.teamHistory) ? snapshot.teamHistory : [],
-    activities: Array.isArray(snapshot.activities) ? snapshot.activities : [],
-    userBadges: Array.isArray(snapshot.userBadges) ? snapshot.userBadges : [],
-    cardInventories: Array.isArray(snapshot.cardInventories) ? snapshot.cardInventories : [],
-    userTitles: Array.isArray(snapshot.userTitles) ? snapshot.userTitles : [],
-    adminSessions: Array.isArray(snapshot.adminSessions) ? snapshot.adminSessions : [],
+    syncLogs: Array.isArray(snapshot.syncLogs) ? sortByKey(snapshot.syncLogs, 'createdAt', 'id').reverse() : [],
+    adminOverrides: Array.isArray(snapshot.adminOverrides) ? sortByKey(snapshot.adminOverrides, 'createdAt', 'id') : [],
+    players: Array.isArray(snapshot.players) ? sortByKey(snapshot.players, 'teamId', 'id') : [],
+    teamHistory: Array.isArray(snapshot.teamHistory) ? sortByKey(snapshot.teamHistory, 'teamId', 'year', 'id') : [],
+    activities: Array.isArray(snapshot.activities) ? sortByKey(snapshot.activities, 'createdAt', 'id').reverse() : [],
+    userBadges: Array.isArray(snapshot.userBadges) ? sortByKey(snapshot.userBadges, 'userId', 'badgeId') : [],
+    cardInventories: Array.isArray(snapshot.cardInventories) ? sortByKey(snapshot.cardInventories, 'userId') : [],
+    userTitles: Array.isArray(snapshot.userTitles) ? sortByKey(snapshot.userTitles, 'userId') : [],
+    adminSessions: Array.isArray(snapshot.adminSessions) ? sortByKey(snapshot.adminSessions, 'token') : [],
     checkinLog: normalizeCheckinLog(snapshot.checkinLog),
+    quizLogs: normalizeQuizLog(snapshot.quizLogs),
+    worldCupStandings: snapshot.worldCupStandings || undefined,
   };
 }
 
@@ -114,13 +136,104 @@ function buildSummary(snapshot) {
     userTitles: snapshot.userTitles.length,
     adminSessions: snapshot.adminSessions.length,
     checkinLog: snapshot.checkinLog.length,
+    quizLogs: snapshot.quizLogs.length,
+    standingsGroups: Object.keys(snapshot.worldCupStandings?.groups || {}).length,
   };
+}
+
+function stableStringify(value) {
+  if (value === null || typeof value !== 'object') {
+    return JSON.stringify(value);
+  }
+
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableStringify(item)).join(',')}]`;
+  }
+
+  const entries = Object.keys(value)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`);
+  return `{${entries.join(',')}}`;
+}
+
+function normalizeMatchOddsRows(matchOdds) {
+  return Object.values(matchOdds).map((item) => ({
+    matchId: item.matchId,
+    h2hHomeWin: item.h2h?.homeWin ?? null,
+    h2hDraw: item.h2h?.draw ?? null,
+    h2hAwayWin: item.h2h?.awayWin ?? null,
+    correctScore: item.correctScore || [],
+    correctScoreSource: item.correctScoreSource ?? null,
+    totalGoalsOver25: item.totalGoalsLegacy?.over25 ?? item.totalGoals?.find((entry) => entry.goals === '3+')?.odds ?? null,
+    totalGoalsUnder25: item.totalGoalsLegacy?.under25 ?? item.totalGoals?.find((entry) => entry.goals === '3-')?.odds ?? null,
+    qualifyHome: item.qualify?.homeQualify ?? null,
+    qualifyAway: item.qualify?.awayQualify ?? null,
+    lastUpdated: item.lastUpdated,
+    source: item.source ?? null,
+    syncStatus: item.syncStatus ?? null,
+    lastSyncedAt: item.lastSyncedAt ?? null,
+  }));
+}
+
+function getSnapshotTables(snapshot) {
+  const normalized = normalizeSnapshot(snapshot);
+  return {
+    rooms: normalized.rooms,
+    users: normalized.users,
+    wallets: normalized.wallets,
+    transactions: normalized.transactions,
+    teams: normalized.teams,
+    matches: normalized.matches,
+    matchOddsRows: normalizeMatchOddsRows(normalized.matchOdds),
+    predictions: normalized.predictions,
+    tournamentBets: normalized.tournamentBets,
+    aiContents: normalized.aiContents,
+    shareCards: normalized.shareCards,
+    syncLogs: normalized.syncLogs,
+    adminOverrides: normalized.adminOverrides,
+    players: normalized.players,
+    teamHistory: normalized.teamHistory,
+    activities: normalized.activities,
+    userBadges: normalized.userBadges,
+    userTitles: normalized.userTitles,
+    cardInventories: normalized.cardInventories,
+    adminSessions: normalized.adminSessions.map((item) => ({
+      token: item.token,
+      expiresAt: String(item.expiresAt),
+    })),
+    checkinLog: normalized.checkinLog,
+    quizLogs: normalized.quizLogs,
+    systemStates: normalized.worldCupStandings
+      ? [
+          {
+            key: 'worldCupStandings',
+            value: normalized.worldCupStandings,
+            updatedAt: normalized.worldCupStandings.lastUpdated || new Date().toISOString(),
+          },
+        ]
+      : [],
+  };
+}
+
+function getChangedTables(currentSnapshot, nextSnapshot) {
+  const currentTables = getSnapshotTables(currentSnapshot);
+  const nextTables = getSnapshotTables(nextSnapshot);
+  const changed = [];
+
+  for (const key of Object.keys(nextTables)) {
+    const currentValue = currentTables[key] ?? [];
+    const nextValue = nextTables[key] ?? [];
+    if (stableStringify(currentValue) !== stableStringify(nextValue)) {
+      changed.push(key);
+    }
+  }
+
+  return { changed, nextTables };
 }
 
 async function loadSnapshot() {
   const prisma = await createPrisma();
   try {
-    // 使用事务确保所有读取操作使用同一个 utf8mb4 连接
     const result = await prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe('SET NAMES utf8mb4');
 
@@ -146,6 +259,7 @@ async function loadSnapshot() {
         cardInventories,
         adminSessions,
         checkinLog,
+        quizLogs,
       ] = await Promise.all([
         tx.room.findMany(),
         tx.user.findMany(),
@@ -172,7 +286,15 @@ async function loadSnapshot() {
         tx.cardInventory.findMany(),
         tx.adminSession.findMany(),
         tx.checkinLog.findMany(),
+        tx.quizLog.findMany(),
       ]);
+
+      let systemStates = [];
+      try {
+        systemStates = await tx.systemState.findMany();
+      } catch {
+        systemStates = [];
+      }
 
       const matchOdds = {};
       for (const row of matchOddsRows) {
@@ -185,22 +307,29 @@ async function loadSnapshot() {
           },
           correctScore: row.correctScore || [],
           correctScoreSource: row.correctScoreSource ?? undefined,
-          totalGoals: {
-            over25: row.totalGoalsOver25,
-            under25: row.totalGoalsUnder25,
-          },
-          qualify: row.qualifyHome != null || row.qualifyAway != null
-            ? {
-                homeQualify: row.qualifyHome ?? undefined,
-                awayQualify: row.qualifyAway ?? undefined,
-              }
-            : undefined,
+          totalGoals: [],
+          totalGoalsLegacy:
+            row.totalGoalsOver25 != null || row.totalGoalsUnder25 != null
+              ? {
+                  over25: row.totalGoalsOver25 ?? undefined,
+                  under25: row.totalGoalsUnder25 ?? undefined,
+                }
+              : undefined,
+          qualify:
+            row.qualifyHome != null || row.qualifyAway != null
+              ? {
+                  homeQualify: row.qualifyHome ?? undefined,
+                  awayQualify: row.qualifyAway ?? undefined,
+                }
+              : undefined,
           lastUpdated: row.lastUpdated,
           source: row.source ?? undefined,
           syncStatus: row.syncStatus ?? undefined,
           lastSyncedAt: row.lastSyncedAt ?? undefined,
         };
       }
+
+      const standingsState = systemStates.find((item) => item.key === 'worldCupStandings');
 
       return normalizeSnapshot({
         rooms,
@@ -228,6 +357,8 @@ async function loadSnapshot() {
           expiresAt: Number(item.expiresAt),
         })),
         checkinLog,
+        quizLogs,
+        worldCupStandings: standingsState?.value || undefined,
       });
     });
 
@@ -237,120 +368,183 @@ async function loadSnapshot() {
   }
 }
 
-async function saveSnapshot(snapshot) {
-  const prisma = await createPrisma();
-  const db = normalizeSnapshot(snapshot);
-  const matchOddsRows = Object.values(db.matchOdds).map((item) => ({
-    matchId: item.matchId,
-    h2hHomeWin: item.h2h.homeWin,
-    h2hDraw: item.h2h.draw,
-    h2hAwayWin: item.h2h.awayWin,
-    correctScore: item.correctScore,
-    correctScoreSource: item.correctScoreSource ?? null,
-    totalGoalsOver25: item.totalGoals.over25,
-    totalGoalsUnder25: item.totalGoals.under25,
-    qualifyHome: item.qualify?.homeQualify ?? null,
-    qualifyAway: item.qualify?.awayQualify ?? null,
-    lastUpdated: item.lastUpdated,
-    source: item.source ?? null,
-    syncStatus: item.syncStatus ?? null,
-    lastSyncedAt: item.lastSyncedAt ?? null,
-  }));
-
-  try {
-    await prisma.$transaction(async (tx) => {
-      // 确保事务连接使用 utf8mb4 字符集（必须在事务内部设置，否则可能使用连接池中未设置字符集的连接）
-      await tx.$executeRawUnsafe('SET NAMES utf8mb4');
-
-      await tx.checkinLog.deleteMany();
-      await tx.adminSession.deleteMany();
-      await tx.cardInventory.deleteMany();
-      await tx.userTitle.deleteMany();
-      await tx.userBadge.deleteMany();
-      await tx.activity.deleteMany();
-      await tx.teamHistory.deleteMany();
-      await tx.player.deleteMany();
-      await tx.adminOverride.deleteMany();
-      await tx.syncLog.deleteMany();
-      await tx.shareCard.deleteMany();
-      await tx.aiContent.deleteMany();
-      await tx.tournamentBet.deleteMany();
-      await tx.prediction.deleteMany();
-      await tx.matchOdds.deleteMany();
-      await tx.match.deleteMany();
-      await tx.transaction.deleteMany();
-      await tx.wallet.deleteMany();
-      await tx.user.deleteMany();
-      await tx.team.deleteMany();
+async function replaceTable(tx, tableName, tableRows) {
+  switch (tableName) {
+    case 'rooms':
       await tx.room.deleteMany();
-
-      if (db.rooms.length > 0) await tx.room.createMany({ data: db.rooms });
-      if (db.users.length > 0) await tx.user.createMany({ data: db.users });
-      if (db.wallets.length > 0) await tx.wallet.createMany({ data: db.wallets });
-      if (db.transactions.length > 0) await tx.transaction.createMany({ data: db.transactions });
-      if (db.teams.length > 0) await tx.team.createMany({ data: db.teams });
-
-      for (const match of db.matches) {
-        await tx.match.create({ data: match });
+      if (tableRows.length > 0) await tx.room.createMany({ data: tableRows });
+      return;
+    case 'users':
+      await tx.user.deleteMany();
+      if (tableRows.length > 0) await tx.user.createMany({ data: tableRows });
+      return;
+    case 'wallets':
+      await tx.wallet.deleteMany();
+      if (tableRows.length > 0) await tx.wallet.createMany({ data: tableRows });
+      return;
+    case 'transactions':
+      await tx.transaction.deleteMany();
+      if (tableRows.length > 0) await tx.transaction.createMany({ data: tableRows });
+      return;
+    case 'teams':
+      await tx.team.deleteMany();
+      if (tableRows.length > 0) await tx.team.createMany({ data: tableRows });
+      return;
+    case 'matches':
+      await tx.match.deleteMany();
+      for (const row of tableRows) {
+        await tx.match.create({ data: row });
       }
-
-      if (matchOddsRows.length > 0) {
-        for (const row of matchOddsRows) {
-          await tx.matchOdds.create({ data: row });
-        }
+      return;
+    case 'matchOddsRows':
+      await tx.matchOdds.deleteMany();
+      for (const row of tableRows) {
+        await tx.matchOdds.create({ data: row });
       }
-
-      if (db.predictions.length > 0) {
-        for (const prediction of db.predictions) {
-          await tx.prediction.create({ data: prediction });
-        }
+      return;
+    case 'predictions':
+      await tx.prediction.deleteMany();
+      for (const row of tableRows) {
+        await tx.prediction.create({ data: row });
       }
-
-      if (db.tournamentBets.length > 0) await tx.tournamentBet.createMany({ data: db.tournamentBets });
-
-      for (const content of db.aiContents) {
-        await tx.aiContent.create({ data: content });
+      return;
+    case 'tournamentBets':
+      await tx.tournamentBet.deleteMany();
+      if (tableRows.length > 0) await tx.tournamentBet.createMany({ data: tableRows });
+      return;
+    case 'aiContents':
+      await tx.aiContent.deleteMany();
+      for (const row of tableRows) {
+        await tx.aiContent.create({ data: row });
       }
-
-      for (const shareCard of db.shareCards) {
-        await tx.shareCard.create({ data: shareCard });
+      return;
+    case 'shareCards':
+      await tx.shareCard.deleteMany();
+      for (const row of tableRows) {
+        await tx.shareCard.create({ data: row });
       }
-
-      // 过滤脏 syncLog：补全缺失字段，去掉未知字段，跳过缺必填字段的记录
-      const before = (db.syncLogs || []).length;
-      const validSyncLogs = (db.syncLogs || [])
+      return;
+    case 'syncLogs': {
+      await tx.syncLog.deleteMany();
+      const validSyncLogs = tableRows
         .map((log) => {
-          const { detail, ...clean } = log; // 去掉 Prisma schema 不认识的字段
+          const { detail, ...clean } = log;
           return {
             ...clean,
             responseSummary: clean.responseSummary || '-',
           };
         })
         .filter((log) => log.id && log.requestSummary && log.createdAt);
-      console.error('[db-storage] syncLog filter: ' + before + ' -> ' + validSyncLogs.length);
-      if (validSyncLogs.length > 0) await tx.syncLog.createMany({ data: validSyncLogs });
-      if (db.adminOverrides.length > 0) await tx.adminOverride.createMany({ data: db.adminOverrides });
-      if (db.players.length > 0) await tx.player.createMany({ data: db.players });
-      if (db.teamHistory.length > 0) await tx.teamHistory.createMany({ data: db.teamHistory });
-      if (db.activities.length > 0) await tx.activity.createMany({ data: db.activities });
-      if (db.userBadges.length > 0) await tx.userBadge.createMany({ data: db.userBadges });
-      if (db.userTitles.length > 0) await tx.userTitle.createMany({ data: db.userTitles });
-
-      for (const inventory of db.cardInventories) {
-        await tx.cardInventory.create({ data: inventory });
+      if (validSyncLogs.length > 0) {
+        await tx.syncLog.createMany({ data: validSyncLogs });
       }
-
-      if (db.adminSessions.length > 0) {
-        await tx.adminSession.createMany({
-          data: db.adminSessions.map((item) => ({
-            token: item.token,
-            expiresAt: String(item.expiresAt),
-          })),
-        });
+      return;
+    }
+    case 'adminOverrides':
+      await tx.adminOverride.deleteMany();
+      if (tableRows.length > 0) await tx.adminOverride.createMany({ data: tableRows });
+      return;
+    case 'players':
+      await tx.player.deleteMany();
+      if (tableRows.length > 0) await tx.player.createMany({ data: tableRows });
+      return;
+    case 'teamHistory':
+      await tx.teamHistory.deleteMany();
+      if (tableRows.length > 0) await tx.teamHistory.createMany({ data: tableRows });
+      return;
+    case 'activities':
+      await tx.activity.deleteMany();
+      if (tableRows.length > 0) await tx.activity.createMany({ data: tableRows });
+      return;
+    case 'userBadges':
+      await tx.userBadge.deleteMany();
+      if (tableRows.length > 0) await tx.userBadge.createMany({ data: tableRows });
+      return;
+    case 'userTitles':
+      await tx.userTitle.deleteMany();
+      if (tableRows.length > 0) await tx.userTitle.createMany({ data: tableRows });
+      return;
+    case 'cardInventories':
+      await tx.cardInventory.deleteMany();
+      for (const row of tableRows) {
+        await tx.cardInventory.create({ data: row });
       }
+      return;
+    case 'adminSessions':
+      await tx.adminSession.deleteMany();
+      if (tableRows.length > 0) await tx.adminSession.createMany({ data: tableRows });
+      return;
+    case 'checkinLog':
+      await tx.checkinLog.deleteMany();
+      if (tableRows.length > 0) await tx.checkinLog.createMany({ data: tableRows });
+      return;
+    case 'quizLogs':
+      await tx.quizLog.deleteMany();
+      if (tableRows.length > 0) await tx.quizLog.createMany({ data: tableRows });
+      return;
+    case 'systemStates':
+      try {
+        await tx.systemState.deleteMany();
+        if (tableRows.length > 0) {
+          await tx.systemState.createMany({ data: tableRows });
+        }
+      } catch {
+        // system_states may not exist until prisma db push runs on the server
+      }
+      return;
+    default:
+      throw new Error(`Unsupported table replacement: ${tableName}`);
+  }
+}
 
-      if (db.checkinLog.length > 0) await tx.checkinLog.createMany({ data: db.checkinLog });
+async function saveSnapshot(snapshot) {
+  const prisma = await createPrisma();
+  const nextSnapshot = normalizeSnapshot(snapshot);
+
+  try {
+    const currentSnapshot = await loadSnapshot();
+    const { changed, nextTables } = getChangedTables(currentSnapshot, nextSnapshot);
+
+    if (changed.length === 0) {
+      return { ok: true, changedTables: [] };
+    }
+
+    const deleteOrder = [
+      'checkinLog',
+      'quizLogs',
+      'adminSessions',
+      'cardInventories',
+      'userTitles',
+      'userBadges',
+      'activities',
+      'teamHistory',
+      'players',
+      'adminOverrides',
+      'syncLogs',
+      'shareCards',
+      'aiContents',
+      'tournamentBets',
+      'predictions',
+      'matchOddsRows',
+      'matches',
+      'transactions',
+      'wallets',
+      'users',
+      'teams',
+      'rooms',
+      'systemStates',
+    ];
+
+    const orderedChanged = deleteOrder.filter((item) => changed.includes(item));
+
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe('SET NAMES utf8mb4');
+      for (const tableName of orderedChanged) {
+        await replaceTable(tx, tableName, nextTables[tableName] || []);
+      }
     });
+
+    return { ok: true, changedTables: orderedChanged };
   } finally {
     await prisma.$disconnect();
   }
@@ -374,8 +568,7 @@ async function main() {
     if (!inputPath) {
       throw new Error('Missing snapshot path for save command.');
     }
-    await saveSnapshot(readJson(path.resolve(process.cwd(), inputPath)));
-    writeStdoutJson({ ok: true, savedFrom: inputPath });
+    writeStdoutJson(await saveSnapshot(readJson(path.resolve(process.cwd(), inputPath))));
     return;
   }
 

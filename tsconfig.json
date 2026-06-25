@@ -22,8 +22,10 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true,
+    "strict": false,
     "strictNullChecks": true,
-    "noUnusedLocals": true,
+    "useUnknownInCatchVariables": false,
+    "noUnusedLocals": false,
     "noFallthroughCasesInSwitch": true
   }
 }

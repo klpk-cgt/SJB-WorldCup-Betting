@@ -1,7 +1,7 @@
 /**
  * 核心工具函数测试
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
 // Mock helpers that are called internally
 vi.mock('../db/db_service', () => ({

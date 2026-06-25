@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>资料页徽章/道具设计预览</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%); color: #1e293b; min-height: 100vh; }
+  .container { max-width: 640px; margin: 0 auto; padding: 16px; }
+
+  /* ===== 章节标题 ===== */
+  .section-title { font-size: 14px; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 1px; margin: 28px 0 14px; padding-left: 4px; display: flex; align-items: center; gap: 8px; }
+  .section-title::before { content: ''; width: 4px; height: 16px; background: linear-gradient(180deg, #fbbf24, #f59e0b); border-radius: 2px; }
+
+  /* ===== 徽章卡片基础 ===== */
+  .badge-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  @media (min-width: 480px) { .badge-grid { grid-template-columns: repeat(3, 1fr); } }
+
+  .badge-card { border-radius: 16px; padding: 14px 12px; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; position: relative; overflow: hidden; }
+  .badge-card:active { transform: scale(0.96); }
+
+  .badge-card .icon-wrap { display: flex; align-items: center; justify-content: center; border-radius: 14px; background: rgba(255,255,255,0.9); box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 10px; position: relative; }
+  .badge-card .icon { font-size: 28px; line-height: 1; }
+  .badge-card .label { font-size: 12px; font-weight: 800; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 6px; }
+  .badge-card .tags { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
+  .badge-card .tag { font-size: 9px; font-weight: 800; padding: 2px 7px; border-radius: 999px; }
+  .badge-card .progress-bar { height: 5px; border-radius: 999px; background: rgba(255,255,255,0.6); overflow: hidden; }
+  .badge-card .progress-fill { height: 100%; border-radius: 999px; transition: width 0.5s; }
+  .badge-card .progress-text { font-size: 9px; font-weight: 800; color: #64748b; margin-top: 3px; text-align: right; }
+
+  /* ===== 稀有度: Legendary (金色脉冲) ===== */
+  .badge-legendary { border: 2px solid #fbbf24; background: linear-gradient(135deg, #fffbeb, #fef3c7); box-shadow: 0 4px 16px rgba(251,191,36,0.3); }
+  .badge-legendary .icon-wrap { width: 56px; height: 56px; box-shadow: 0 0 20px rgba(251,191,36,0.5); animation: legendary-pulse 2.5s ease-in-out infinite; }
+  .badge-legendary .icon { font-size: 32px; }
+  .badge-legendary .tag-rarity { background: linear-gradient(135deg, #fbbf24, #f59e0b); color: #fff; }
+  .badge-legendary .progress-fill { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
+
+  @keyframes legendary-pulse {
+    0%, 100% { box-shadow: 0 0 20px rgba(251,191,36,0.4); }
+    50% { box-shadow: 0 0 32px rgba(251,191,36,0.7), 0 0 8px rgba(251,191,36,0.9); }
+  }
+
+  /* ===== 稀有度: Epic (紫色微光) ===== */
+  .badge-epic { border: 2px solid #a78bfa; background: linear-gradient(135deg, #f5f3ff, #ede9fe); box-shadow: 0 3px 12px rgba(167,139,250,0.2); }
+  .badge-epic .icon-wrap { width: 48px; height: 48px; animation: epic-glow 3s ease-in-out infinite; }
+  .badge-epic .icon { font-size: 28px; }
+  .badge-epic .tag-rarity { background: linear-gradient(135deg, #a78bfa, #8b5cf6); color: #fff; }
+  .badge-epic .progress-fill { background: linear-gradient(90deg, #a78bfa, #8b5cf6); }
+
+  @keyframes epic-glow {
+    0%, 100% { box-shadow: 0 2px 8px rgba(167,139,250,0.15); }
+    50% { box-shadow: 0 2px 16px rgba(167,139,250,0.35); }
+  }
+
+  /* ===== 稀有度: Rare (青色边框) ===== */
+  .badge-rare { border: 1.5px solid #22d3ee; background: #ecfeff; }
+  .badge-rare .icon-wrap { width: 44px; height: 44px; }
+  .badge-rare .icon { font-size: 24px; }
+  .badge-rare .tag-rarity { background: #cffafe; color: #0e7490; }
+  .badge-rare .progress-fill { background: linear-gradient(90deg, #22d3ee, #06b6d4); }
+
+  /* ===== 稀有度: Common (灰色) ===== */
+  .badge-common { border: 1px solid #cbd5e1; background: #f8fafc; }
+  .badge-common .icon-wrap { width: 40px; height: 40px; }
+  .badge-common .icon { font-size: 22px; }
+  .badge-common .tag-rarity { background: #f1f5f9; color: #64748b; }
+  .badge-common .progress-fill { background: #94a3b8; }
+
+  /* ===== 未解锁状态 ===== */
+  .badge-locked { filter: grayscale(0.8); opacity: 0.55; }
+  .badge-locked .icon-wrap::after { content: '🔒'; position: absolute; bottom: -4px; right: -4px; font-size: 14px; background: #fff; border-radius: 999px; padding: 1px 3px; box-shadow: 0 1px 4px rgba(0,0,0,0.15); }
+
+  /* ===== 极性标签 ===== */
+  .tag-positive { background: #d1fae5; color: #059669; }
+  .tag-funny { background: #fef3c7; color: #d97706; }
+  .tag-negative { background: #fee2e2; color: #dc2626; }
+
+  /* ===== 对比展示区 ===== */
+  .compare-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-bottom: 20px; }
+  .compare-item { text-align: center; }
+  .compare-item .compare-label { font-size: 10px; font-weight: 800; color: #475569; margin-top: 6px; }
+
+  /* ===== 道具卡 ===== */
+  .item-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .item-card { border-radius: 16px; padding: 16px; position: relative; overflow: hidden; cursor: pointer; transition: transform 0.2s; }
+  .item-card:active { transform: scale(0.96); }
+  .item-card .item-icon-wrap { width: 52px; height: 52px; border-radius: 14px; background: rgba(255,255,255,0.95); display: flex; align-items: center; justify-content: center; font-size: 28px; margin-bottom: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+  .item-card .item-label { font-size: 13px; font-weight: 800; color: #1e293b; margin-bottom: 4px; }
+  .item-card .item-desc { font-size: 11px; color: #64748b; line-height: 1.4; }
+  .item-card .item-count { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.6); color: #fff; font-size: 11px; font-weight: 800; padding: 3px 9px; border-radius: 999px; backdrop-filter: blur(4px); }
+
+  .item-emerald { background: linear-gradient(135deg, #d1fae5, #a7f3d0); border: 1.5px solid #6ee7b7; }
+  .item-amber { background: linear-gradient(135deg, #fef3c7, #fde68a); border: 1.5px solid #fcd34d; }
+  .item-rose { background: linear-gradient(135deg, #fee2e2, #fecaca); border: 1.5px solid #fca5a5; }
+  .item-cyan { background: linear-gradient(135deg, #cffafe, #a5f3fc); border: 1.5px solid #67e8f9; }
+
+  /* ===== 详情弹窗 (底部抽屉) ===== */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 100; display: none; align-items: flex-end; justify-content: center; }
+  .modal-overlay.active { display: flex; }
+  .modal-content { background: #fff; border-radius: 24px 24px 0 0; width: 100%; max-width: 640px; padding: 24px 20px 32px; transform: translateY(100%); transition: transform 0.35s cubic-bezier(0.32,0.72,0,1); max-height: 80vh; overflow-y: auto; }
+  .modal-overlay.active .modal-content { transform: translateY(0); }
+  .modal-handle { width: 40px; height: 4px; background: #cbd5e1; border-radius: 999px; margin: 0 auto 20px; }
+  .modal-close { position: absolute; top: 16px; right: 16px; width: 32px; height: 32px; border-radius: 999px; background: #f1f5f9; display: flex; align-items: center; justify-content: center; font-size: 18px; color: #64748b; cursor: pointer; border: none; }
+  .modal-icon-wrap { display: flex; align-items: center; justify-content: center; margin-bottom: 16px; }
+  .modal-icon-wrap .icon-inner { border-radius: 20px; background: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 20px rgba(0,0,0,0.1); position: relative; }
+  .modal-title { text-align: center; font-size: 20px; font-weight: 900; color: #1e293b; margin-bottom: 12px; }
+  .modal-tags { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-bottom: 16px; }
+  .modal-tags .tag { font-size: 11px; font-weight: 800; padding: 4px 12px; border-radius: 999px; }
+  .modal-desc { text-align: center; font-size: 14px; color: #64748b; line-height: 1.6; margin-bottom: 20px; padding: 0 12px; }
+  .modal-progress-section { background: #f8fafc; border-radius: 14px; padding: 16px; }
+  .modal-progress-label { font-size: 11px; font-weight: 800; color: #94a3b8; margin-bottom: 8px; display: flex; justify-content: space-between; }
+  .modal-progress-bar { height: 10px; border-radius: 999px; background: #e2e8f0; overflow: hidden; }
+  .modal-progress-fill { height: 100%; border-radius: 999px; }
+  .modal-status { text-align: center; margin-top: 16px; font-size: 12px; font-weight: 700; color: #059669; }
+  .modal-status.locked { color: #94a3b8; }
+
+  /* ===== 顶部头部 ===== */
+  .preview-header { text-align: center; padding: 32px 16px 8px; }
+  .preview-header h1 { font-size: 22px; font-weight: 900; background: linear-gradient(135deg, #fbbf24, #f59e0b); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 6px; }
+  .preview-header p { font-size: 13px; color: #64748b; }
+
+  /* prefers-reduced-motion */
+  @media (prefers-reduced-motion: reduce) {
+    .badge-legendary .icon-wrap, .badge-epic .icon-wrap { animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="preview-header">
+  <h1>资料页 · 徽章/道具设计预览</h1>
+  <p>4种稀有度分级展示 · 点击查看详情 · 道具卡视觉升级</p>
+</div>
+
+<div class="container">
+
+  <!-- ===== 稀有度对比 ===== -->
+  <div class="section-title">稀有度视觉对比</div>
+  <div class="compare-row">
+    <div class="compare-item">
+      <div class="badge-card badge-legendary" style="width:90px" onclick="openModal('ten_streak')">
+        <div class="icon-wrap"><span class="icon">🐐</span></div>
+        <div class="label" style="text-align:center">十连红</div>
+      </div>
+      <div class="compare-label">传说 Legendary</div>
+    </div>
+    <div class="compare-item">
+      <div class="badge-card badge-epic" style="width:90px" onclick="openModal('five_streak')">
+        <div class="icon-wrap"><span class="icon">🌟</span></div>
+        <div class="label" style="text-align:center">五连红</div>
+      </div>
+      <div class="compare-label">史诗 Epic</div>
+    </div>
+    <div class="compare-item">
+      <div class="badge-card badge-rare" style="width:90px" onclick="openModal('three_streak')">
+        <div class="icon-wrap"><span class="icon">🔥</span></div>
+        <div class="label" style="text-align:center">三连红</div>
+      </div>
+      <div class="compare-label">稀有 Rare</div>
+    </div>
+    <div class="compare-item">
+      <div class="badge-card badge-common" style="width:90px" onclick="openModal('first_bet')">
+        <div class="icon-wrap"><span class="icon">🎯</span></div>
+        <div class="label" style="text-align:center">初次下注</div>
+      </div>
+      <div class="compare-label">普通 Common</div>
+    </div>
+  </div>
+
+  <!-- ===== 已解锁 vs 未解锁 ===== -->
+  <div class="section-title">已解锁 / 未解锁状态</div>
+  <div class="compare-row">
+    <div class="compare-item">
+      <div class="badge-card badge-legendary" style="width:90px">
+        <div class="icon-wrap"><span class="icon">🏆</span></div>
+        <div class="label" style="text-align:center">大赢家</div>
+      </div>
+      <div class="compare-label">已解锁</div>
+    </div>
+    <div class="compare-item">
+      <div class="badge-card badge-legendary badge-locked" style="width:90px">
+        <div class="icon-wrap"><span class="icon">🏆</span></div>
+        <div class="label" style="text-align:center">大赢家</div>
+      </div>
+      <div class="compare-label">未解锁</div>
+    </div>
+  </div>
+
+  <!-- ===== 徽章网格 ===== -->
+  <div class="section-title">徽章网格（点击查看详情）</div>
+  <div class="badge-grid" id="badgeGrid"></div>
+
+  <!-- ===== 道具卡 ===== -->
+  <div class="section-title">道具卡</div>
+  <div class="item-grid">
+    <div class="item-card item-emerald">
+      <div class="item-count">×2</div>
+      <div class="item-icon-wrap">🛡️</div>
+      <div class="item-label">免亏护盾</div>
+      <div class="item-desc">下注失败时退还本金，每场限用1次</div>
+    </div>
+    <div class="item-card item-amber">
+      <div class="item-count">×1</div>
+      <div class="item-icon-wrap">⚡</div>
+      <div class="item-label">双倍加成</div>
+      <div class="item-desc">命中后积分翻倍，高风险高回报</div>
+    </div>
+    <div class="item-card item-rose">
+      <div class="item-count">×3</div>
+      <div class="item-icon-wrap">↩️</div>
+      <div class="item-label">反悔药</div>
+      <div class="item-desc">撤回最近一笔已下注预测</div>
+    </div>
+    <div class="item-card item-cyan">
+      <div class="item-count">×1</div>
+      <div class="item-icon-wrap">🛟</div>
+      <div class="item-label">保底浮标</div>
+      <div class="item-desc">结算后积分不低于初始值</div>
+    </div>
+  </div>
+
+  <div style="height: 40px"></div>
+</div>
+
+<!-- ===== 详情弹窗 ===== -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+  <div class="modal-content" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="modal-icon-wrap" id="modalIcon"></div>
+    <div class="modal-title" id="modalTitle"></div>
+    <div class="modal-tags" id="modalTags"></div>
+    <div class="modal-desc" id="modalDesc"></div>
+    <div class="modal-progress-section">
+      <div class="modal-progress-label">
+        <span id="modalProgressLabel">进度</span>
+        <span id="modalProgressValue"></span>
+      </div>
+      <div class="modal-progress-bar"><div class="modal-progress-fill" id="modalProgressFill"></div></div>
+      <div class="modal-status" id="modalStatus"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== 真实徽章数据（取样自 badge_service.ts）=====
+const badges = [
+  { id:'first_bet', label:'初次下注', desc:'完成第一笔竞猜即可解锁', icon:'🎯', rarity:'common', polarity:'positive', category:'新手', current:1, target:1, unlocked:true, unlockedAt:'2026-06-12' },
+  { id:'three_streak', label:'三连红', desc:'连续命中 3 场竞猜', icon:'🔥', rarity:'rare', polarity:'positive', category:'连红', current:3, target:3, unlocked:true, unlockedAt:'2026-06-15' },
+  { id:'five_streak', label:'五连红', desc:'连续命中 5 场竞猜', icon:'🌟', rarity:'epic', polarity:'positive', category:'连红', current:5, target:5, unlocked:true, unlockedAt:'2026-06-18' },
+  { id:'seven_streak', label:'七连红', desc:'连续命中 7 场竞猜', icon:'⚡', rarity:'epic', polarity:'positive', category:'连红', current:4, target:7, unlocked:false },
+  { id:'ten_streak', label:'十连红', desc:'连续命中 10 场竞猜，传说级手感', icon:'🐐', rarity:'legendary', polarity:'positive', category:'连红', current:2, target:10, unlocked:false },
+  { id:'beacon_certified', label:'明灯认证', desc:'连续未中 5 场，群聊反向指标上线', icon:'💡', rarity:'rare', polarity:'negative', category:'名场面', current:5, target:5, unlocked:true, unlockedAt:'2026-06-20' },
+  { id:'comeback_hit', label:'绝地翻盘', desc:'连续未中 5 场后，下一笔成功命中', icon:'🧗', rarity:'epic', polarity:'funny', category:'名场面', current:0, target:1, unlocked:false },
+  { id:'hit_rate_60', label:'神准', desc:'命中率达到 60%，至少 5 单已结算', icon:'🎯', rarity:'rare', polarity:'positive', category:'精准', current:58, target:60, unlocked:false },
+  { id:'perfect_shooter', label:'百发百中', desc:'命中率达到 80%，至少 10 单已结算', icon:'🏹', rarity:'legendary', polarity:'positive', category:'精准', current:0, target:10, unlocked:false },
+  { id:'score_prophet', label:'比分预言家', desc:'正确比分命中 2 次', icon:'🔮', rarity:'epic', polarity:'positive', category:'精准', current:1, target:2, unlocked:false },
+  { id:'big_win', label:'单场大赢', desc:'单场竞猜收益超过 2000 积分', icon:'💰', rarity:'rare', polarity:'positive', category:'收益', current:1500, target:2000, unlocked:false },
+  { id:'big_winner', label:'大赢家', desc:'累计净收益超过 10000 积分', icon:'🏆', rarity:'legendary', polarity:'positive', category:'收益', current:8000, target:10000, unlocked:false },
+];
+
+const rarityLabel = { common:'普通', rare:'稀有', epic:'史诗', legendary:'传说' };
+const polarityLabel = { positive:'成就', funny:'名场面', negative:'反向' };
+const polarityClass = { positive:'tag-positive', funny:'tag-funny', negative:'tag-negative' };
+const progressColor = {
+  common: '#94a3b8', rare: 'linear-gradient(90deg,#22d3ee,#06b6d4)',
+  epic: 'linear-gradient(90deg,#a78bfa,#8b5cf6)', legendary: 'linear-gradient(90deg,#fbbf24,#f59e0b)'
+};
+const iconSize = { common: 40, rare: 44, epic: 48, legendary: 56 };
+
+// ===== 渲染徽章网格 =====
+const grid = document.getElementById('badgeGrid');
+badges.forEach(b => {
+  const card = document.createElement('div');
+  card.className = `badge-card badge-${b.rarity} ${!b.unlocked ? 'badge-locked' : ''}`;
+  card.onclick = () => openModal(b.id);
+  const pct = Math.min(100, Math.round(b.current / b.target * 100));
+  card.innerHTML = `
+    <div class="icon-wrap" style="width:${iconSize[b.rarity]}px;height:${iconSize[b.rarity]}px">
+      <span class="icon">${b.icon}</span>
+    </div>
+    <div class="label">${b.label}</div>
+    <div class="tags">
+      <span class="tag tag-rarity">${rarityLabel[b.rarity]}</span>
+      <span class="tag ${polarityClass[b.polarity]}">${polarityLabel[b.polarity]}</span>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${progressColor[b.rarity]}"></div></div>
+    <div class="progress-text">${b.current}/${b.target}</div>
+  `;
+  grid.appendChild(card);
+});
+
+// ===== 弹窗逻辑 =====
+function openModal(id) {
+  const b = badges.find(x => x.id === id);
+  if (!b) return;
+  const pct = Math.min(100, Math.round(b.current / b.target * 100));
+
+  // 图标
+  const iconWrap = document.getElementById('modalIcon');
+  iconWrap.innerHTML = `<div class="icon-inner" style="width:96px;height:96px"><span style="font-size:52px">${b.icon}</span></div>`;
+  iconWrap.querySelector('.icon-inner').className = `icon-inner badge-${b.rarity}`;
+  if (b.rarity === 'legendary') {
+    iconWrap.querySelector('.icon-inner').style.cssText = 'width:96px;height:96px;box-shadow:0 0 40px rgba(251,191,36,0.5);animation:legendary-pulse 2.5s ease-in-out infinite;border-radius:20px';
+  } else if (b.rarity === 'epic') {
+    iconWrap.querySelector('.icon-inner').style.cssText = 'width:96px;height:96px;box-shadow:0 0 24px rgba(167,139,250,0.35);animation:epic-glow 3s ease-in-out infinite;border-radius:20px';
+  }
+
+  document.getElementById('modalTitle').textContent = b.label;
+
+  // 标签
+  document.getElementById('modalTags').innerHTML = `
+    <span class="tag tag-rarity" style="background:${b.rarity==='legendary'?'linear-gradient(135deg,#fbbf24,#f59e0b)':b.rarity==='epic'?'linear-gradient(135deg,#a78bfa,#8b5cf6)':b.rarity==='rare'?'#cffafe':'#f1f5f9'};color:${b.rarity==='legendary'||b.rarity==='epic'?'#fff':b.rarity==='rare'?'#0e7490':'#64748b'}">${rarityLabel[b.rarity]}</span>
+    <span class="tag ${polarityClass[b.polarity]}">${polarityLabel[b.polarity]}</span>
+    <span class="tag" style="background:#f1f5f9;color:#64748b">${b.category}</span>
+  `;
+
+  document.getElementById('modalDesc').textContent = b.desc;
+
+  // 进度
+  document.getElementById('modalProgressLabel').textContent = b.unlocked ? '已完成' : '获取进度';
+  document.getElementById('modalProgressValue').textContent = `${b.current} / ${b.target}`;
+  document.getElementById('modalProgressFill').style.cssText = `width:${pct}%;background:${progressColor[b.rarity]}`;
+
+  // 状态
+  const status = document.getElementById('modalStatus');
+  if (b.unlocked) {
+    status.className = 'modal-status';
+    status.textContent = `✓ 已于 ${b.unlockedAt} 解锁`;
+  } else {
+    status.className = 'modal-status locked';
+    status.textContent = '🔒 未解锁 — 继续努力！';
+  }
+
+  document.getElementById('modalOverlay').classList.add('active');
+}
+
+function closeModal(e) {
+  if (e && e.target !== e.currentTarget) return;
+  document.getElementById('modalOverlay').classList.remove('active');
+}
+</script>
+
+</body>
+</html>

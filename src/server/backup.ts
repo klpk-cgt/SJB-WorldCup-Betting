@@ -1,18 +1,16 @@
-/**
- * 数据库备份服务
- * 提供 /workspace/h/世界杯娱乐项目/back/klpk-cgt-s-Org v2/db.json 的备份与归档
- */
-
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
+import { execFileSync } from 'child_process';
 import logger from './logger';
 
 const DATA_DIR = process.env.APP_DATA_DIR
   ? path.resolve(process.cwd(), process.env.APP_DATA_DIR)
   : process.cwd();
-const DB_FILE_PATH = path.join(DATA_DIR, 'db.json');
 const BACKUP_DIR = path.join(DATA_DIR, 'backups');
 const ARCHIVE_FILE = path.join(DATA_DIR, 'db.activities.archive.json');
+const STORAGE_SCRIPT_PATH = path.join(process.cwd(), 'scripts', 'db-storage.mjs');
+const STORAGE_SCRIPT_MAX_BUFFER = 16 * 1024 * 1024;
 
 export interface BackupResult {
   ok: boolean;
@@ -21,19 +19,12 @@ export interface BackupResult {
   error?: string;
 }
 
-/**
- * 确保备份目录存在
- */
 function ensureBackupDir(): void {
   if (!fs.existsSync(BACKUP_DIR)) {
     fs.mkdirSync(BACKUP_DIR, { recursive: true });
   }
 }
 
-/**
- * 生成备份文件名
- * 格式：db.backup.YYYY-MM-DD-HHMMSS.json
- */
 function generateBackupFileName(): string {
   const now = new Date();
   const yyyy = now.getFullYear();
@@ -42,24 +33,43 @@ function generateBackupFileName(): string {
   const hh = String(now.getHours()).padStart(2, '0');
   const mi = String(now.getMinutes()).padStart(2, '0');
   const ss = String(now.getSeconds()).padStart(2, '0');
-  return `db.backup.${yyyy}-${mm}-${dd}-${hh}${mi}${ss}.json`;
+  return `mysql.backup.${yyyy}-${mm}-${dd}-${hh}${mi}${ss}.json`;
 }
 
-/**
- * 创建 db.json 备份
- */
+function loadStructuredSnapshot(): string {
+  if (!fs.existsSync(STORAGE_SCRIPT_PATH)) {
+    throw new Error(`Storage script not found: ${STORAGE_SCRIPT_PATH}`);
+  }
+
+  return execFileSync(process.execPath, [STORAGE_SCRIPT_PATH, 'load'], {
+    cwd: process.cwd(),
+    encoding: 'utf-8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    maxBuffer: STORAGE_SCRIPT_MAX_BUFFER,
+  });
+}
+
+function saveStructuredSnapshot(filePath: string) {
+  if (!fs.existsSync(STORAGE_SCRIPT_PATH)) {
+    throw new Error(`Storage script not found: ${STORAGE_SCRIPT_PATH}`);
+  }
+
+  execFileSync(process.execPath, [STORAGE_SCRIPT_PATH, 'save', filePath], {
+    cwd: process.cwd(),
+    encoding: 'utf-8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    maxBuffer: STORAGE_SCRIPT_MAX_BUFFER,
+  });
+}
+
 export function createBackup(reason = 'manual'): BackupResult {
   try {
-    if (!fs.existsSync(DB_FILE_PATH)) {
-      return { ok: false, error: 'db.json 不存在，无法备份。' };
-    }
-
     ensureBackupDir();
     const fileName = generateBackupFileName();
     const target = path.join(BACKUP_DIR, fileName);
-    fs.copyFileSync(DB_FILE_PATH, target);
+    fs.writeFileSync(target, loadStructuredSnapshot(), 'utf-8');
     const size = fs.statSync(target).size;
-    logger.backup(`Backup created: ${fileName}`, { size, reason });
+    logger.backup(`MySQL structured backup created: ${fileName}`, { size, reason });
     return { ok: true, filePath: target, size };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -68,15 +78,12 @@ export function createBackup(reason = 'manual'): BackupResult {
   }
 }
 
-/**
- * 列出所有备份
- */
 export function listBackups(): Array<{ name: string; size: number; createdAt: string }> {
   try {
     if (!fs.existsSync(BACKUP_DIR)) {
       return [];
     }
-    const files = fs.readdirSync(BACKUP_DIR).filter((f) => f.startsWith('db.backup.'));
+    const files = fs.readdirSync(BACKUP_DIR).filter((f) => f.endsWith('.json'));
     return files
       .map((name) => {
         const full = path.join(BACKUP_DIR, name);
@@ -89,40 +96,23 @@ export function listBackups(): Array<{ name: string; size: number; createdAt: st
   }
 }
 
-/**
- * 获取数据库文件大小
- */
 export function getDbFileSize(): { exists: boolean; size: number } {
   try {
-    if (!fs.existsSync(DB_FILE_PATH)) {
-      return { exists: false, size: 0 };
-    }
-    const stat = fs.statSync(DB_FILE_PATH);
-    return { exists: true, size: stat.size };
+    const snapshot = loadStructuredSnapshot();
+    return { exists: true, size: Buffer.byteLength(snapshot, 'utf-8') };
   } catch {
     return { exists: false, size: 0 };
   }
 }
 
-/**
- * 读取 db.json 内容（用于后台导出）
- */
 export function readDbJson(): string | null {
   try {
-    if (!fs.existsSync(DB_FILE_PATH)) {
-      return null;
-    }
-    return fs.readFileSync(DB_FILE_PATH, 'utf-8');
+    return loadStructuredSnapshot();
   } catch {
     return null;
   }
 }
 
-/**
- * 将溢出数据追加到归档文件
- * @param items 待归档的动态数组
- * @returns 归档数量
- */
 export function archiveActivities<T>(items: T[]): number {
   if (!items || items.length === 0) {
     return 0;
@@ -149,29 +139,18 @@ export function archiveActivities<T>(items: T[]): number {
   }
 }
 
-/**
- * 从备份文件中恢复数据
- * 支持全量恢复或精确恢复单个用户
- */
 export interface RestoreOptions {
-  /** 'full' = 完整恢复整个数据库; 'user' = 仅恢复指定用户 */
   mode: 'full' | 'user';
-  /** mode='user' 时指定要恢复的用户 ID */
   targetUserId?: string;
 }
 
 export interface RestoreResult {
   ok: boolean;
   mode: string;
-  /** 恢复的用户数量 */
   restoredUsers?: number;
-  /** 恢复的钱包数量 */
   restoredWallets?: number;
-  /** 恢复的预测记录数量 */
   restoredPredictions?: number;
-  /** 恢复的交易记录数量 */
   restoredTransactions?: number;
-  /** 恢复的用户详情 */
   restoredUserDetails?: Array<{
     id: string;
     displayName: string;
@@ -185,17 +164,24 @@ export function restoreFromBackup(backupFileName: string, options: RestoreOption
   try {
     const backupPath = path.join(BACKUP_DIR, backupFileName);
     if (!fs.existsSync(backupPath)) {
-      return { ok: false, mode: options.mode, error: `备份文件不存在: ${backupFileName}` };
+      return { ok: false, mode: options.mode, error: `Backup file not found: ${backupFileName}` };
     }
 
-    // 读取备份数据
     const backupContent = fs.readFileSync(backupPath, 'utf-8');
     const backupData = JSON.parse(backupContent);
 
     if (options.mode === 'full') {
-      // 全量恢复：直接写入 db.json
-      fs.writeFileSync(DB_FILE_PATH, backupContent, 'utf-8');
-      logger.backup(`Full restore from ${backupFileName}`);
+      const tempFile = path.join(os.tmpdir(), `worldcup-restore-${Date.now()}.json`);
+      fs.writeFileSync(tempFile, backupContent, 'utf-8');
+      try {
+        saveStructuredSnapshot(tempFile);
+      } finally {
+        if (fs.existsSync(tempFile)) {
+          fs.unlinkSync(tempFile);
+        }
+      }
+
+      logger.backup(`Full MySQL restore from ${backupFileName}`);
       return {
         ok: true,
         mode: 'full',
@@ -207,30 +193,21 @@ export function restoreFromBackup(backupFileName: string, options: RestoreOption
     }
 
     if (options.mode === 'user' && options.targetUserId) {
-      // 精确恢复单个用户
       const { dbService } = require('../db/db_service');
       const db = dbService.getData();
 
-      // 从备份中查找目标用户
       const backupUser = backupData.users?.find((u: any) => u.id === options.targetUserId);
       if (!backupUser) {
-        return { ok: false, mode: 'user', error: `备份中未找到用户 ${options.targetUserId}` };
+        return { ok: false, mode: 'user', error: `User ${options.targetUserId} not found in backup` };
       }
 
-      // 检查当前数据库是否已存在该用户
       const existingIndex = db.users.findIndex((u: any) => u.id === options.targetUserId);
-
       if (existingIndex >= 0) {
-        // 用户已存在，更新用户信息
         db.users[existingIndex] = { ...db.users[existingIndex], ...backupUser };
-        logger.backup(`Updated existing user ${backupUser.displayName} (${options.targetUserId})`);
       } else {
-        // 用户不存在，添加回来
         db.users.push(backupUser);
-        logger.backup(`Restored missing user ${backupUser.displayName} (${options.targetUserId})`);
       }
 
-      // 恢复钱包
       const backupWallet = backupData.wallets?.find((w: any) => w.userId === options.targetUserId);
       if (backupWallet) {
         const walletIndex = db.wallets.findIndex((w: any) => w.userId === options.targetUserId);
@@ -241,19 +218,16 @@ export function restoreFromBackup(backupFileName: string, options: RestoreOption
         }
       }
 
-      // 恢复交易记录（追加缺失的，不覆盖已有的）
       const backupTransactions = (backupData.transactions || []).filter((t: any) => t.userId === options.targetUserId);
       const existingTxIds = new Set(db.transactions.map((t: any) => t.id));
       const newTransactions = backupTransactions.filter((t: any) => !existingTxIds.has(t.id));
       db.transactions.push(...newTransactions);
 
-      // 恢复预测记录（追加缺失的，不覆盖已有的）
       const backupPredictions = (backupData.predictions || []).filter((p: any) => p.userId === options.targetUserId);
       const existingPredIds = new Set(db.predictions.map((p: any) => p.id));
       const newPredictions = backupPredictions.filter((p: any) => !existingPredIds.has(p.id));
       db.predictions.push(...newPredictions);
 
-      // 恢复卡牌库存
       const backupCardInv = (backupData.cardInventories || []).find((i: any) => i.userId === options.targetUserId);
       if (backupCardInv) {
         const cardInvIndex = (db.cardInventories || []).findIndex((i: any) => i.userId === options.targetUserId);
@@ -262,25 +236,6 @@ export function restoreFromBackup(backupFileName: string, options: RestoreOption
         } else {
           if (!db.cardInventories) (db as any).cardInventories = [];
           (db.cardInventories as any).push(backupCardInv);
-        }
-      }
-
-      // 恢复徽章和称号
-      const backupBadges = (backupData.userBadges || []).filter((b: any) => b.userId === options.targetUserId);
-      const existingBadgeIds = new Set((db.userBadges || []).map((b: any) => b.id));
-      for (const badge of backupBadges) {
-        if (!existingBadgeIds.has(badge.id)) {
-          if (!db.userBadges) (db as any).userBadges = [];
-          (db.userBadges as any).push(badge);
-        }
-      }
-
-      const backupTitles = (backupData.userTitles || []).filter((t: any) => t.userId === options.targetUserId);
-      const existingTitleIds = new Set((db.userTitles || []).map((t: any) => t.id));
-      for (const title of backupTitles) {
-        if (!existingTitleIds.has(title.id)) {
-          if (!db.userTitles) (db as any).userTitles = [];
-          (db.userTitles as any).push(title);
         }
       }
 
@@ -294,16 +249,18 @@ export function restoreFromBackup(backupFileName: string, options: RestoreOption
         restoredWallets: backupWallet ? 1 : 0,
         restoredPredictions: newPredictions.length,
         restoredTransactions: newTransactions.length,
-        restoredUserDetails: [{
-          id: backupUser.id,
-          displayName: backupUser.displayName,
-          loginCode: backupUser.loginCode,
-          balance: backupWallet?.balance ?? 0,
-        }],
+        restoredUserDetails: [
+          {
+            id: backupUser.id,
+            displayName: backupUser.displayName,
+            loginCode: backupUser.loginCode,
+            balance: backupWallet?.balance ?? 0,
+          },
+        ],
       };
     }
 
-    return { ok: false, mode: options.mode, error: '不支持的恢复模式' };
+    return { ok: false, mode: options.mode, error: 'Unsupported restore mode' };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     logger.error('Restore failed', { error: msg, backupFileName, options });
@@ -312,7 +269,6 @@ export function restoreFromBackup(backupFileName: string, options: RestoreOption
 }
 
 export const BACKUP_PATHS = {
-  DB_FILE_PATH,
   BACKUP_DIR,
   ARCHIVE_FILE,
 };

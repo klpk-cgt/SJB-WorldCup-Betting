@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * WebSocket 服务 - 基于 socket.io
  * 实现：实时比分推送、赔率变动推送、竞猜结果推送

@@ -171,7 +171,7 @@ function normalizeTeamName(name: string): string {
     .replace(/[^a-z0-9\u4e00-\u9fa5]/g, '');
 }
 
-function _teamNameMatch(scrapedName: string, localName: string): boolean {
+function teamNameMatch(scrapedName: string, localName: string): boolean {
   const source = normalizeTeamName(scrapedName);
   const target = normalizeTeamName(localName);
   if (!source || !target) return false;

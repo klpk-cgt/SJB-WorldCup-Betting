@@ -3,18 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/**
- * 每日问答服务
- *
- * 核心改进：使用独立的 quizLog 记录问答完成状态，
- * 不再依赖 transaction.note 判断。
- *
- * 必须在 runBusinessTransaction 内部调用。
- */
-
 import { dbService } from '../../db/db_service';
 import { QuizLogRecord } from '../../types';
-import { adjustWalletBalance } from './wallet_service';
+import { getRuntimeConfig } from '../config';
 import {
   QUIZ_POINTS_PER_CORRECT,
   createId,
@@ -24,9 +15,7 @@ import {
   toBeijingDateKey,
 } from '../helpers';
 import logger from '../logger';
-import { getRuntimeConfig } from '../config';
-
-// ─── AI 每日自动生成新题 ───
+import { adjustWalletBalance } from './wallet_service';
 
 interface AIGeneratedQuestion {
   id: string;
@@ -36,28 +25,28 @@ interface AIGeneratedQuestion {
   explanation: string;
 }
 
-/**
- * 获取今日 AI 生成的题目（从 db.aiQuizCache 读取，自动过滤过期题目）
- */
-export function getAIQuizCache(): AIGeneratedQuestion[] {
-  const db = dbService.getData();
-  const today = toBeijingDateKey();
-  const cache: AIGeneratedQuestion[] = (db as any).aiQuizCache || [];
-  // 仅返回今日生成的 AI 题目，过期的自动丢弃
-  return cache.filter((q) => q.id.startsWith(`ai-${today}`));
+function getQuestionErrorMessage() {
+  return '题目不存在。';
 }
 
-/**
- * 保存 AI 生成的题目到缓存
- */
+function getCompletedErrorMessage() {
+  return '今日问答已完成。';
+}
+
+function getAnsweredErrorMessage() {
+  return '该题已作答';
+}
+
+export function getAIQuizCache(): AIGeneratedQuestion[] {
+  const db = dbService.getData();
+  return (db as any).aiQuizCache || [];
+}
+
 function saveAIQuizCache(questions: AIGeneratedQuestion[]) {
   const db = dbService.getData();
   (db as any).aiQuizCache = questions;
 }
 
-/**
- * 调用 AI 生成 5 道世界杯相关问答题
- */
 export async function generateAIQuizQuestions(): Promise<{
   questions: AIGeneratedQuestion[];
   provider: string;
@@ -79,16 +68,16 @@ export async function generateAIQuizQuestions(): Promise<{
             model: 'deepseek-chat',
             temperature: 0.8,
             messages: [
-              { role: 'system', content: '你是一个世界杯足球知识专家。请严格按照JSON格式输出，不要输出其他内容。' },
-              { role: 'user', content: `请生成5道关于世界杯足球的问答题，涵盖历史、球星、规则、趣闻等方面。每题4个选项，标明正确答案。
-输出严格JSON数组格式，每项包含：question(题目), options(4个选项数组), correctIndex(正确答案索引0-3), explanation(解析说明)。
-示例：[{"question":"...","options":["A","B","C","D"],"correctIndex":0,"explanation":"..."}]
-要求：题目有趣、答案准确、解析简明。不要和以下已有题目重复：${quizQuestionPool.slice(0, 10).map(q => q.question).join('；')}` },
+              { role: 'system', content: 'You are a World Cup football quiz writer. Output strict JSON only.' },
+              {
+                role: 'user',
+                content: `Generate 5 World Cup football quiz questions. Output a JSON array where each item contains question, options, correctIndex, explanation. Avoid repeating these questions: ${quizQuestionPool.slice(0, 10).map((q) => q.question).join(' | ')}`,
+              },
             ],
           }),
         });
         if (!resp.ok) throw new Error(`DeepSeek failed: ${resp.status}`);
-        const data = await resp.json() as any;
+        const data = (await resp.json()) as any;
         return data.choices?.[0]?.message?.content?.trim() || '';
       },
     });
@@ -98,19 +87,27 @@ export async function generateAIQuizQuestions(): Promise<{
     providers.push({
       name: 'Gemini',
       call: async () => {
-        const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${config.geminiApiKey}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: `请生成5道关于世界杯足球的问答题，涵盖历史、球星、规则、趣闻等方面。每题4个选项，标明正确答案。
-输出严格JSON数组格式，每项包含：question(题目), options(4个选项数组), correctIndex(正确答案索引0-3), explanation(解析说明)。
-示例：[{"question":"...","options":["A","B","C","D"],"correctIndex":0,"explanation":"..."}]
-要求：题目有趣、答案准确、解析简明。` }] }],
-            generationConfig: { temperature: 0.8 },
-          }),
-        });
+        const resp = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${config.geminiApiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [
+                {
+                  parts: [
+                    {
+                      text: 'Generate 5 World Cup football quiz questions as a JSON array. Each item must include question, options, correctIndex, explanation.',
+                    },
+                  ],
+                },
+              ],
+              generationConfig: { temperature: 0.8 },
+            }),
+          },
+        );
         if (!resp.ok) throw new Error(`Gemini failed: ${resp.status}`);
-        const data = await resp.json() as any;
+        const data = (await resp.json()) as any;
         return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
       },
     });
@@ -119,7 +116,6 @@ export async function generateAIQuizQuestions(): Promise<{
   for (const provider of providers) {
     try {
       const raw = await provider.call();
-      // 提取 JSON 数组
       const jsonMatch = raw.match(/\[[\s\S]*\]/);
       if (!jsonMatch) continue;
       const parsed = JSON.parse(jsonMatch[0]);
@@ -128,31 +124,28 @@ export async function generateAIQuizQuestions(): Promise<{
       const questions: AIGeneratedQuestion[] = parsed.slice(0, 5).map((item: any, idx: number) => ({
         id: `ai-${toBeijingDateKey()}-${idx + 1}`,
         question: String(item.question || ''),
-        options: Array.isArray(item.options) ? item.options.slice(0, 4).map(String) : ['', '', '', ''],
+        options: Array.isArray(item.options) ? item.options.slice(0, 4).map(String) as [string, string, string, string] : ['', '', '', ''],
         correctIndex: typeof item.correctIndex === 'number' ? item.correctIndex : 0,
         explanation: String(item.explanation || ''),
       }));
 
       saveAIQuizCache(questions);
-      logger.info(`[QuizService] AI 生成 ${questions.length} 道新题 (provider: ${provider.name})`);
+      logger.info(`[QuizService] AI generated ${questions.length} questions`, { provider: provider.name });
       return { questions, provider: provider.name };
-    } catch (e) {
-      logger.warn(`[QuizService] ${provider.name} 生成题目失败`, { error: e instanceof Error ? e.message : String(e) });
+    } catch (error) {
+      logger.warn(`[QuizService] ${provider.name} failed to generate questions`, {
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
-  logger.warn('[QuizService] 所有 AI 提供商均失败，跳过 AI 题目生成');
+  logger.warn('[QuizService] All AI quiz providers failed, skipping AI question generation');
   return { questions: [], provider: 'none' };
 }
 
-/**
- * 获取合并后的每日题目（静态题库 + AI 生成题）
- */
 export function getMergedDailyQuestions(): typeof quizQuestionPool {
   const staticQuestions = getDailyQuizQuestions();
   const aiQuestions = getAIQuizCache();
-
-  // 将 AI 题目转换为兼容格式
   const aiFormatted = aiQuestions.map((q) => ({
     id: q.id,
     question: q.question,
@@ -161,49 +154,39 @@ export function getMergedDailyQuestions(): typeof quizQuestionPool {
     explanation: q.explanation,
   }));
 
-  // 混合：2 道静态 + 1 道 AI（如果有的话）
   if (aiFormatted.length > 0) {
     return [...staticQuestions.slice(0, 2), ...aiFormatted.slice(0, 1)];
   }
   return staticQuestions;
 }
 
-/**
- * 查询用户今日是否已完成问答（基于 quizLog）
- * 必须答完当日全部题目才算完成
- */
-export function hasCompletedQuizToday(userId: string, date: string): boolean {
+function getTodayLogs(userId: string, date: string): QuizLogRecord[] {
   const db = dbService.getData();
-  const dailyQuestions = getMergedDailyQuestions();
-  if (dailyQuestions.length === 0) return false;
-  const logs = (db.quizLogs || []).filter((log) => log.userId === userId && log.date === date);
-  const answeredIds = new Set(logs.flatMap((log) => log.questionIds));
-  return dailyQuestions.every((q) => answeredIds.has(q.id));
+  return (db.quizLogs || []).filter((log) => log.userId === userId && log.date === date);
 }
 
-/**
- * 获取今日问答题目
- * 如果已完成则抛出异常
- */
+export function hasCompletedQuizToday(userId: string, date: string): boolean {
+  const todayLogs = getTodayLogs(userId, date);
+  const requiredIds = new Set(getMergedDailyQuestions().map((question) => question.id));
+  const answeredIds = new Set(
+    todayLogs.flatMap((log) => (Array.isArray(log.questionIds) ? log.questionIds : [])),
+  );
+
+  if (requiredIds.size === 0) return false;
+  for (const questionId of requiredIds) {
+    if (!answeredIds.has(questionId)) return false;
+  }
+  return true;
+}
+
 export function getTodayQuiz(userId: string) {
   const today = toBeijingDateKey();
   if (hasCompletedQuizToday(userId, today)) {
-    throw new Error('今日问答已完成。');
+    throw new Error(getCompletedErrorMessage());
   }
   return { questions: getMergedDailyQuestions(), date: today };
 }
 
-/**
- * 提交问答答案
- *
- * 内部负责：
- * 1. 校验今日未答题
- * 2. 校验题目存在
- * 3. 判断是否正确
- * 4. 正确则加积分（通过 wallet_service）
- * 5. 写 quizLog（答错也算完成）
- * 6. 返回结果
- */
 export function submitQuizAnswer(params: {
   userId: string;
   questionId: string;
@@ -211,43 +194,37 @@ export function submitQuizAnswer(params: {
 }): { isCorrect: boolean; pointsEarned: number; explanation: string } {
   const db = dbService.getData();
   const today = toBeijingDateKey();
+  const todayLogs = getTodayLogs(params.userId, today);
 
-  // 1. 校验今日是否已全部答完
+  if (todayLogs.some((log) => Array.isArray(log.questionIds) && log.questionIds.includes(params.questionId))) {
+    throw new Error(getAnsweredErrorMessage());
+  }
+
   if (hasCompletedQuizToday(params.userId, today)) {
-    throw new Error('今日问答已完成。');
+    throw new Error(getCompletedErrorMessage());
   }
 
-  // 1.5 校验该题是否已作答（防重复）
-  const todayLogs = (db.quizLogs || []).filter((log) => log.userId === params.userId && log.date === today);
-  const alreadyAnswered = todayLogs.some((log) => log.questionIds.includes(params.questionId));
-  if (alreadyAnswered) {
-    throw new Error('该题已作答，请继续下一题。');
-  }
-
-  // 2. 校验题目存在（先查静态题库，再查 AI 缓存）
   let question = quizQuestionPool.find((item) => item.id === params.questionId);
   if (!question) {
-    const aiQuestions = getAIQuizCache();
-    const aiQ = aiQuestions.find((item) => item.id === params.questionId);
-    if (aiQ) {
+    const aiQuestion = getAIQuizCache().find((item) => item.id === params.questionId);
+    if (aiQuestion) {
       question = {
-        id: aiQ.id,
-        question: aiQ.question,
-        options: aiQ.options,
-        correctIndex: aiQ.correctIndex,
-        explanation: aiQ.explanation,
+        id: aiQuestion.id,
+        question: aiQuestion.question,
+        options: aiQuestion.options,
+        correctIndex: aiQuestion.correctIndex,
+        explanation: aiQuestion.explanation,
       };
     }
   }
+
   if (!question) {
-    throw new Error('题目不存在。');
+    throw new Error(getQuestionErrorMessage());
   }
 
-  // 3. 判断是否正确
   const isCorrect = params.selectedIndex === question.correctIndex;
   let pointsEarned = 0;
 
-  // 4. 正确则加积分
   if (isCorrect) {
     pointsEarned = roundPoints(QUIZ_POINTS_PER_CORRECT);
     adjustWalletBalance({
@@ -258,7 +235,6 @@ export function submitQuizAnswer(params: {
     });
   }
 
-  // 5. 写 quizLog（答错也算完成）
   const quizLog: QuizLogRecord = {
     id: createId('quiz-log'),
     userId: params.userId,
@@ -277,9 +253,6 @@ export function submitQuizAnswer(params: {
   return { isCorrect, pointsEarned, explanation: question.explanation };
 }
 
-/**
- * 获取问答统计（后台使用）
- */
 export function getQuizStats() {
   const db = dbService.getData();
   const logs = db.quizLogs || [];
@@ -288,7 +261,6 @@ export function getQuizStats() {
   const todayLogs = logs.filter((log) => log.date === today);
   const todayCorrect = todayLogs.filter((log) => log.correctCount > 0).length;
 
-  // 最近7天活跃答题人数
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const sevenDaysAgoKey = sevenDaysAgo.toISOString().slice(0, 10);
@@ -297,7 +269,7 @@ export function getQuizStats() {
   ).size;
 
   return {
-    todayParticipants: todayLogs.length,
+    todayParticipants: new Set(todayLogs.map((log) => log.userId)).size,
     todayCorrectRate: todayLogs.length > 0 ? Math.round((todayCorrect / todayLogs.length) * 100) : 0,
     recentActiveUsers7d: recentActiveUsers,
     totalQuizLogs: logs.length,

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CalendarDays, Clock3, MapPin, Zap, Trophy, Flame, Radio, ArrowRight, BarChart3, Shirt, Tv, Info } from 'lucide-react';

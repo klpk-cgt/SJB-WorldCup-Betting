@@ -14,3 +14,8 @@ backups/
 *.png
 !src/assets/*.png
 !public/profile-icons/*.png
+
+# 临时诊断/快照文件
+_srv.txt
+_srv_out.txt
+_mysql_snapshot.json

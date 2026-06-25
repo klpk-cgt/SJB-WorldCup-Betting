@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>资料页整体美化预览</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  :root {
+    --emerald: #10b981; --emerald-dark: #059669;
+    --amber: #f59e0b; --amber-dark: #d97706;
+    --rose: #f43f5e; --rose-dark: #e11d48;
+    --cyan: #06b6d4; --violet: #8b5cf6;
+    --slate-50: #f8fafc; --slate-100: #f1f5f9; --slate-200: #e2e8f0;
+    --slate-300: #cbd5e1; --slate-400: #94a3b8; --slate-500: #64748b;
+    --slate-600: #475569; --slate-700: #334155; --slate-800: #1e293b; --slate-900: #0f172a;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+    color: var(--slate-800);
+    min-height: 100vh;
+    max-width: 420px;
+    margin: 0 auto;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  /* ===== 体育场背景 Header ===== */
+  .stadium-bg {
+    background-image:
+      linear-gradient(180deg, rgba(248,251,255,0.35) 0%, rgba(246,248,251,0.75) 60%, rgba(255,255,255,0.96) 100%),
+      linear-gradient(135deg, #dbeafe 0%, #ede9fe 50%, #fef3c7 100%);
+    background-size: cover;
+    background-position: center top;
+    position: relative;
+    padding: 20px 16px 12px;
+    overflow: hidden;
+  }
+  .stadium-decor {
+    position: absolute; top: 12px; right: 14px; opacity: 0.55; pointer-events: none;
+    display: flex; gap: 6px; align-items: center;
+  }
+  .stadium-decor svg { width: 28px; height: 28px; }
+
+  /* ===== 毛玻璃主卡 ===== */
+  .glass-card {
+    background: rgba(255,255,255,0.86);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(255,255,255,0.72);
+    box-shadow: 0 24px 60px rgba(15,23,42,0.10), inset 0 1px 0 rgba(255,255,255,0.70);
+    border-radius: 24px;
+    padding: 18px 16px;
+    position: relative;
+  }
+  @supports not (backdrop-filter: blur(18px)) { .glass-card { background: rgba(255,255,255,0.96); } }
+
+  /* ===== 用户信息行 ===== */
+  .user-row { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+  .avatar-wrap { position: relative; flex-shrink: 0; }
+  .avatar {
+    width: 76px; height: 76px; border-radius: 50%;
+    background: linear-gradient(135deg, #10b981, #059669);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 30px; font-weight: 900;
+    box-shadow: 0 8px 20px rgba(16,185,129,0.30);
+    border: 3px solid #fff;
+  }
+  .avatar-ring {
+    position: absolute; inset: -5px; border-radius: 50%;
+    border: 2px dashed var(--amber); opacity: 0.6;
+    animation: ring-rotate 12s linear infinite;
+  }
+  @keyframes ring-rotate { to { transform: rotate(360deg); } }
+  .verify-badge {
+    position: absolute; bottom: 2px; right: 2px;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--emerald); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; border: 2px solid #fff;
+  }
+  .user-info { flex: 1; min-width: 0; }
+  .user-name-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
+  .user-name { font-size: 19px; font-weight: 900; color: var(--slate-900); }
+  .featured-tag {
+    font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 999px;
+    background: linear-gradient(135deg, #fbbf24, #f59e0b); color: #fff;
+  }
+  .user-title { font-size: 12px; color: var(--slate-600); font-weight: 700; margin-bottom: 2px; }
+  .user-title-copy { font-size: 11px; color: var(--slate-500); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+  /* ===== 底部三列统计 ===== */
+  .stat-row { display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 10px; align-items: end; }
+  .stat-col { text-align: center; }
+  .stat-col .label { font-size: 10px; font-weight: 700; color: var(--slate-500); margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-col .value { font-size: 17px; font-weight: 900; color: var(--slate-900); font-variant-numeric: tabular-nums; }
+  .stat-col .value.up { color: var(--emerald-dark); }
+  .stat-col .value.down { color: var(--rose-dark); }
+  .stat-col .trend { font-size: 10px; font-weight: 800; }
+  .trend.up { color: var(--emerald-dark); }
+  .trend.down { color: var(--rose-dark); }
+
+  /* 等级条 */
+  .level-col { text-align: left; }
+  .level-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  .level-badge {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    color: #fff; font-size: 10px; font-weight: 900;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 6px rgba(251,191,36,0.4);
+  }
+  .level-name { font-size: 11px; font-weight: 800; color: var(--slate-700); }
+  .level-bar { height: 7px; border-radius: 999px; background: var(--slate-200); overflow: hidden; }
+  .level-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #fbbf24, #f59e0b); transition: width 1s cubic-bezier(0.22,0.61,0.36,1); }
+  .level-pct { font-size: 9px; color: var(--slate-500); font-weight: 700; margin-top: 2px; text-align: right; }
+
+  /* ===== Tab 导航 ===== */
+  .tab-nav {
+    display: flex; gap: 6px; padding: 10px 16px 6px;
+    background: rgba(255,255,255,0.6); backdrop-filter: blur(10px);
+    position: sticky; top: 0; z-index: 20;
+    border-bottom: 1px solid var(--slate-100);
+  }
+  .tab-btn {
+    flex: 1; padding: 9px 6px; border-radius: 999px;
+    border: none; background: rgba(255,255,255,0.7);
+    font-size: 12px; font-weight: 700; color: var(--slate-500);
+    cursor: pointer; transition: all 0.25s;
+    display: flex; align-items: center; justify-content: center; gap: 4px;
+  }
+  .tab-btn .ico { font-size: 14px; }
+  .tab-btn.active {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(16,185,129,0.30);
+  }
+
+  /* ===== Tab 内容 ===== */
+  .tab-content { display: none; padding: 14px 16px 80px; animation: fadeIn 0.3s ease-out; }
+  .tab-content.active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+  .section-title {
+    font-size: 13px; font-weight: 800; color: var(--slate-600);
+    text-transform: uppercase; letter-spacing: 0.5px;
+    margin: 18px 0 10px; padding-left: 4px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .section-title::before { content: ''; width: 4px; height: 14px; background: linear-gradient(180deg, #10b981, #059669); border-radius: 2px; }
+  .section-title:first-child { margin-top: 4px; }
+  .section-title .link { margin-left: auto; font-size: 11px; color: var(--emerald-dark); font-weight: 700; text-decoration: none; }
+
+  /* ===== 统计卡 2x2 ===== */
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat-tile {
+    background: #fff; border: 1px solid var(--slate-200); border-radius: 18px;
+    padding: 14px 12px; position: relative;
+    box-shadow: 0 8px 20px rgba(15,23,42,0.05);
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .stat-tile:hover { transform: translateY(-2px); box-shadow: 0 14px 30px rgba(15,23,42,0.10); }
+  .stat-tile .tile-label { font-size: 11px; font-weight: 700; color: var(--slate-500); margin-bottom: 4px; }
+  .stat-tile .tile-value { font-size: 22px; font-weight: 900; color: var(--slate-900); font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .stat-tile .tile-trend { font-size: 10px; font-weight: 800; margin-top: 2px; }
+  .stat-tile .tile-trend.up { color: var(--emerald-dark); }
+  .stat-tile .tile-trend.down { color: var(--rose-dark); }
+  .stat-tile .tile-icon {
+    position: absolute; top: 12px; right: 12px;
+    width: 36px; height: 36px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+  .tile-emerald { background: #ecfdf5; }
+  .tile-rose { background: #fff1f2; }
+  .tile-amber { background: #fffbeb; }
+  .tile-cyan { background: #ecfeff; }
+
+  /* ===== 通用卡片 ===== */
+  .soft-card {
+    background: #fff; border: 1px solid var(--slate-200); border-radius: 18px;
+    padding: 14px; box-shadow: 0 8px 20px rgba(15,23,42,0.05);
+  }
+
+  /* 徽章进度行 */
+  .badge-progress-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--slate-100); }
+  .badge-progress-item:last-child { border-bottom: none; }
+  .badge-progress-item .bp-icon { width: 34px; height: 34px; border-radius: 10px; background: var(--slate-100); display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .badge-progress-item .bp-info { flex: 1; min-width: 0; }
+  .badge-progress-item .bp-name { font-size: 12px; font-weight: 800; color: var(--slate-800); }
+  .badge-progress-item .bp-bar { height: 5px; border-radius: 999px; background: var(--slate-100); overflow: hidden; margin-top: 4px; }
+  .badge-progress-item .bp-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #10b981, #059669); }
+  .badge-progress-item .bp-pct { font-size: 10px; color: var(--slate-500); font-weight: 700; flex-shrink: 0; }
+
+  /* 战报结算行 */
+  .settle-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--slate-100); }
+  .settle-row:last-child { border-bottom: none; }
+  .settle-row .flags { font-size: 16px; flex-shrink: 0; }
+  .settle-row .s-info { flex: 1; min-width: 0; }
+  .settle-row .s-score { font-size: 13px; font-weight: 900; color: var(--slate-800); }
+  .settle-row .s-meta { font-size: 10px; color: var(--slate-500); margin-top: 1px; }
+  .settle-row .s-tag { font-size: 9px; font-weight: 800; padding: 2px 7px; border-radius: 999px; }
+  .s-tag.win { background: #d1fae5; color: #059669; }
+  .s-tag.lose { background: #fee2e2; color: #dc2626; }
+  .settle-row .s-profit { font-size: 13px; font-weight: 900; font-variant-numeric: tabular-nums; }
+  .s-profit.up { color: var(--emerald-dark); }
+  .s-profit.down { color: var(--rose-dark); }
+
+  /* 流水行 */
+  .tx-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--slate-100); }
+  .tx-row:last-child { border-bottom: none; }
+  .tx-row .tx-icon { width: 30px; height: 30px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; background: var(--slate-100); }
+  .tx-row .tx-info { flex: 1; min-width: 0; }
+  .tx-row .tx-title { font-size: 12px; font-weight: 700; color: var(--slate-800); }
+  .tx-row .tx-time { font-size: 10px; color: var(--slate-400); }
+  .tx-row .tx-amount { font-size: 13px; font-weight: 900; font-variant-numeric: tabular-nums; }
+  .tx-amount.up { color: var(--emerald-dark); }
+  .tx-amount.down { color: var(--rose-dark); }
+
+  /* ===== 收益曲线图 ===== */
+  .chart-card { background: #fff; border: 1px solid var(--slate-200); border-radius: 18px; padding: 14px; box-shadow: 0 8px 20px rgba(15,23,42,0.05); }
+  .chart-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+  .chart-title { font-size: 12px; font-weight: 800; color: var(--slate-600); }
+  .chart-current { font-size: 22px; font-weight: 900; color: var(--emerald-dark); font-variant-numeric: tabular-nums; }
+  .chart-current .delta { font-size: 11px; font-weight: 800; margin-left: 6px; }
+  .chart-svg { width: 100%; height: 110px; display: block; }
+
+  /* ===== 徽章统计条 ===== */
+  .badge-stats-bar { display: flex; align-items: center; gap: 10px; background: linear-gradient(135deg, #fffbeb, #fef3c7); border: 1px solid #fde68a; border-radius: 14px; padding: 10px 14px; margin-bottom: 14px; }
+  .badge-stats-bar .bs-num { font-size: 20px; font-weight: 900; color: var(--amber-dark); }
+  .badge-stats-bar .bs-label { font-size: 11px; color: var(--slate-600); font-weight: 700; flex: 1; }
+  .rarity-mini { display: flex; gap: 3px; }
+  .rarity-mini .rm { width: 6px; height: 20px; border-radius: 2px; }
+  .rm.legendary { background: #fbbf24; }
+  .rm.epic { background: #a78bfa; }
+  .rm.rare { background: #22d3ee; }
+  .rm.common { background: #94a3b8; }
+
+  /* ===== 代表徽章高亮卡 ===== */
+  .featured-badge-card {
+    background: linear-gradient(135deg, #fffbeb, #fef3c7);
+    border: 2px solid #fbbf24;
+    border-radius: 18px; padding: 14px; margin-bottom: 14px;
+    display: flex; align-items: center; gap: 12px;
+    box-shadow: 0 4px 16px rgba(251,191,36,0.25);
+    position: relative; overflow: hidden;
+  }
+  .featured-badge-card::before {
+    content: ''; position: absolute; top: -30px; right: -30px;
+    width: 100px; height: 100px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(251,191,36,0.3), transparent);
+  }
+  .featured-badge-card .fb-icon { width: 56px; height: 56px; border-radius: 14px; background: #fff; display: flex; align-items: center; justify-content: center; font-size: 30px; box-shadow: 0 0 20px rgba(251,191,36,0.5); animation: legendary-pulse 2.5s ease-in-out infinite; flex-shrink: 0; }
+  .featured-badge-card .fb-info { flex: 1; min-width: 0; position: relative; }
+  .featured-badge-card .fb-label { font-size: 11px; font-weight: 800; color: var(--amber-dark); text-transform: uppercase; letter-spacing: 0.5px; }
+  .featured-badge-card .fb-name { font-size: 15px; font-weight: 900; color: var(--slate-900); margin: 2px 0; }
+  .featured-badge-card .fb-desc { font-size: 11px; color: var(--slate-600); line-height: 1.3; }
+
+  /* ===== 徽章网格 ===== */
+  .category-label { font-size: 11px; font-weight: 800; color: var(--slate-500); margin: 14px 0 8px; }
+  .badge-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  @media (max-width: 380px) { .badge-grid { grid-template-columns: repeat(2, 1fr); } }
+  .badge-card { border-radius: 14px; padding: 12px 8px; cursor: pointer; transition: transform 0.2s; position: relative; overflow: hidden; text-align: center; }
+  .badge-card:active { transform: scale(0.95); }
+  .badge-card .b-icon-wrap { display: flex; align-items: center; justify-content: center; border-radius: 12px; background: rgba(255,255,255,0.9); margin: 0 auto 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+  .badge-card .b-icon { font-size: 24px; line-height: 1; }
+  .badge-card .b-label { font-size: 11px; font-weight: 800; color: var(--slate-800); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
+  .badge-card .b-tag { display: inline-block; font-size: 8px; font-weight: 800; padding: 1px 6px; border-radius: 999px; }
+  .badge-card .b-bar { height: 4px; border-radius: 999px; background: rgba(255,255,255,0.6); overflow: hidden; margin-top: 6px; }
+  .badge-card .b-fill { height: 100%; border-radius: 999px; }
+
+  /* 4 种稀有度 */
+  .badge-legendary { border: 2px solid #fbbf24; background: linear-gradient(135deg, #fffbeb, #fef3c7); box-shadow: 0 4px 16px rgba(251,191,36,0.3); }
+  .badge-legendary .b-icon-wrap { width: 48px; height: 48px; box-shadow: 0 0 20px rgba(251,191,36,0.5); animation: legendary-pulse 2.5s ease-in-out infinite; }
+  .badge-legendary .b-icon { font-size: 26px; }
+  .badge-legendary .b-tag { background: linear-gradient(135deg, #fbbf24, #f59e0b); color: #fff; }
+  .badge-legendary .b-fill { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
+  @keyframes legendary-pulse { 0%,100% { box-shadow: 0 0 20px rgba(251,191,36,0.4); } 50% { box-shadow: 0 0 32px rgba(251,191,36,0.7), 0 0 8px rgba(251,191,36,0.9); } }
+
+  .badge-epic { border: 2px solid #a78bfa; background: linear-gradient(135deg, #f5f3ff, #ede9fe); box-shadow: 0 3px 12px rgba(167,139,250,0.2); }
+  .badge-epic .b-icon-wrap { width: 44px; height: 44px; animation: epic-glow 3s ease-in-out infinite; }
+  .badge-epic .b-tag { background: linear-gradient(135deg, #a78bfa, #8b5cf6); color: #fff; }
+  .badge-epic .b-fill { background: linear-gradient(90deg, #a78bfa, #8b5cf6); }
+  @keyframes epic-glow { 0%,100% { box-shadow: 0 2px 8px rgba(167,139,250,0.15); } 50% { box-shadow: 0 2px 16px rgba(167,139,250,0.35); } }
+
+  .badge-rare { border: 1.5px solid #22d3ee; background: #ecfeff; }
+  .badge-rare .b-icon-wrap { width: 40px; height: 40px; }
+  .badge-rare .b-tag { background: #cffafe; color: #0e7490; }
+  .badge-rare .b-fill { background: linear-gradient(90deg, #22d3ee, #06b6d4); }
+
+  .badge-common { border: 1px solid var(--slate-300); background: var(--slate-50); }
+  .badge-common .b-icon-wrap { width: 36px; height: 36px; }
+  .badge-common .b-tag { background: var(--slate-100); color: var(--slate-600); }
+  .badge-common .b-fill { background: var(--slate-400); }
+
+  .badge-locked { filter: grayscale(0.8); opacity: 0.55; }
+  .badge-locked .b-icon-wrap::after { content: '🔒'; position: absolute; bottom: -4px; right: -4px; font-size: 12px; background: #fff; border-radius: 999px; padding: 1px 3px; box-shadow: 0 1px 4px rgba(0,0,0,0.15); }
+
+  /* ===== 道具卡 ===== */
+  .item-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .item-card { border-radius: 16px; padding: 14px; position: relative; overflow: hidden; cursor: pointer; transition: transform 0.2s; border: 1.5px solid; }
+  .item-card:active { transform: scale(0.96); }
+  .item-card .i-icon { width: 48px; height: 48px; border-radius: 12px; background: rgba(255,255,255,0.95); display: flex; align-items: center; justify-content: center; font-size: 26px; margin-bottom: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+  .item-card .i-label { font-size: 13px; font-weight: 900; color: var(--slate-800); margin-bottom: 3px; }
+  .item-card .i-desc { font-size: 10px; color: var(--slate-600); line-height: 1.4; }
+  .item-card .i-count { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.55); color: #fff; font-size: 11px; font-weight: 800; padding: 3px 9px; border-radius: 999px; backdrop-filter: blur(4px); }
+  .item-emerald { background: linear-gradient(135deg, #d1fae5, #a7f3d0); border-color: #6ee7b7; }
+  .item-amber { background: linear-gradient(135deg, #fef3c7, #fde68a); border-color: #fcd34d; }
+  .item-rose { background: linear-gradient(135deg, #fee2e2, #fecaca); border-color: #fca5a5; }
+  .item-cyan { background: linear-gradient(135deg, #cffafe, #a5f3fc); border-color: #67e8f9; }
+
+  /* 长线竞猜 strip */
+  .strip-scroll { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
+  .strip-scroll::-webkit-scrollbar { display: none; }
+  .strip-card { flex-shrink: 0; width: 150px; background: #fff; border: 1px solid var(--slate-200); border-radius: 14px; padding: 10px; box-shadow: 0 4px 12px rgba(15,23,42,0.05); }
+  .strip-card .sc-flags { font-size: 14px; margin-bottom: 4px; }
+  .strip-card .sc-match { font-size: 11px; font-weight: 800; color: var(--slate-700); margin-bottom: 6px; }
+  .strip-card .sc-odds { font-size: 13px; font-weight: 900; color: var(--emerald-dark); }
+  .strip-card .sc-status { font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 999px; display: inline-block; margin-top: 4px; }
+  .sc-status.pending { background: #fef3c7; color: #d97706; }
+  .sc-status.won { background: #d1fae5; color: #059669; }
+
+  /* ===== 底部操作栏 ===== */
+  .bottom-bar {
+    position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+    width: 100%; max-width: 420px;
+    background: rgba(255,255,255,0.92); backdrop-filter: blur(14px);
+    border-top: 1px solid var(--slate-200);
+    padding: 10px 16px; display: flex; gap: 10px; z-index: 30;
+  }
+  .btn-share { flex: 1; padding: 12px; border-radius: 14px; border: none; background: linear-gradient(135deg, #10b981, #059669); color: #fff; font-size: 13px; font-weight: 800; box-shadow: 0 6px 16px rgba(16,185,129,0.30); cursor: pointer; }
+  .btn-logout { padding: 12px 18px; border-radius: 14px; background: #fff; border: 1px solid var(--slate-300); color: var(--slate-600); font-size: 13px; font-weight: 700; cursor: pointer; }
+
+  /* ===== 详情弹窗 ===== */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); backdrop-filter: blur(4px); z-index: 100; display: none; align-items: flex-end; justify-content: center; }
+  .modal-overlay.active { display: flex; }
+  .modal-content { background: #fff; border-radius: 24px 24px 0 0; width: 100%; max-width: 420px; padding: 20px 18px 28px; transform: translateY(100%); transition: transform 0.35s cubic-bezier(0.32,0.72,0,1); max-height: 80vh; overflow-y: auto; }
+  .modal-overlay.active .modal-content { transform: translateY(0); }
+  .modal-handle { width: 40px; height: 4px; background: var(--slate-300); border-radius: 999px; margin: 0 auto 18px; }
+  .modal-close { position: absolute; top: 14px; right: 14px; width: 30px; height: 30px; border-radius: 999px; background: var(--slate-100); display: flex; align-items: center; justify-content: center; font-size: 16px; color: var(--slate-500); cursor: pointer; border: none; }
+  .modal-icon-wrap { display: flex; align-items: center; justify-content: center; margin-bottom: 14px; }
+  .modal-icon-wrap .mi-inner { border-radius: 20px; background: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+  .modal-title { text-align: center; font-size: 19px; font-weight: 900; color: var(--slate-900); margin-bottom: 10px; }
+  .modal-tags { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-bottom: 14px; }
+  .modal-tags .mt { font-size: 11px; font-weight: 800; padding: 4px 11px; border-radius: 999px; }
+  .modal-desc { text-align: center; font-size: 13px; color: var(--slate-600); line-height: 1.6; margin-bottom: 18px; padding: 0 10px; }
+  .modal-prog { background: var(--slate-50); border-radius: 14px; padding: 14px; }
+  .modal-prog-label { font-size: 11px; font-weight: 800; color: var(--slate-500); margin-bottom: 8px; display: flex; justify-content: space-between; }
+  .modal-prog-bar { height: 10px; border-radius: 999px; background: var(--slate-200); overflow: hidden; }
+  .modal-prog-fill { height: 100%; border-radius: 999px; }
+  .modal-status { text-align: center; margin-top: 14px; font-size: 12px; font-weight: 700; color: #059669; }
+  .modal-status.locked { color: var(--slate-400); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .badge-legendary .b-icon-wrap, .badge-epic .b-icon-wrap, .featured-badge-card .fb-icon, .avatar-ring { animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== Header ===== -->
+<div class="stadium-bg">
+  <div class="stadium-decor">
+    <svg viewBox="0 0 24 24" fill="#fbbf24"><path d="M6 4h12v3a6 6 0 01-12 0V4zm-2 1h2v2H4V5zm14 0h2v2h-2V5zM8 14h8v2H8v-2zm2 3h4v5h-4v-5z"/></svg>
+    <svg viewBox="0 0 24 24" fill="#0f172a"><circle cx="12" cy="12" r="10" fill="#fff" stroke="#0f172a" stroke-width="1.5"/><path d="M12 2v20M2 12h20M5 5l14 14M19 5L5 19" stroke="#0f172a" stroke-width="1"/></svg>
+  </div>
+  <div class="glass-card">
+    <div class="user-row">
+      <div class="avatar-wrap">
+        <div class="avatar-ring"></div>
+        <div class="avatar">哥</div>
+        <div class="verify-badge">✓</div>
+      </div>
+      <div class="user-info">
+        <div class="user-name-row">
+          <span class="user-name">哥文达</span>
+          <span class="featured-tag">🏆 大赢家</span>
+        </div>
+        <div class="user-title">称号 · 金杯投资人</div>
+        <div class="user-title-copy">收益曲线领先，已经打出资产感。</div>
+      </div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-col">
+        <div class="label">积分</div>
+        <div class="value">10,000</div>
+      </div>
+      <div class="stat-col">
+        <div class="label">净收益</div>
+        <div class="value up">+2,450</div>
+        <div class="trend up">↑ 本周 +18%</div>
+      </div>
+      <div class="level-col">
+        <div class="level-row">
+          <div class="level-badge">4</div>
+          <span class="level-name">锋线快马</span>
+        </div>
+        <div class="level-bar"><div class="level-fill" style="width:62%"></div></div>
+        <div class="level-pct">6,000 / 10,000 (62%)</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Tab 导航 ===== -->
+<div class="tab-nav">
+  <button class="tab-btn active" data-tab="overview"><span class="ico">📊</span>总览</button>
+  <button class="tab-btn" data-tab="reports"><span class="ico">📈</span>战报</button>
+  <button class="tab-btn" data-tab="badges"><span class="ico">🎖️</span>徽章</button>
+  <button class="tab-btn" data-tab="items"><span class="ico">🎁</span>道具</button>
+</div>
+
+<!-- ===== 总览 ===== -->
+<div class="tab-content active" id="tab-overview">
+  <div class="section-title">核心数据</div>
+  <div class="stat-grid">
+    <div class="stat-tile">
+      <div class="tile-icon tile-emerald">🎯</div>
+      <div class="tile-label">命中率</div>
+      <div class="tile-value">62%</div>
+      <div class="tile-trend up">↑ 较上周 +8%</div>
+    </div>
+    <div class="stat-tile">
+      <div class="tile-icon tile-rose">💰</div>
+      <div class="tile-label">净收益</div>
+      <div class="tile-value">+2,450</div>
+      <div class="tile-trend up">↑ 峰值 3,800</div>
+    </div>
+    <div class="stat-tile">
+      <div class="tile-icon tile-amber">🔥</div>
+      <div class="tile-label">最长连中</div>
+      <div class="tile-value">5</div>
+      <div class="tile-trend down">↓ 当前 2</div>
+    </div>
+    <div class="stat-tile">
+      <div class="tile-icon tile-cyan">🏆</div>
+      <div class="tile-label">单场最高</div>
+      <div class="tile-value">1,850</div>
+      <div class="tile-trend up">↑ 法国 vs 德国</div>
+    </div>
+  </div>
+
+  <div class="section-title">徽章进度 <a class="link" onclick="switchTab('badges')">查看全部 →</a></div>
+  <div class="soft-card">
+    <div class="badge-progress-item">
+      <div class="bp-icon">⚡</div>
+      <div class="bp-info">
+        <div class="bp-name">七连红</div>
+        <div class="bp-bar"><div class="bp-fill" style="width:57%"></div></div>
+      </div>
+      <div class="bp-pct">4/7</div>
+    </div>
+    <div class="badge-progress-item">
+      <div class="bp-icon">🎯</div>
+      <div class="bp-info">
+        <div class="bp-name">神准</div>
+        <div class="bp-bar"><div class="bp-fill" style="width:97%"></div></div>
+      </div>
+      <div class="bp-pct">58/60</div>
+    </div>
+    <div class="badge-progress-item">
+      <div class="bp-icon">🏆</div>
+      <div class="bp-info">
+        <div class="bp-name">大赢家</div>
+        <div class="bp-bar"><div class="bp-fill" style="width:80%"></div></div>
+      </div>
+      <div class="bp-pct">8000/10000</div>
+    </div>
+  </div>
+
+  <div class="section-title">最近战报 <a class="link" onclick="switchTab('reports')">完整战报 →</a></div>
+  <div class="soft-card">
+    <div class="settle-row">
+      <div class="flags">🇫🇷🇩🇪</div>
+      <div class="s-info">
+        <div class="s-score">法国 2-1 德国</div>
+        <div class="s-meta">主胜 · 06/24</div>
+      </div>
+      <span class="s-tag win">命中</span>
+      <div class="s-profit up">+850</div>
+    </div>
+    <div class="settle-row">
+      <div class="flags">🇧🇷🇦🇷</div>
+      <div class="s-info">
+        <div class="s-score">巴西 1-1 阿根廷</div>
+        <div class="s-meta">平局 · 06/23</div>
+      </div>
+      <span class="s-tag lose">未中</span>
+      <div class="s-profit down">-500</div>
+    </div>
+    <div class="settle-row">
+      <div class="flags">🇪🇸🇵🇹</div>
+      <div class="s-info">
+        <div class="s-score">西班牙 3-0 葡萄牙</div>
+        <div class="s-meta">主胜 · 06/22</div>
+      </div>
+      <span class="s-tag win">命中</span>
+      <div class="s-profit up">+1,200</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 战报 ===== -->
+<div class="tab-content" id="tab-reports">
+  <div class="section-title">净收益趋势</div>
+  <div class="chart-card">
+    <div class="chart-header">
+      <div>
+        <div class="chart-title">累计净收益</div>
+        <div class="chart-current">+2,450<span class="delta">↑ +18%</span></div>
+      </div>
+      <div style="text-align:right">
+        <div class="chart-title" style="font-size:10px">峰值</div>
+        <div style="font-size:13px;font-weight:900;color:#d97706">3,800</div>
+      </div>
+    </div>
+    <svg class="chart-svg" viewBox="0 0 320 110" preserveAspectRatio="none" id="profitChart"></svg>
+  </div>
+
+  <div class="section-title">最近结算</div>
+  <div class="soft-card">
+    <div class="settle-row">
+      <div class="flags">🇫🇷🇩🇪</div>
+      <div class="s-info">
+        <div class="s-score">法国 2-1 德国</div>
+        <div class="s-meta">主胜 · 1.85 · 06/24</div>
+      </div>
+      <span class="s-tag win">命中</span>
+      <div class="s-profit up">+850</div>
+    </div>
+    <div class="settle-row">
+      <div class="flags">🇧🇷🇦🇷</div>
+      <div class="s-info">
+        <div class="s-score">巴西 1-1 阿根廷</div>
+        <div class="s-meta">平局 · 3.20 · 06/23</div>
+      </div>
+      <span class="s-tag lose">未中</span>
+      <div class="s-profit down">-500</div>
+    </div>
+    <div class="settle-row">
+      <div class="flags">🇪🇸🇵🇹</div>
+      <div class="s-info">
+        <div class="s-score">西班牙 3-0 葡萄牙</div>
+        <div class="s-meta">主胜 · 2.10 · 06/22</div>
+      </div>
+      <span class="s-tag win">命中</span>
+      <div class="s-profit up">+1,200</div>
+    </div>
+    <div class="settle-row">
+      <div class="flags">🇳🇱🇸🇳</div>
+      <div class="s-info">
+        <div class="s-score">荷兰 2-0 塞内加尔</div>
+        <div class="s-meta">主胜 · 1.55 · 06/21</div>
+      </div>
+      <span class="s-tag win">命中</span>
+      <div class="s-profit up">+550</div>
+    </div>
+    <div class="settle-row">
+      <div class="flags">🇮🇹🇨🇭</div>
+      <div class="s-info">
+        <div class="s-score">意大利 0-1 瑞士</div>
+        <div class="s-meta">客胜 · 4.50 · 06/20</div>
+      </div>
+      <span class="s-tag lose">未中</span>
+      <div class="s-profit down">-400</div>
+    </div>
+  </div>
+
+  <div class="section-title">积分流水</div>
+  <div class="soft-card">
+    <div class="tx-row">
+      <div class="tx-icon">🏆</div>
+      <div class="tx-info"><div class="tx-title">竞猜结算 - 法国胜</div><div class="tx-time">06/24 18:32</div></div>
+      <div class="tx-amount up">+850</div>
+    </div>
+    <div class="tx-row">
+      <div class="tx-icon">💔</div>
+      <div class="tx-info"><div class="tx-title">竞猜结算 - 巴西平</div><div class="tx-time">06/23 21:15</div></div>
+      <div class="tx-amount down">-500</div>
+    </div>
+    <div class="tx-row">
+      <div class="tx-icon">🏆</div>
+      <div class="tx-info"><div class="tx-title">竞猜结算 - 西班牙胜</div><div class="tx-time">06/22 23:45</div></div>
+      <div class="tx-amount up">+1,200</div>
+    </div>
+    <div class="tx-row">
+      <div class="tx-icon">🎁</div>
+      <div class="tx-info"><div class="tx-title">每日签到奖励</div><div class="tx-time">06/22 09:00</div></div>
+      <div class="tx-amount up">+100</div>
+    </div>
+    <div class="tx-row">
+      <div class="tx-icon">🏆</div>
+      <div class="tx-info"><div class="tx-title">竞猜结算 - 荷兰胜</div><div class="tx-time">06/21 20:30</div></div>
+      <div class="tx-amount up">+550</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 徽章 ===== -->
+<div class="tab-content" id="tab-badges">
+  <div class="badge-stats-bar">
+    <div class="bs-num">8</div>
+    <div class="bs-label">已解锁<br><span style="font-size:9px;color:#94a3b8">共 35 枚</span></div>
+    <div class="rarity-mini">
+      <div class="rm legendary" style="height:28px"></div>
+      <div class="rm epic" style="height:22px"></div>
+      <div class="rm rare" style="height:14px"></div>
+      <div class="rm common" style="height:8px"></div>
+    </div>
+  </div>
+
+  <div class="featured-badge-card">
+    <div class="fb-icon">🏆</div>
+    <div class="fb-info">
+      <div class="fb-label">代表徽章 · 传说</div>
+      <div class="fb-name">大赢家</div>
+      <div class="fb-desc">累计净收益超过 10,000 积分</div>
+    </div>
+  </div>
+
+  <div class="category-label">连红</div>
+  <div class="badge-grid">
+    <div class="badge-card badge-legendary" onclick="openModal('ten_streak')">
+      <div class="b-icon-wrap"><span class="b-icon">🐐</span></div>
+      <div class="b-label">十连红</div>
+      <span class="b-tag">传说</span>
+      <div class="b-bar"><div class="b-fill" style="width:20%"></div></div>
+    </div>
+    <div class="badge-card badge-epic" onclick="openModal('five_streak')">
+      <div class="b-icon-wrap"><span class="b-icon">🌟</span></div>
+      <div class="b-label">五连红</div>
+      <span class="b-tag">史诗</span>
+      <div class="b-bar"><div class="b-fill" style="width:100%"></div></div>
+    </div>
+    <div class="badge-card badge-rare" onclick="openModal('three_streak')">
+      <div class="b-icon-wrap"><span class="b-icon">🔥</span></div>
+      <div class="b-label">三连红</div>
+      <span class="b-tag">稀有</span>
+      <div class="b-bar"><div class="b-fill" style="width:100%"></div></div>
+    </div>
+  </div>
+
+  <div class="category-label">精准</div>
+  <div class="badge-grid">
+    <div class="badge-card badge-legendary badge-locked" onclick="openModal('perfect_shooter')">
+      <div class="b-icon-wrap"><span class="b-icon">🏹</span></div>
+      <div class="b-label">百发百中</div>
+      <span class="b-tag">传说</span>
+      <div class="b-bar"><div class="b-fill" style="width:0%"></div></div>
+    </div>
+    <div class="badge-card badge-epic" onclick="openModal('hit_rate_60')">
+      <div class="b-icon-wrap"><span class="b-icon">🎯</span></div>
+      <div class="b-label">神准</div>
+      <span class="b-tag">史诗</span>
+      <div class="b-bar"><div class="b-fill" style="width:97%"></div></div>
+    </div>
+    <div class="badge-card badge-rare" onclick="openModal('score_prophet')">
+      <div class="b-icon-wrap"><span class="b-icon">🔮</span></div>
+      <div class="b-label">比分预言</div>
+      <span class="b-tag">稀有</span>
+      <div class="b-bar"><div class="b-fill" style="width:50%"></div></div>
+    </div>
+  </div>
+
+  <div class="category-label">名场面</div>
+  <div class="badge-grid">
+    <div class="badge-card badge-rare" onclick="openModal('beacon')">
+      <div class="b-icon-wrap"><span class="b-icon">💡</span></div>
+      <div class="b-label">明灯认证</div>
+      <span class="b-tag">稀有</span>
+      <div class="b-bar"><div class="b-fill" style="width:100%"></div></div>
+    </div>
+    <div class="badge-card badge-epic badge-locked" onclick="openModal('comeback')">
+      <div class="b-icon-wrap"><span class="b-icon">🧗</span></div>
+      <div class="b-label">绝地翻盘</div>
+      <span class="b-tag">史诗</span>
+      <div class="b-bar"><div class="b-fill" style="width:0%"></div></div>
+    </div>
+    <div class="badge-card badge-common" onclick="openModal('first_bet')">
+      <div class="b-icon-wrap"><span class="b-icon">🎯</span></div>
+      <div class="b-label">初次下注</div>
+      <span class="b-tag">普通</span>
+      <div class="b-bar"><div class="b-fill" style="width:100%"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 道具 ===== -->
+<div class="tab-content" id="tab-items">
+  <div class="section-title">道具卡</div>
+  <div class="item-grid">
+    <div class="item-card item-emerald">
+      <div class="i-count">×2</div>
+      <div class="i-icon">🛡️</div>
+      <div class="i-label">免亏护盾</div>
+      <div class="i-desc">下注失败退还本金</div>
+    </div>
+    <div class="item-card item-amber">
+      <div class="i-count">×1</div>
+      <div class="i-icon">⚡</div>
+      <div class="i-label">双倍加成</div>
+      <div class="i-desc">命中积分翻倍</div>
+    </div>
+    <div class="item-card item-rose">
+      <div class="i-count">×3</div>
+      <div class="i-icon">↩️</div>
+      <div class="i-label">反悔药</div>
+      <div class="i-desc">撤回最近预测</div>
+    </div>
+    <div class="item-card item-cyan">
+      <div class="i-count">×1</div>
+      <div class="i-icon">🛟</div>
+      <div class="i-label">保底浮标</div>
+      <div class="i-desc">积分不低于初始值</div>
+    </div>
+  </div>
+
+  <div class="section-title">长线竞猜</div>
+  <div class="strip-scroll">
+    <div class="strip-card">
+      <div class="sc-flags">🇦🇷🇧🇷</div>
+      <div class="sc-match">世界杯冠军</div>
+      <div class="sc-odds">阿根廷 3.50</div>
+      <span class="sc-status pending">进行中</span>
+    </div>
+    <div class="strip-card">
+      <div class="sc-flags">🇫🇷🇩🇪</div>
+      <div class="sc-match">金靴奖</div>
+      <div class="sc-odds">姆巴佩 5.00</div>
+      <span class="sc-status pending">进行中</span>
+    </div>
+    <div class="strip-card">
+      <div class="sc-flags">🇧🇷</div>
+      <div class="sc-match">金球奖</div>
+      <div class="sc-odds">维尼修斯 4.20</div>
+      <span class="sc-status pending">进行中</span>
+    </div>
+    <div class="strip-card">
+      <div class="sc-flags">🇪🇸🇵🇹</div>
+      <div class="sc-match">小组出线</div>
+      <div class="sc-odds">西班牙 1.80</div>
+      <span class="sc-status won">已命中</span>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 底部操作栏 ===== -->
+<div class="bottom-bar">
+  <button class="btn-share">📥 保存战绩图</button>
+  <button class="btn-logout">退出</button>
+</div>
+
+<!-- ===== 详情弹窗 ===== -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+  <div class="modal-content" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="modal-icon-wrap" id="modalIcon"></div>
+    <div class="modal-title" id="modalTitle"></div>
+    <div class="modal-tags" id="modalTags"></div>
+    <div class="modal-desc" id="modalDesc"></div>
+    <div class="modal-prog">
+      <div class="modal-prog-label"><span id="modalProgLabel">进度</span><span id="modalProgValue"></span></div>
+      <div class="modal-prog-bar"><div class="modal-prog-fill" id="modalProgFill"></div></div>
+      <div class="modal-status" id="modalStatus"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== Tab 切换 =====
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-' + tab));
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
+
+// ===== 收益曲线图 (纯 SVG) =====
+(function drawChart() {
+  const data = [0, -200, 300, 150, 800, 1200, 950, 1800, 2200, 1900, 2800, 3800, 3200, 2450];
+  const W = 320, H = 110, pad = 6;
+  const min = Math.min(...data, 0), max = Math.max(...data, 0);
+  const range = max - min || 1;
+  const stepX = (W - pad * 2) / (data.length - 1);
+  const y = v => H - pad - ((v - min) / range) * (H - pad * 2);
+  const points = data.map((v, i) => [pad + i * stepX, y(v)]);
+  const linePath = 'M ' + points.map(p => p.join(' ')).join(' L ');
+  const areaPath = linePath + ` L ${pad + (data.length-1)*stepX} ${H-pad} L ${pad} ${H-pad} Z`;
+  const zeroY = y(0);
+  const isPositive = data[data.length-1] >= 0;
+  const color = isPositive ? '#10b981' : '#f43f5e';
+  const colorDark = isPositive ? '#059669' : '#e11d48';
+
+  const svg = document.getElementById('profitChart');
+  svg.innerHTML = `
+    <defs>
+      <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${color}" stop-opacity="0.35"/>
+        <stop offset="100%" stop-color="${color}" stop-opacity="0.02"/>
+      </linearGradient>
+    </defs>
+    <line x1="${pad}" y1="${zeroY}" x2="${W-pad}" y2="${zeroY}" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="3 3"/>
+    <path d="${areaPath}" fill="url(#areaGrad)"/>
+    <path d="${linePath}" fill="none" stroke="${colorDark}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="${points[points.length-1][0]}" cy="${points[points.length-1][1]}" r="4" fill="#fff" stroke="${colorDark}" stroke-width="2.5"/>
+    <circle cx="${points[points.length-1][0]}" cy="${points[points.length-1][1]}" r="8" fill="${color}" fill-opacity="0.2"/>
+  `;
+})();
+
+// ===== 徽章详情弹窗 =====
+const badgeData = {
+  ten_streak: { label:'十连红', desc:'连续命中 10 场竞猜，传说级手感', icon:'🐐', rarity:'legendary', current:2, target:10, unlocked:false },
+  five_streak: { label:'五连红', desc:'连续命中 5 场竞猜', icon:'🌟', rarity:'epic', current:5, target:5, unlocked:true, unlockedAt:'2026-06-18' },
+  three_streak: { label:'三连红', desc:'连续命中 3 场竞猜', icon:'🔥', rarity:'rare', current:3, target:3, unlocked:true, unlockedAt:'2026-06-15' },
+  perfect_shooter: { label:'百发百中', desc:'命中率达到 80%，至少 10 单已结算', icon:'🏹', rarity:'legendary', current:0, target:10, unlocked:false },
+  hit_rate_60: { label:'神准', desc:'命中率达到 60%，至少 5 单已结算', icon:'🎯', rarity:'epic', current:58, target:60, unlocked:false },
+  score_prophet: { label:'比分预言家', desc:'正确比分命中 2 次', icon:'🔮', rarity:'rare', current:1, target:2, unlocked:false },
+  beacon: { label:'明灯认证', desc:'连续未中 5 场，群聊反向指标上线', icon:'💡', rarity:'rare', current:5, target:5, unlocked:true, unlockedAt:'2026-06-20' },
+  comeback: { label:'绝地翻盘', desc:'连续未中 5 场后，下一笔成功命中', icon:'🧗', rarity:'epic', current:0, target:1, unlocked:false },
+  first_bet: { label:'初次下注', desc:'完成第一笔竞猜即可解锁', icon:'🎯', rarity:'common', current:1, target:1, unlocked:true, unlockedAt:'2026-06-12' },
+};
+const rarityLabel = { common:'普通', rare:'稀有', epic:'史诗', legendary:'传说' };
+const progressColor = {
+  common:'#94a3b8', rare:'linear-gradient(90deg,#22d3ee,#06b6d4)',
+  epic:'linear-gradient(90deg,#a78bfa,#8b5cf6)', legendary:'linear-gradient(90deg,#fbbf24,#f59e0b)'
+};
+
+function openModal(id) {
+  const b = badgeData[id]; if (!b) return;
+  const pct = Math.min(100, Math.round(b.current / b.target * 100));
+  const iconWrap = document.getElementById('modalIcon');
+  const isAnim = b.rarity === 'legendary' || b.rarity === 'epic';
+  iconWrap.innerHTML = `<div class="mi-inner" style="width:88px;height:88px;border:2px solid ${b.rarity==='legendary'?'#fbbf24':b.rarity==='epic'?'#a78bfa':b.rarity==='rare'?'#22d3ee':'#cbd5e1'};box-shadow:0 0 ${b.rarity==='legendary'?'32px rgba(251,191,36,0.5)':b.rarity==='epic'?'24px rgba(167,139,250,0.35)':'12px rgba(0,0,0,0.1)'};${isAnim?`animation:${b.rarity==='legendary'?'legendary-pulse':'epic-glow'} 2.5s ease-in-out infinite`:''}"><span style="font-size:46px">${b.icon}</span></div>`;
+  document.getElementById('modalTitle').textContent = b.label;
+  const tagBg = b.rarity==='legendary'?'linear-gradient(135deg,#fbbf24,#f59e0b)':b.rarity==='epic'?'linear-gradient(135deg,#a78bfa,#8b5cf6)':b.rarity==='rare'?'#cffafe':'#f1f5f9';
+  const tagColor = (b.rarity==='legendary'||b.rarity==='epic')?'#fff':b.rarity==='rare'?'#0e7490':'#64748b';
+  document.getElementById('modalTags').innerHTML = `<span class="mt" style="background:${tagBg};color:${tagColor}">${rarityLabel[b.rarity]}</span>`;
+  document.getElementById('modalDesc').textContent = b.desc;
+  document.getElementById('modalProgLabel').textContent = b.unlocked ? '已完成' : '获取进度';
+  document.getElementById('modalProgValue').textContent = `${b.current} / ${b.target}`;
+  document.getElementById('modalProgFill').style.cssText = `width:${pct}%;background:${progressColor[b.rarity]}`;
+  const status = document.getElementById('modalStatus');
+  if (b.unlocked) { status.className = 'modal-status'; status.textContent = `✓ 已于 ${b.unlockedAt} 解锁`; }
+  else { status.className = 'modal-status locked'; status.textContent = '🔒 未解锁 — 继续努力！'; }
+  document.getElementById('modalOverlay').classList.add('active');
+}
+function closeModal(e) {
+  if (e && e.target !== e.currentTarget) return;
+  document.getElementById('modalOverlay').classList.remove('active');
+}
+</script>
+
+</body>
+</html>
