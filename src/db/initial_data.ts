@@ -5,6 +5,36 @@
 
 import { Team, Match, MatchOdds, MatchStatus, GroupRoom } from '../types';
 import { generateDefaultOdds } from '../utils/odds';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+// 真实用户种子数据（从 seed_users.json 加载，含头像 base64）
+// 修改此文件即可更新默认用户，迁移云服务器时一并携带
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const SEED_USERS_PATH = join(__dirname, 'seed_users.json');
+
+interface SeedUser {
+  id: string;
+  groupId: string;
+  displayName: string;
+  avatarUrl: string;
+  loginCode: string;
+  pinHash: string;
+  status: string;
+  balance: number;
+}
+
+export const PRESEEDED_USERS: SeedUser[] = (() => {
+  try {
+    const raw = readFileSync(SEED_USERS_PATH, 'utf8');
+    return JSON.parse(raw) as SeedUser[];
+  } catch (e) {
+    console.warn('[initial_data] seed_users.json 加载失败，回退到空数组:', e);
+    return [];
+  }
+})();
 
 export const SEED_ROOMS: GroupRoom[] = [
   {
@@ -95,13 +125,7 @@ export const THE_TEAMS: Team[] = [
   { id: 'ITA', name: 'Italy', nameZh: '意大利', code: 'ITA', logoUrl: '/flags/it.png', groupName: 'Group G', fifaRank: 8, confederation: 'UEFA', coachName: '卢西亚诺·斯帕莱蒂', coachNationality: '意大利', formation: '4-3-3', worldCupAppearances: 18, bestResult: '冠军 (1934, 1938, 1982, 2006)', primaryColor: '#008C45', secondaryColor: '#CD212A' },
 ];
 
-export const PRESEEDED_USERS = [
-  { id: 'u1', groupId: 'room-1', displayName: '小李(明灯)', avatarUrl: '🤵', loginCode: 'WC1001', pinHash: '1234', balance: 10000 },
-  { id: 'u2', groupId: 'room-1', displayName: '豪哥(冷门收割机)', avatarUrl: '⚽', loginCode: 'WC1002', pinHash: '1111', balance: 10000 },
-  { id: 'u3', groupId: 'room-1', displayName: '阿强(常胜将军)', avatarUrl: '👑', loginCode: 'WC1003', pinHash: '8888', balance: 10000 },
-  { id: 'u4', groupId: 'room-1', displayName: '小白(划水王)', avatarUrl: '🦁', loginCode: 'WC1004', pinHash: '0000', balance: 10000 },
-  { id: 'u5', groupId: 'room-2', displayName: '老王粉丝', avatarUrl: '🥊', loginCode: 'WC2001', pinHash: '1234', balance: 10000 }
-];
+export const PRESEEDED_USERS_LEGACY_REMOVED = true;
 
 // 北京时间 → UTC
 function bjToUtc(month: number, day: number, hour: number, minute: number) {

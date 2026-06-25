@@ -148,7 +148,7 @@ class DatabaseService {
         avatarUrl: u.avatarUrl,
         loginCode: u.loginCode,
         pinHash: u.pinHash, // store simple text for demo and ease of token verification
-        status: 'CLAIMED',
+        status: (u as { status?: string }).status || 'CLAIMED',
         claimedAt: new Date().toISOString(),
         createdAt: new Date().toISOString()
       });
