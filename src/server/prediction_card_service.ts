@@ -171,6 +171,20 @@ export function consumeCard(userId: string, cardId: PredictionCardId): boolean {
 }
 
 /**
+ * 恢复一张卡牌库存（forceResettle 回滚时使用，consumeCard 的逆操作）
+ * 仅在回滚场景调用——将已消耗的卡牌退还给用户，避免重结时卡牌效果被重复应用
+ */
+export function restoreCard(userId: string, cardId: PredictionCardId): boolean {
+  const inv = getUserCardInventory(userId);
+  const current = inv.cards[cardId] || 0;
+  inv.cards[cardId] = current + 1;
+  inv.updatedAt = new Date().toISOString();
+  const inventories = ensureCardInventories();
+  saveCardInventories(inventories);
+  return true;
+}
+
+/**
  * 检查用户是否拥有该卡牌
  */
 export function userHasCard(userId: string, cardId: PredictionCardId): boolean {

@@ -90,10 +90,23 @@ class DatabaseService {
   private init() {
     try {
       this.ensureDataDir();
+      try {
+        const snapshot = this.readMySqlSnapshot();
+        if (snapshot && snapshot.teams.length > 0) {
+          this.cache = snapshot;
+          this.ensureDerivedState();
+          return;
+        }
+        console.log('MySQL snapshot is empty, seeding default data...');
+      } catch (error) {
+        console.warn('Failed to read MySQL snapshot, seeding default data instead.', error);
+      }
+      this.resetToDefaults();
+      return;
       if (this.useMySqlStorage()) {
         try {
           const snapshot = this.readMySqlSnapshot();
-          if (snapshot && snapshot.teams.length > 0) {
+          if (snapshot?.teams.length) {
             this.cache = snapshot;
             this.ensureDerivedState();
             return;
@@ -330,7 +343,7 @@ class DatabaseService {
 
   public getStorageInfo() {
     return {
-      mode: this.useMySqlStorage() ? MYSQL_STORAGE_MODE : 'json',
+      mode: MYSQL_STORAGE_MODE,
     };
   }
 
@@ -429,6 +442,12 @@ class DatabaseService {
       this._saveTimer = null;
       this.ensureDataDir();
       const normalized = this.normalizeForPersistence();
+      try {
+        this.writeMySqlSnapshot(normalized);
+      } catch (e) {
+        console.error('Failed to persist database to MySQL!', e);
+      }
+      return;
       const data = JSON.stringify(normalized, null, 2);
       fs.promises.writeFile(DB_FILE_PATH, data, 'utf-8').catch((e) => {
         console.error('Failed to write database to disk!', e);
@@ -475,16 +494,17 @@ class DatabaseService {
   }
 
   private useMySqlStorage() {
-    const mode = String(process.env.APP_STORAGE_MODE || '').trim().toLowerCase();
-    return mode === MYSQL_STORAGE_MODE || (!!process.env.DATABASE_URL && mode !== 'json');
+    return true;
   }
 
   private persistCurrentState() {
     this.ensureDataDir();
     const normalized = this.normalizeForPersistence();
-    fs.writeFileSync(DB_FILE_PATH, JSON.stringify(normalized, null, 2), 'utf-8');
-    if (this.useMySqlStorage()) {
+    try {
       this.writeMySqlSnapshot(normalized);
+    } catch (e) {
+      // MySQL 不可用时回退到 JSON 文件存储
+      fs.writeFileSync(DB_FILE_PATH, JSON.stringify(normalized, null, 2), 'utf-8');
     }
   }
 
