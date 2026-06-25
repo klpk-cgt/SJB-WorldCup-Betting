@@ -168,7 +168,15 @@
   box-shadow: 0 4px 16px rgba(251,191,36,0.3);
 }
 .badge-legendary .profile-badge-icon-wrap {
+  width: 56px !important; height: 56px !important;
   animation: legendary-pulse 2.5s ease-in-out infinite;
+}
+.badge-legendary .tag-rarity {
+  background: linear-gradient(135deg, #fbbf24, #f59e0b) !important;
+  color: #fff !important;
+}
+.badge-legendary .progress-fill {
+  background: linear-gradient(90deg, #fbbf24, #f59e0b) !important;
 }
 @keyframes legendary-pulse {
   0%, 100% { box-shadow: 0 0 20px rgba(251,191,36,0.4); }
@@ -181,7 +189,15 @@
   box-shadow: 0 3px 12px rgba(167,139,250,0.2);
 }
 .badge-epic .profile-badge-icon-wrap {
+  width: 48px !important; height: 48px !important;
   animation: epic-glow 3s ease-in-out infinite;
+}
+.badge-epic .tag-rarity {
+  background: linear-gradient(135deg, #a78bfa, #8b5cf6) !important;
+  color: #fff !important;
+}
+.badge-epic .progress-fill {
+  background: linear-gradient(90deg, #a78bfa, #8b5cf6) !important;
 }
 @keyframes epic-glow {
   0%, 100% { box-shadow: 0 2px 8px rgba(167,139,250,0.15); }
@@ -192,10 +208,30 @@
   border: 1.5px solid #22d3ee !important;
   background: #ecfeff !important;
 }
+.badge-rare .profile-badge-icon-wrap {
+  width: 44px !important; height: 44px !important;
+}
+.badge-rare .tag-rarity {
+  background: #cffafe !important;
+  color: #0e7490 !important;
+}
+.badge-rare .progress-fill {
+  background: linear-gradient(90deg, #22d3ee, #06b6d4) !important;
+}
 
 .badge-common {
   border: 1px solid #cbd5e1 !important;
   background: #f8fafc !important;
+}
+.badge-common .profile-badge-icon-wrap {
+  width: 40px !important; height: 40px !important;
+}
+.badge-common .tag-rarity {
+  background: #f1f5f9 !important;
+  color: #64748b !important;
+}
+.badge-common .progress-fill {
+  background: #94a3b8 !important;
 }
 
 .profile-badge-icon-wrap {
@@ -205,11 +241,23 @@
   align-items: center;
   justify-content: center;
   box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  position: relative;
 }
 
 .badge-locked {
   filter: grayscale(0.8);
   opacity: 0.55;
+}
+.badge-locked .profile-badge-icon-wrap::after {
+  content: '🔒';
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  font-size: 14px;
+  background: #fff;
+  border-radius: 999px;
+  padding: 1px 3px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
 }
 
 /* ===== 徽章详情弹窗（底部抽屉） ===== */

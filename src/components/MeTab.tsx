@@ -269,11 +269,11 @@ function StatTileLight({
   valueColor?: string;
 }) {
   return (
-    <div className="bg-white border border-slate-200 rounded-[20px] p-4 flex flex-col transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgba(15,23,42,0.08)] shadow-[0_12px_30px_rgba(15,23,42,0.05)] cursor-default">
-      <span className="text-xs font-semibold text-slate-500 mb-1">{label}</span>
-      <span className={`text-2xl font-extrabold tabular-nums leading-none ${valueColor || 'text-[#0f172a]'}`}>{value}</span>
-      <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${iconBg} mt-2`}>
-        <ProfileImageIcon src={iconSrc} alt={label} size={36} fallback={<Icon className={`h-4 w-4 ${iconColor}`} />} />
+    <div className="profile-stat-tile">
+      <span className="text-xs font-semibold text-slate-500">{label}</span>
+      <span className={`mt-1 block text-2xl font-extrabold tabular-nums leading-none ${valueColor || 'text-[#0f172a]'}`}>{value}</span>
+      <div className={`profile-tile-icon ${iconBg}`}>
+        <ProfileImageIcon src={iconSrc} alt={label} size={32} fallback={<Icon className={`h-4 w-4 ${iconColor}`} />} />
       </div>
     </div>
   );
@@ -923,7 +923,7 @@ function BadgeCard({ badge, unlocked = false, onClick }: { badge: AchievementBad
       className={`rounded-2xl border p-3 transition cursor-pointer active:scale-[0.97] ${rarityClass} ${!unlocked ? 'badge-locked' : ''}`}
     >
       <div className="flex items-center gap-2">
-        <div className="profile-badge-icon-wrap flex h-10 w-10 shrink-0 items-center justify-center">
+        <div className="profile-badge-icon-wrap shrink-0">
           <ProfileImageIcon src={getBadgeImageSrc(badge)} alt={badge.label} size={32} fallback={<span className="text-lg">{badge.icon}</span>} />
         </div>
         <div className="min-w-0">
@@ -931,7 +931,7 @@ function BadgeCard({ badge, unlocked = false, onClick }: { badge: AchievementBad
             {badge.label}
           </span>
           <div className="mt-1 flex flex-wrap gap-1">
-            <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black ${getRarityClass(badge.rarity)}`}>
+            <span className="tag-rarity rounded-full px-1.5 py-0.5 text-[9px] font-black">
               {RARITY_LABEL[badge.rarity || 'common']}
             </span>
             <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black ${badge.polarity === 'negative' ? 'bg-rose-50 text-rose-600' : badge.polarity === 'funny' ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>
@@ -942,8 +942,8 @@ function BadgeCard({ badge, unlocked = false, onClick }: { badge: AchievementBad
       </div>
       <p className="mt-2 line-clamp-2 text-xs font-semibold leading-5 text-slate-500">{badge.description}</p>
       <div className="mt-2 flex items-center gap-2">
-        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white">
-          <div className={`h-full rounded-full ${unlocked ? 'bg-gradient-to-r from-emerald-500 to-cyan-500' : 'bg-slate-300'}`} style={{ width: `${progress}%` }} />
+        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/60">
+          <div className="progress-fill h-full rounded-full" style={{ width: `${progress}%` }} />
         </div>
         <span className="text-[10px] font-black text-slate-400">{badge.current}/{badge.target}</span>
       </div>
@@ -956,23 +956,38 @@ function CardInventoryGrid({ cardInventory }: { cardInventory: any }) {
     return <EmptyState>暂无道具卡，后续活动会继续发放。</EmptyState>;
   }
 
+  const ITEM_GRADIENT: Record<string, string> = {
+    NO_LOSS: 'item-emerald',
+    no_loss: 'item-emerald',
+    'no-loss': 'item-emerald',
+    DOUBLE: 'item-amber',
+    double: 'item-amber',
+    REGRET: 'item-rose',
+    regret: 'item-rose',
+    FLOOR: 'item-cyan',
+    floor: 'item-cyan',
+  };
+
   return (
     <div className="grid grid-cols-2 gap-2">
       {cardInventory.definitions.map((def: any) => {
         const count = cardInventory.cards?.[def.id] || 0;
         const cardIconSrc = CARD_ICON_SRC[def.id] || CARD_ICON_SRC[String(def.id).toUpperCase()] || CARD_ICON_SRC[String(def.id).toLowerCase()];
+        const gradientClass = ITEM_GRADIENT[def.id] || ITEM_GRADIENT[String(def.id).toUpperCase()] || 'item-emerald';
         return (
-          <div key={def.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+          <div key={def.id} className={`item-card rounded-2xl border p-3 relative overflow-hidden ${gradientClass}`}>
             <div className="flex items-center justify-between gap-2">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-100">
+              <div className="flex h-[52px] w-[52px] items-center justify-center rounded-[14px] bg-white/95 shadow-sm">
                 <ProfileImageIcon src={cardIconSrc} alt={def.shortLabel || def.label} size={32} fallback={<span className="text-xl">{def.icon}</span>} />
               </div>
-              <span className={`rounded-full px-2 py-0.5 text-xs font-black ${count > 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-500'}`}>
-                x{count}
-              </span>
+              {count > 0 && (
+                <span className="absolute top-2.5 right-2.5 rounded-full px-2 py-0.5 text-[11px] font-black text-white" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
+                  x{count}
+                </span>
+              )}
             </div>
-            <p className="mt-2 text-sm font-black text-slate-900">{def.shortLabel || def.label}</p>
-            <p className="mt-1 line-clamp-2 text-[11px] font-semibold leading-4 text-slate-500">{def.description}</p>
+            <p className="mt-2.5 text-sm font-black text-slate-900">{def.shortLabel || def.label}</p>
+            <p className="mt-1 line-clamp-2 text-[11px] font-semibold leading-4 text-slate-600">{def.description}</p>
           </div>
         );
       })}
