@@ -52,7 +52,10 @@ import { createBackup, listBackups, restoreFromBackup } from '../backup';
 import { adjustWalletBalance } from '../services/wallet_service';
 import logger from '../logger';
 
-const config = getRuntimeConfig();
+// 使用 Proxy 动态读取配置，避免模块加载时 dotenv 尚未执行导致配置为空
+const config = new Proxy({} as ReturnType<typeof getRuntimeConfig>, {
+  get(_t, prop: string) { return getRuntimeConfig()[prop as keyof ReturnType<typeof getRuntimeConfig>]; },
+});
 const router = Router();
 
 interface SyncSampleOddsResult {

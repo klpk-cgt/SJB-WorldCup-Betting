@@ -32,12 +32,25 @@ import {
 
 export { deriveOperationalStatus, deriveSettlementStatus };
 import { invalidateAIContent } from './ai';
-import logger, { getLogDirectory } from './logger';
+import logger, { getLogDirectory, getLogRotationConfig } from './logger';
 import { quizQuestionPool, QUIZ_POINTS_PER_CORRECT } from './quiz_data';
 import { mergeCorrectScoreOdds } from '../utils/odds';
 
-const config = getRuntimeConfig();
+// 使用 Proxy 动态读取配置，避免模块加载时 dotenv 尚未执行导致配置为空
+const config = new Proxy({} as ReturnType<typeof getRuntimeConfig>, {
+  get(_t, prop: string) { return getRuntimeConfig()[prop as keyof ReturnType<typeof getRuntimeConfig>]; },
+});
 const seedTeamMap = new Map(THE_TEAMS.map((team) => [team.id, team]));
+
+function getDirectorySize(targetPath: string): number {
+  if (!fs.existsSync(targetPath)) return 0;
+  const stat = fs.statSync(targetPath);
+  if (!stat.isDirectory()) return stat.size;
+
+  return fs.readdirSync(targetPath).reduce((sum, entry) => {
+    return sum + getDirectorySize(path.join(targetPath, entry));
+  }, 0);
+}
 
 // ─── Admin Session Management ───
 
@@ -45,18 +58,12 @@ type AdminSession = { token: string; expiresAt: number };
 const ADMIN_DATA_DIR = process.env.APP_DATA_DIR
   ? path.resolve(process.cwd(), process.env.APP_DATA_DIR)
   : process.cwd();
-const ADMIN_SESSIONS_FILE = path.join(ADMIN_DATA_DIR, 'admin_sessions.json');
 const adminSessions = new Map<string, AdminSession>();
 
 export function loadAdminSessions() {
   try {
     const db = dbService.getData();
-    const persistedSessions =
-      dbService.getStorageInfo().mode === 'mysql'
-        ? ((db.adminSessions || []) as AdminSession[])
-        : (fs.existsSync(ADMIN_SESSIONS_FILE)
-            ? (JSON.parse(fs.readFileSync(ADMIN_SESSIONS_FILE, 'utf-8')) as AdminSession[])
-            : []);
+    const persistedSessions = (db.adminSessions || []) as AdminSession[];
 
     if (persistedSessions.length > 0) {
       const now = Date.now();
@@ -78,13 +85,9 @@ export function saveAdminSessions() {
     if (!fs.existsSync(ADMIN_DATA_DIR)) {
       fs.mkdirSync(ADMIN_DATA_DIR, { recursive: true });
     }
-    if (dbService.getStorageInfo().mode === 'mysql') {
-      const db = dbService.getData();
-      db.adminSessions = sessions;
-      dbService.save();
-      return;
-    }
-    fs.writeFileSync(ADMIN_SESSIONS_FILE, JSON.stringify(sessions, null, 2), 'utf-8');
+    const db = dbService.getData();
+    db.adminSessions = sessions;
+    dbService.save();
   } catch (error) {
     console.error('[Admin] Failed to save admin sessions.', error);
   }
@@ -912,6 +915,11 @@ export function getSystemStatusPayload() {
     acc[match.status] = (acc[match.status] || 0) + 1;
     return acc;
   }, {});
+  const oddsSourceCounts = Object.values(db.matchOdds).reduce<Record<string, number>>((acc, odds) => {
+    const key = odds.source || 'UNKNOWN';
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
   const unmatchedTeamRefs = db.matches.filter(
     (match) => !teamIds.has(match.homeTeamId) || !teamIds.has(match.awayTeamId),
   );
@@ -919,12 +927,20 @@ export function getSystemStatusPayload() {
     (match) => teamIds.has(match.homeTeamId) && teamIds.has(match.awayTeamId),
   ).length;
   const latestSyncLog = db.syncLogs[0] || null;
+  const unsettledFinishedMatches = db.matches.filter((match) => {
+    return (match.status === 'FT' || match.status === 'AET' || match.status === 'PEN') && !match.isSettled;
+  }).length;
+  const scoreUnknownMatches = db.matches.filter((match) => Boolean((match as any).scoreUnknown)).length;
+  const logDirectory = getLogDirectory();
+  const logDirectoryBytes = getDirectorySize(logDirectory);
 
   return {
     storage: {
       mode: dbService.getStorageInfo().mode,
       databaseConnected: true,
-      logDirectory: getLogDirectory(),
+      logDirectory,
+      logDirectoryBytes,
+      logRotation: getLogRotationConfig(),
     },
     counts: {
       rooms: db.rooms.length,
@@ -940,6 +956,8 @@ export function getSystemStatusPayload() {
     },
     matches: {
       byStatus: matchStatusCounts,
+      unsettledFinishedMatches,
+      scoreUnknownMatches,
       withScores: db.matches.filter(
         (match) => typeof match.homeScore === 'number' || typeof match.awayScore === 'number',
       ).length,
@@ -958,6 +976,9 @@ export function getSystemStatusPayload() {
       latest: latestSyncLog,
       latestFixtures: getLatestSyncLog('fixtures', 'API-Football') || null,
       latestOdds: getLatestSyncLog('odds', 'The Odds API') || null,
+    },
+    odds: {
+      bySource: oddsSourceCounts,
     },
     providers: summarizeProviderConfig(config),
     generatedAt: new Date().toISOString(),
