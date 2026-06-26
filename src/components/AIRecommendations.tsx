@@ -5,6 +5,7 @@
 import { useState, useEffect } from 'react';
 import { Sparkles, TrendingUp, Target, AlertTriangle, Swords } from 'lucide-react';
 import { apiRequest } from '../utils/api';
+import { formatPoints, formatOdds } from '../utils/format';
 import { useToast } from './ToastProvider';
 
 interface Recommendation {
@@ -55,7 +56,7 @@ export default function AIRecommendations({ onNavigate }: { onNavigate: (tab: st
       const wallet = userResp.wallet;
 
       if (wallet.balance < rec.suggestedStake) {
-        toast.error('积分不足', `需要 ${rec.suggestedStake} 积分，当前余额 ${wallet.balance}`);
+        toast.error('余额不足', `需要 ${formatPoints(rec.suggestedStake)}，当前余额 ${formatPoints(wallet.balance)}`);
         return;
       }
 
@@ -70,7 +71,7 @@ export default function AIRecommendations({ onNavigate }: { onNavigate: (tab: st
         }),
       });
 
-      toast.success('跟投成功', `已跟投 ${rec.optionLabel}，${rec.suggestedStake} 积分`);
+      toast.success('跟投成功', `已跟投 ${rec.optionLabel}，${formatPoints(rec.suggestedStake)}`);
 
       onNavigate('predictions');
     } catch (e: unknown) {
@@ -139,7 +140,7 @@ export default function AIRecommendations({ onNavigate }: { onNavigate: (tab: st
                   </div>
                 </div>
                 <div className="text-right shrink-0 ml-3">
-                  <div className="text-lg font-black text-slate-900">{rec.odds.toFixed(2)}</div>
+                  <div className="text-lg font-black text-slate-900">{formatOdds(rec.odds)}</div>
                   <div className="text-[10px] text-slate-400">赔率</div>
                 </div>
               </div>
@@ -152,9 +153,9 @@ export default function AIRecommendations({ onNavigate }: { onNavigate: (tab: st
                 </div>
                 <div className="rounded-xl bg-slate-50 p-3">
                   <div className="text-[10px] font-bold text-slate-400">建议投入</div>
-                  <div className="text-sm font-black text-slate-900">{rec.suggestedStake} 积分</div>
+                  <div className="text-sm font-black text-slate-900">{formatPoints(rec.suggestedStake)}</div>
                   <div className="text-[10px] text-slate-400">
-                    预期回报 {Math.round(rec.suggestedStake * rec.odds)}
+                    预期回报 {formatPoints(Math.round(rec.suggestedStake * rec.odds))}
                   </div>
                 </div>
               </div>

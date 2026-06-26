@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿/**
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿/**
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -6,10 +6,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Brain, Calendar, CheckCircle2, ChevronRight, Sparkles, Timer, Trophy, Users, XCircle, Zap } from 'lucide-react';
-import { AIContent, Match, MatchStatus, User, Wallet } from '../types';
+import { AIContent, Match, MatchStatus, User, UserProfileSummary, Wallet } from '../types';
 import { apiRequest, formatDate } from '../utils/api';
 import { useStaggerReveal, useFadeIn } from '../animations';
 import { getBeijingDayLabel, getMatchesForNearestDay, sortMatchesByKickoff } from '../utils/matchDisplay';
+import { getLevelByNetProfit } from '../server/config';
 import {
   getHomeMatchCategory,
   selectFeaturedHomeMatch,
@@ -24,6 +25,7 @@ import TeamDetailDrawer from './TeamDetailDrawer';
 import { useToast } from './ToastProvider';
 import ActivityFeed, { ActivityItem } from './ActivityFeed';
 import BattleReportCard, { type BattleReportData } from './BattleReportCard';
+import { formatPoints, formatSignedPoints } from '../utils/format';
 
 interface HomeTabProps {
   user: User | null;
@@ -156,9 +158,9 @@ function buildFocusMatch(match: Match | undefined, now: number): FocusMatch {
 function extractAiView(ai: AIContent | null) {
   if (!ai) {
     return {
-      summary: '今晚先盯焦点战节奏，再决定娱乐积分怎么分配。',
+      summary: '今晚先盯焦点战节奏，再决定娱乐余额怎么分配。',
       bullets: ['首发出来后再加注', '热门方向别一把压满', '比分玩法更适合小档位试水'],
-      riskWarning: '临场首发和锁盘时间都可能改变判断，建议娱乐积分分档操作。',
+      riskWarning: '临场首发和锁盘时间都可能改变判断，建议娱乐余额分档操作。',
       provider: 'AI 赛前助手',
       title: '今日焦点推荐已生成',
     };
@@ -167,7 +169,7 @@ function extractAiView(ai: AIContent | null) {
   return {
     summary: ai.summary || ai.content.split('\n').find(Boolean) || ai.title,
     bullets: ai.bullets?.slice(0, 3) || [],
-    riskWarning: ai.riskWarning || '注意临场变化，娱乐积分别一次性压太重。',
+    riskWarning: ai.riskWarning || '注意临场变化，娱乐余额别一次性压太重。',
     provider: ai.provider || ai.model || 'AI 赛前助手',
     title: ai.title,
   };
@@ -230,6 +232,7 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate, wsS
   const [teamDetailOpen, setTeamDetailOpen] = useState(false);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [activitiesLoading, setActivitiesLoading] = useState(true);
+  const [profileSummary, setProfileSummary] = useState<UserProfileSummary | null>(null);
   const [battleReport, setBattleReport] = useState<BattleReportData | null>(null);
   const [sentiment, setSentiment] = useState<{ home: number; draw: number; away: number; total?: number } | null>(null);
   const [sentimentLoading, setSentimentLoading] = useState(true);
@@ -274,6 +277,19 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate, wsS
     }
 
     initHome();
+  }, [user]);
+
+  useEffect(() => {
+    async function fetchProfileSummary() {
+      if (!user) return;
+      try {
+        const data = await apiRequest('/api/me/profile-summary');
+        setProfileSummary(data);
+      } catch (error) {
+        console.error('Failed to fetch profile summary', error);
+      }
+    }
+    fetchProfileSummary();
   }, [user]);
 
   // WebSocket 实时比分更新：局部更新本地 matches 状态，无需重新请求全量
@@ -391,6 +407,11 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate, wsS
   }, [unifiedFeaturedMatch?.id]);
 
   const aiView = extractAiView(dailyAI);
+
+  // 与资料页统一的等级计算逻辑
+  const gameNetProfit = (wallet?.balance || 0) - (wallet?.initialPoints || 10000);
+  const currentLevel = getLevelByNetProfit(gameNetProfit);
+
   const nearestDayLabel = recentMatches[0] ? getBeijingDayLabel(recentMatches[0].startTimeUtc) : '';
 
   const countdownTarget = useMemo(
@@ -425,8 +446,6 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate, wsS
   }
 
   return (
-    <>
-      <style>{`@keyframes coinPulse{0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,.15)}50%{box-shadow:0 0 0 6px rgba(245,158,11,0)}}`}</style>
     <div className="space-y-5 pb-6">
       <section ref={headerRef} className="flex items-center justify-between rounded-[28px] border border-slate-200 bg-white px-4 py-3.5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
         <div className="flex items-center gap-3 min-w-0">
@@ -434,35 +453,77 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate, wsS
           <div className="min-w-0 flex-1">
             <span className="text-sm font-black text-slate-900 truncate block">{user?.displayName || '游客观赛模式'}</span>
             <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-              <span className="rounded-full bg-orange-50 border border-orange-100 px-2 py-0.5 text-[9px] font-bold text-orange-600">🔥 群聊入口</span>
-              {user && <span className="rounded-full bg-amber-50 border border-amber-100 px-2 py-0.5 text-[9px] font-bold text-amber-600">⭐ Lv.4</span>}
+              {profileSummary?.currentTitle && (
+                <span className="rounded-full bg-violet-50 border border-violet-100 px-2 py-0.5 text-[9px] font-bold text-violet-600">
+                  ⚡ {profileSummary.currentTitle}
+                </span>
+              )}
+              {user && (
+                <span className={`rounded-full border px-2 py-0.5 text-[9px] font-bold ${currentLevel.badgeBg}`}>
+                  ⭐ Lv.{currentLevel.level}
+                </span>
+              )}
             </div>
           </div>
         </div>
 
-        {/* 积分余额 */}
+        {/* 余额 */}
         <div className="shrink-0">
           <div className="flex items-center gap-2.5">
-            {/* PTS 金币 */}
-            <div className="shrink-0 rounded-full animate-[coinPulse_2.5s_ease-in-out_infinite]" style={{ boxShadow: '0 0 12px rgba(245,158,11,0.15)' }}>
-              <svg width="42" height="42" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+            {/* 余额金币图标 - Riot 风格锐利现代金币 */}
+            <div className="shrink-0">
+              <svg width="46" height="46" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <defs>
-                  <linearGradient id="ptsGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#F59E0B" />
-                    <stop offset="50%" stopColor="#FBBF24" />
-                    <stop offset="100%" stopColor="#D97706" />
+                  {/* 外环锐利金渐变 */}
+                  <linearGradient id="coinRim" x1="0" y1="0" x2="64" y2="64">
+                    <stop offset="0%" stopColor="#FEF3C7" />
+                    <stop offset="20%" stopColor="#FBBF24" />
+                    <stop offset="50%" stopColor="#D97706" />
+                    <stop offset="80%" stopColor="#78350F" />
+                    <stop offset="100%" stopColor="#451A03" />
                   </linearGradient>
+                  {/* 币面渐变 */}
+                  <linearGradient id="coinFace" x1="10" y1="6" x2="54" y2="54">
+                    <stop offset="0%" stopColor="#FFFBEB" />
+                    <stop offset="30%" stopColor="#FDE68A" />
+                    <stop offset="65%" stopColor="#F59E0B" />
+                    <stop offset="100%" stopColor="#B45309" />
+                  </linearGradient>
+                  {/* 釉光覆盖层 */}
+                  <linearGradient id="coinGlaze" x1="15" y1="5" x2="49" y2="55">
+                    <stop offset="0%" stopColor="rgba(255,255,255,0.45)" />
+                    <stop offset="35%" stopColor="rgba(255,255,255,0)" />
+                    <stop offset="65%" stopColor="rgba(0,0,0,0)" />
+                    <stop offset="100%" stopColor="rgba(0,0,0,0.15)" />
+                  </linearGradient>
+                  {/* 投影 */}
+                  <filter id="coinDrop" x="-15%" y="-5%" width="130%" height="130%">
+                    <feDropShadow dx="0" dy="3" stdDeviation="3.5" floodColor="#000" floodOpacity="0.3" />
+                  </filter>
                 </defs>
-                <circle cx="18" cy="18" r="16" fill="url(#ptsGrad)" />
-                <circle cx="18" cy="18" r="11" fill="#FEF3C7" />
-                <text x="18" y="20.5" textAnchor="middle" fontSize="8" fontWeight="900" fill="#B45309" fontFamily="system-ui, sans-serif">PTS</text>
-                <ellipse cx="14" cy="9" rx="5" ry="2.5" fill="white" opacity="0.35" />
+                {/* 底部投影 */}
+                <ellipse cx="32" cy="58" rx="20" ry="3.5" fill="#000" opacity="0.18" />
+                {/* 外环 */}
+                <circle cx="32" cy="30" r="28" fill="url(#coinRim)" filter="url(#coinDrop)" />
+                {/* 币面 */}
+                <circle cx="32" cy="30" r="20" fill="url(#coinFace)" />
+                {/* 釉光层 */}
+                <circle cx="32" cy="30" r="20" fill="url(#coinGlaze)" />
+                {/* 锐利刻线 */}
+                <circle cx="32" cy="30" r="28" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="0.6" />
+                <circle cx="32" cy="30" r="20" fill="none" stroke="rgba(69,26,3,0.25)" strokeWidth="0.6" />
+                {/* ¥ 字 */}
+                <text x="32" y="36" textAnchor="middle" fontSize="16" fontWeight="900" fill="#78350F" fontFamily="system-ui, sans-serif" opacity="0.9">¥</text>
+                {/* 锐利高光弧 */}
+                <path d="M14 20 A20 20 0 0 1 50 20" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2" strokeLinecap="round" />
+                {/* 亮点 */}
+                <ellipse cx="22" cy="15" rx="6" ry="2" fill="white" opacity="0.25" />
               </svg>
             </div>
             <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">积分</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">余额</p>
               <p className="text-xl font-black tabular-nums tracking-tight text-slate-900 leading-tight">
-                {wallet?.balance?.toLocaleString() || '10,000'}
+                {formatPoints(wallet?.balance)}
               </p>
             </div>
           </div>
@@ -696,7 +757,7 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate, wsS
             <Brain className="h-4.5 w-4.5 text-violet-500" />
             <h3 className="text-sm font-black text-slate-900">每日足球问答</h3>
           </div>
-          <span className="text-xs font-semibold text-slate-400">答对 +100 积分/题</span>
+          <span className="text-xs font-semibold text-slate-400">答对 +¥100/题</span>
         </div>
 
         <div className="mt-4 grid grid-cols-[1fr_auto] gap-3">
@@ -709,7 +770,7 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate, wsS
               3 <span className="ml-1 text-xs font-bold text-slate-400">道题</span>
             </p>
             <p className="mt-2 text-xs leading-6 text-slate-500">
-              {quizFinishedToday ? '今天已经答完了，明天再来继续挑战。' : '轻量问答不扣分，适合每天顺手领一点积分。'}
+              {quizFinishedToday ? '今天已经答完了，明天再来继续挑战。' : '轻量问答不扣分，适合每天顺手领一点余额。'}
             </p>
           </div>
 
@@ -841,7 +902,7 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate, wsS
                     animate={{ scale: [0.5, 1.2, 1], opacity: [0, 1, 1] }}
                     transition={{ duration: 0.5, delay: 0.3 }}
                   >
-                    +{quizScore} PTS
+                    {formatSignedPoints(quizScore)}
                   </motion.p>
                   <p className="mt-2 text-xs text-slate-500">
                     {quizScore >= 300
@@ -849,7 +910,7 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate, wsS
                       : quizScore >= 200
                         ? '表现很稳，明天继续冲。'
                         : quizScore >= 100
-                          ? '拿到积分了，明天继续补全。'
+                          ? '拿到余额了，明天继续补全。'
                           : '今天没答对也没关系，明天继续。'}
                   </p>
                   <button
@@ -959,7 +1020,7 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate, wsS
                               }`}
                             >
                               <p className="font-black">
-                                {selectedOption === quizQuestions[currentQIndex].correctIndex ? '回答正确，+100 积分' : '回答错误'}
+                                {selectedOption === quizQuestions[currentQIndex].correctIndex ? '回答正确，+¥100' : '回答错误'}
                               </p>
                               <p className="mt-1">{quizQuestions[currentQIndex].explanation}</p>
                             </div>
@@ -984,6 +1045,5 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate, wsS
 
       <TeamDetailDrawer teamId={teamDetailId} open={teamDetailOpen} onClose={() => setTeamDetailOpen(false)} />
     </div>
-    </>
   );
 }

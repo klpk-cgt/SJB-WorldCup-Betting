@@ -10,6 +10,7 @@ import { ADMIN_KEY_STORAGE, apiRequest } from '../utils/api';
 import { Match, SyncLog } from '../types';
 import { useToast } from './ToastProvider';
 import AdminDashboard from './AdminDashboard';
+import { formatPoints, formatSignedPoints, formatOdds } from '../utils/format';
 
 interface AdminPanelProps {
   onBackToApp: () => void;
@@ -93,7 +94,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
   const [predTotal, setPredTotal] = useState(0);
   const [predPage, setPredPage] = useState(1);
 
-  // 积分流水查看
+  // 余额流水查看
   const [txUserId, setTxUserId] = useState('');
   const [txType, setTxType] = useState('');
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -195,7 +196,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
       setTxPage(page);
     } catch (e) {
       console.error(e);
-      toast.error('加载积分流水失败');
+      toast.error('加载余额流水失败');
     }
   };
 
@@ -357,9 +358,9 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
       });
       setAdjustTargetUser(null);
       await loadAdminData();
-      toast.success('调整成功', '用户积分已经更新。');
+      toast.success('调整成功', '用户余额已经更新。');
     } catch (e: unknown) {
-      toast.error('调整积分失败', e.message);
+      toast.error('调整余额失败', e.message);
     } finally {
       setIsWorking(false);
     }
@@ -381,7 +382,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
         body: JSON.stringify({ amount: amountNum, reason: bulkReason }),
       });
       await loadAdminData();
-      toast.success('发配成功', `已向 ${result.affectedCount} 名用户各发配 ${amountNum > 0 ? '+' : ''}${amountNum} 积分。`);
+      toast.success('发配成功', `已向 ${result.affectedCount} 名用户各发配 ${amountNum > 0 ? '+' : ''}${formatPoints(amountNum)}。`);
     } catch (e: unknown) {
       toast.error('统一发配失败', e.message);
     } finally {
@@ -469,7 +470,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
   const handleTriggerSettlement = async () => {
     if (!selectedMatch) return;
     setIsWorking(true);
-    setSettleStatusMsg('正在检索群 predictions 数据并自动核对计算派积分中...');
+    setSettleStatusMsg('正在检索群 predictions 数据并自动核对计算派余额中...');
     try {
       const res = await apiRequest(`/api/admin/matches/${selectedMatch.id}/settle`, {
         method: 'POST'
@@ -652,7 +653,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
           </h2>
         </div>
         <p className="text-xs text-slate-500 font-bold leading-relaxed">
-          出于积分操作及赛程同步安全考虑，请使用生产环境里配置的管理员账号和密码登录后台。
+          出于余额操作及赛程同步安全考虑，请使用生产环境里配置的管理员账号和密码登录后台。
         </p>
 
         <form onSubmit={handleLogin} className="space-y-4">
@@ -775,7 +776,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
             activeTab === 'transactions' ? 'bg-white text-rose-600 font-extrabold shadow-sm' : 'text-slate-500 hover:text-slate-800'
           }`}
         >
-          积分流水
+          余额流水
         </button>
         <button
           onClick={() => setActiveTab('logs')}
@@ -831,7 +832,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
                     结算：{m.isSettled ? (
                       <span className="text-emerald-600 flex items-center gap-0.5">✅ 已派发</span>
                     ) : (
-                      <span className="text-rose-500 font-bold">❌ 尚未清算发放积分</span>
+                      <span className="text-rose-500 font-bold">❌ 尚未清算发放余额</span>
                     )}
                   </span>
                   <span className="text-slate-500">赔率: {m.odds ? `${m.odds.h2h.homeWin}/${m.odds.h2h.draw}/${m.odds.h2h.awayWin}` : '无'}</span>
@@ -995,7 +996,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
                         disabled={isWorking}
                         className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black py-3 px-4 rounded-xl transition cursor-pointer min-w-[100px]"
                       >
-                        一键清算积分
+                        一键清算余额
                       </button>
                     )}
                   </div>
@@ -1521,7 +1522,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
               快速创建账号
             </h4>
             <p className="text-[10.5px] text-slate-450 leading-relaxed font-bold">
-              手动设置登录码、昵称和初始积分。创建后无需 PIN，好友直接用登录码即可进入。
+              手动设置登录码、昵称和初始余额。创建后无需 PIN，好友直接用登录码即可进入。
             </p>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -1546,7 +1547,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
                 />
               </div>
               <div>
-                <label className="text-[9px] text-slate-400 block mb-1 font-bold">初始积分</label>
+                <label className="text-[9px] text-slate-400 block mb-1 font-bold">初始余额</label>
                 <input
                   type="text"
                   value={singlePoints}
@@ -1573,7 +1574,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
               批量创建账号
             </h4>
             <p className="text-[10.5px] text-slate-450 leading-relaxed font-bold">
-              支持按换行录入多个昵称，默认分配 10,000 积分、默认 PIN「1234」。
+              支持按换行录入多个昵称，默认分配 ¥10,000、默认 PIN「1234」。
             </p>
 
             <div className="space-y-3 pt-1">
@@ -1616,20 +1617,20 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
             </div>
           </div>
 
-          {/* 统一发配积分 */}
+          {/* 统一发配余额 */}
           <div className="bg-white p-5 rounded-3xl border border-slate-200 space-y-4 shadow-2xs">
             <h4 className="text-xs font-black text-slate-800 flex items-center gap-1.5 font-display border-b border-slate-100 pb-2">
               <Coins className="w-5 h-5 text-amber-500" />
-              统一发配积分给全员
+              统一发配余额给全员
             </h4>
             <p className="text-[10.5px] text-slate-450 leading-relaxed font-bold">
-              一键给所有已注册用户统一发放或扣除积分，请谨慎操作。
+              一键给所有已注册用户统一发放或扣除余额，请谨慎操作。
             </p>
 
             {bulkConfirmOpen ? (
               <div className="bg-amber-50/50 border border-amber-200 rounded-2xl p-4 space-y-3">
                 <p className="text-[11px] font-bold text-amber-700">
-                  确认向 <strong>所有用户</strong> {Number(bulkAmount) > 0 ? '发放' : '扣除'} {Math.abs(Number(bulkAmount))} 积分？
+                  确认向 <strong>所有用户</strong> {Number(bulkAmount) > 0 ? '发放' : '扣除'} {formatPoints(Math.abs(Number(bulkAmount)))}？
                 </p>
                 <div className="flex justify-end space-x-2">
                   <button
@@ -1651,7 +1652,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
             ) : (
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="text-[9px] text-slate-400 block mb-1 font-bold">积分额度（负数为扣减）</label>
+                  <label className="text-[9px] text-slate-400 block mb-1 font-bold">余额额度（负数为扣减）</label>
                   <input
                     type="text"
                     value={bulkAmount}
@@ -1699,11 +1700,11 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
             {adjustTargetUser && (
               <div className="bg-gradient-to-tr from-rose-50/25 via-white to-white p-4 border border-rose-200 rounded-2xl space-y-3 shadow-2xs">
                 <p className="text-xs font-bold text-rose-600">
-                  调整用户 「{adjustTargetUser.displayName}」 积分
+                  调整用户 「{adjustTargetUser.displayName}」 余额
                 </p>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-[9px] text-slate-400 block font-bold">积分调幅 (负数扣减)</label>
+                    <label className="text-[9px] text-slate-400 block font-bold">余额调幅 (负数扣减)</label>
                     <input
                       type="text"
                       value={adjustAmount}
@@ -1833,7 +1834,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
 
                   <div className="flex items-center space-x-2 font-mono text-right">
                     <div className="text-right">
-                      <span className="text-emerald-600 font-black block">{u.balance?.toLocaleString()} PTS</span>
+                      <span className="text-emerald-600 font-black block">{formatPoints(u.balance)}</span>
                       <span className="text-[9px] text-slate-400 block font-bold">Wallet</span>
                     </div>
                     <button
@@ -2087,9 +2088,9 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
                   <div className="mt-1 text-slate-600">{p.matchLabel}</div>
                   <div className="mt-1 flex items-center gap-3 text-[10px] text-slate-500">
                     <span>{p.optionLabel}</span>
-                    <span>赔率 {p.oddsDecimal}</span>
-                    <span>投注 {p.stakePoints}</span>
-                    {p.potentialReturn && <span>可赢 {p.potentialReturn}</span>}
+                    <span>赔率 {formatOdds(p.oddsDecimal)}</span>
+                    <span>投注 {formatPoints(p.stakePoints)}</span>
+                    {p.potentialReturn && <span>可赢 {formatPoints(p.potentialReturn)}</span>}
                     {p.usedCard && <span className="text-violet-600">道具: {p.usedCard}</span>}
                   </div>
                   <div className="mt-1 text-[9px] text-slate-400">{p.placedAt}</div>
@@ -2125,7 +2126,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
         <div className="bg-white p-5 rounded-3xl border border-slate-200 space-y-4 shadow-2xs">
           <h4 className="text-xs font-black text-slate-800 flex items-center gap-1.5 border-b border-slate-100 pb-2">
             <Coins className="w-5 h-5 text-rose-500" />
-            积分流水查看
+            余额流水查看
             <span className="ml-auto text-[10px] font-bold text-slate-400">共 {txTotal} 条</span>
           </h4>
 
@@ -2162,7 +2163,7 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
           </div>
 
           {transactions.length === 0 ? (
-            <p className="text-xs text-slate-400 py-8 font-bold text-center">暂无积分流水</p>
+            <p className="text-xs text-slate-400 py-8 font-bold text-center">暂无余额流水</p>
           ) : (
             <div className="space-y-2 max-h-[400px] overflow-y-auto">
               {transactions.map((t) => (
@@ -2170,12 +2171,12 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
                   <div className="flex items-center justify-between">
                     <span className="font-black text-slate-900">{t.userName}</span>
                     <span className={`font-black ${t.amount > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                      {t.amount > 0 ? '+' : ''}{t.amount}
+                      {formatSignedPoints(t.amount)}
                     </span>
                   </div>
                   <div className="mt-1 flex items-center gap-3 text-[10px] text-slate-500">
                     <span className="rounded-full bg-slate-100 px-2 py-0.5 font-bold">{t.type}</span>
-                    <span>余额: {t.balanceBefore} → {t.balanceAfter}</span>
+                    <span>余额: {formatPoints(t.balanceBefore)} → {formatPoints(t.balanceAfter)}</span>
                   </div>
                   {t.note && <div className="mt-1 text-[10px] text-slate-400">{t.note}</div>}
                   <div className="mt-1 text-[9px] text-slate-400">{t.createdAt}</div>

@@ -1,5 +1,35 @@
 # 更新日志 (Changelog)
 
+## v2.6.1 - 2026-06-26
+
+### 积分显示统一与首页称号/等级改造
+
+#### 1. 积分格式统一为 ¥ 前缀
+- **新增工具函数**：`src/utils/format.ts` 提供 `formatPoints` / `formatSignedPoints` / `formatOdds` / `formatReturn`，统一 ¥ 前缀 + 千分位格式
+- **全局替换**：App / HomeTab / MeTab / PredictionTab / LeaderboardTab / MatchDetailPage / AdminPanel / BattleReportCard / ActivityFeed / AIRecommendations / NetProfitChart 等 12 个组件接入统一格式化函数，移除 PTS 后缀与纯数字混用
+- **文案统一**：用户货币相关"积分"文案统一改为"余额"
+
+#### 2. 资料页布局优化
+- **余额/净收益行**：MeTab 头像右侧改用 `whitespace-nowrap` + 微调字号/间距，修复 ¥ 符号增加宽度导致的错位
+- **净收益格式化**：使用 `formatSignedPoints` 统一带符号显示
+
+#### 3. 首页金币图标动画移除
+- **HomeTab**：移除余额左侧金币图标的 `coinPulse` 动画类与对应 keyframes 样式定义
+
+#### 4. 首页"群聊入口"改为成就称号
+- **HomeTab**：新增 `/api/me/profile-summary` 请求获取用户成就称号
+- 将"🔥 群聊入口"替换为 `⚡ {currentTitle}` 称号徽章（紫色系，与资料页一致）
+
+#### 5. 首页/资料页等级显示统一
+- **HomeTab**：引入 `getLevelByNetProfit` 动态计算等级，移除写死的 `Lv.4`
+- 等级徽章使用 `currentLevel.badgeBg` 主题色，与资料页等级环色彩一致
+
+### 改动文件
+`src/utils/format.ts`(新增), `src/App.tsx`, `src/components/HomeTab.tsx`, `src/components/MeTab.tsx`, `src/components/PredictionTab.tsx`, `src/components/LeaderboardTab.tsx`, `src/components/MatchDetailPage.tsx`, `src/components/AdminPanel.tsx`, `src/components/AdminDashboard.tsx`, `src/components/BattleReportCard.tsx`, `src/components/ActivityFeed.tsx`, `src/components/AIRecommendations.tsx`, `src/components/profile/NetProfitChart.tsx`, `src/server/helpers.test.ts`
+
+### 测试守门
+lint 通过 · build 通过
+
 ## v2.6.0 - 2026-06-26
 
 ### 稳定性修复三阶段实施（17 项改动）

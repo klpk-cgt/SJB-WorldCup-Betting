@@ -8,6 +8,7 @@ import {
   Target, Clock, DollarSign, Zap, ChevronUp,
 } from 'lucide-react';
 import { apiRequest, ADMIN_KEY_STORAGE } from '../utils/api';
+import { formatPoints } from '../utils/format';
 
 interface DashboardData {
   overview: {
@@ -243,7 +244,7 @@ export default function AdminDashboard() {
                 <div
                   className={`w-full rounded-t transition-all duration-300 ${h.volume > 0 ? 'bg-emerald-500' : 'bg-slate-100'}`}
                   style={{ height: `${height}%`, minHeight: h.volume > 0 ? '4px' : '2px' }}
-                  title={`${h.hour}: ${h.count}次 / ${h.volume}积分`}
+                  title={`${h.hour}: ${h.count}次 / ${formatPoints(h.volume)}`}
                 />
                 {i % 4 === 0 && <span className="text-[8px] text-slate-400">{h.hour.slice(0, 2)}</span>}
               </div>

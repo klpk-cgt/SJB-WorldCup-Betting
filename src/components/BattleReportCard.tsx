@@ -16,6 +16,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { Brain } from 'lucide-react';
 import SmartAvatar from './SmartAvatar';
+import { formatSignedPoints } from '../utils/format';
 
 export interface BattleReportData {
   matchId: string;
@@ -44,12 +45,6 @@ function parseScoreFromTitle(title: string) {
     return { homeTeam: match[1], homeScore: match[2], awayScore: match[3], awayTeam: match[4] };
   }
   return { homeTeam: '主队', homeScore: '0', awayScore: '0', awayTeam: '客队' };
-}
-
-function formatPts(profit: number) {
-  if (profit >= 1000) return '+' + (profit / 1000).toFixed(1) + 'K';
-  if (profit >= 0) return '+' + profit;
-  return profit.toString();
 }
 
 /** 单个玩家行：avatar + 角色标签 + 昵称 + 数值 */
@@ -100,7 +95,7 @@ export default function BattleReportCard({
         emoji="🏆"
         label="最大赢家"
         name={report.biggestWinner.displayName}
-        value={formatPts(report.biggestWinner.profit) + ' PTS'}
+        value={formatSignedPoints(report.biggestWinner.profit)}
         valueColor="text-emerald-600"
         bgClass="bg-emerald-50/70"
       />
@@ -114,7 +109,7 @@ export default function BattleReportCard({
         emoji="📉"
         label="最惨玩家"
         name={report.biggestLoss.displayName}
-        value={formatPts(report.biggestLoss.profit) + ' PTS'}
+        value={formatSignedPoints(report.biggestLoss.profit)}
         valueColor="text-rose-600"
         bgClass="bg-rose-50/70"
       />

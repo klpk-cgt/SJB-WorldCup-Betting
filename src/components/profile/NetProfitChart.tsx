@@ -1,17 +1,13 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Area, AreaChart, Tooltip, YAxis } from 'recharts';
 import type { Transaction } from '../../types';
+import { formatSignedPoints } from '../../utils/format';
 
 interface NetProfitChartProps {
   transactions: Transaction[];
 }
 
 const CHART_HEIGHT = 110;
-
-function formatSigned(value: number) {
-  if (value > 0) return `+${value.toLocaleString()}`;
-  return value.toLocaleString();
-}
 
 function formatDateShort(iso: string) {
   const d = new Date(iso);
@@ -65,7 +61,7 @@ export default function NetProfitChart({ transactions }: NetProfitChartProps) {
           <div>
             <p className="text-xs font-bold text-slate-600">累计净收益</p>
             <p className={`text-2xl font-extrabold tabular-nums ${isPositive ? 'text-emerald-600' : 'text-rose-500'}`}>
-              {formatSigned(currentValue)}
+              {formatSignedPoints(currentValue)}
             </p>
           </div>
         </div>
@@ -86,12 +82,12 @@ export default function NetProfitChart({ transactions }: NetProfitChartProps) {
         <div>
           <p className="text-xs font-bold text-slate-600">累计净收益</p>
           <p className={`text-2xl font-extrabold tabular-nums ${isPositive ? 'text-emerald-600' : 'text-rose-500'}`}>
-            {formatSigned(currentValue)}
+            {formatSignedPoints(currentValue)}
           </p>
         </div>
         <div className="text-right">
           <p className="text-[10px] font-bold text-slate-500">峰值</p>
-          <p className="text-sm font-extrabold text-amber-600 tabular-nums">{formatSigned(peakValue)}</p>
+          <p className="text-sm font-extrabold text-amber-600 tabular-nums">{formatSignedPoints(peakValue)}</p>
         </div>
       </div>
       <div ref={containerRef} style={{ width: '100%', height: CHART_HEIGHT }}>
@@ -114,7 +110,7 @@ export default function NetProfitChart({ transactions }: NetProfitChartProps) {
                 padding: '6px 10px',
               }}
               labelStyle={{ color: '#64748b', fontSize: '10px' }}
-              formatter={(value: number) => [formatSigned(value), '净收益']}
+              formatter={(value: number) => [formatSignedPoints(value), '净收益']}
               labelFormatter={(label: string) => `日期 ${label}`}
             />
             <Area

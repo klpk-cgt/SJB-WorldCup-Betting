@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { Match, MatchOdds, MatchOperationalStatus, Prediction, TournamentBet, TournamentBetOption, TournamentBetType, User, Wallet } from '../types';
 import { apiRequest, clearApiCache, formatDate } from '../utils/api';
+import { formatPoints, formatSignedPoints, formatOdds, formatReturn } from '../utils/format';
 import { SCORE_GROUP_META, getScoreGroup, getScoreDisplayLabel, isOtherScoreKey } from '../utils/odds';
 import type { ScoreGroup } from '../utils/odds';
 import FlagBadge from './home/FlagBadge';
@@ -327,7 +328,7 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
   const handleOpenConfirm = () => {
     if (!selectedMatch || !selectedOption) return;
     if (stake <= 0) {
-      setMessage({ type: 'error', text: '请输入有效的积分数量。' });
+      setMessage({ type: 'error', text: '请输入有效的余额数量。' });
       return;
     }
     setMessage(null);
@@ -357,7 +358,7 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
 
       setMessage({
         type: 'success',
-        text: `已提交 ${stake} 积分，命中后预计可回收 ${res.prediction.potentialReturn} 积分。`,
+        text: `已提交 ${formatPoints(stake)}，命中后预计可回收 ${formatPoints(res.prediction.potentialReturn)}。`,
       });
       closeModal();
       clearApiCache();
@@ -373,7 +374,7 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
   const handleSubmitTournamentBet = async () => {
     if (!selectedTournamentMarket || !selectedTournamentOption) return;
     if (stake <= 0) {
-      setMessage({ type: 'error', text: '请输入有效的积分数量。' });
+      setMessage({ type: 'error', text: '请输入有效的余额数量。' });
       return;
     }
 
@@ -390,7 +391,7 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
 
       setMessage({
         type: 'success',
-        text: `已提交 ${selectedTournamentMarket.label}，本次投入 ${stake} 积分，预计回收 ${res.bet.potentialReturn} 积分。`,
+        text: `已提交 ${selectedTournamentMarket.label}，本次投入 ${formatPoints(stake)}，预计回收 ${formatPoints(res.bet.potentialReturn)}。`,
       });
       closeModal();
       clearApiCache();
@@ -430,7 +431,7 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
               <Coins className="h-3.5 w-3.5" />
               当前余额
             </div>
-            <div className="mt-1 text-sm font-black text-emerald-900">{wallet?.balance?.toLocaleString()} PTS</div>
+            <div className="mt-1 text-sm font-black text-emerald-900">{formatPoints(wallet?.balance)}</div>
           </div>
         </div>
 
@@ -708,7 +709,7 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
                                       {option.label}
                                     </div>
                                     <div className={`mt-1 text-sm font-black ${option.isOther ? 'text-slate-600' : 'text-slate-900'}`}>
-                                      {option.odds.toFixed(2)}
+                                      {formatOdds(option.odds)}
                                     </div>
                                   </button>
                                 ))}
@@ -736,7 +737,7 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
                                       className="rounded-xl border border-slate-200 bg-slate-50 px-2 py-2 text-left transition hover:border-emerald-200 hover:bg-emerald-50"
                                     >
                                       <div className="text-xs font-bold text-slate-700">{option.label}</div>
-                                      <div className="mt-1 text-sm font-black text-slate-900">{option.odds.toFixed(2)}</div>
+                                      <div className="mt-1 text-sm font-black text-slate-900">{formatOdds(option.odds)}</div>
                                     </button>
                                   ))}
                                 </div>
@@ -760,7 +761,7 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
                                 className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-left transition hover:border-emerald-200 hover:bg-emerald-50"
                               >
                                 <div className="text-xs font-bold text-slate-700">{option.label}</div>
-                                <div className="mt-2 text-base font-black text-slate-900">{option.odds.toFixed(2)}</div>
+                                <div className="mt-2 text-base font-black text-slate-900">{formatOdds(option.odds)}</div>
                               </button>
                             ))}
                           </div>
@@ -783,7 +784,7 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
                             className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-left transition hover:border-emerald-200 hover:bg-emerald-50"
                           >
                             <div className="text-xs font-bold text-slate-700">{option.label}</div>
-                            <div className="mt-2 text-base font-black text-slate-900">{option.odds.toFixed(2)}</div>
+                            <div className="mt-2 text-base font-black text-slate-900">{formatOdds(option.odds)}</div>
                           </button>
                         ))}
                       </div>
@@ -858,7 +859,7 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
                       </div>
                       <div className="rounded-2xl bg-white px-3 py-2 text-right ring-1 ring-slate-200">
                         <div className="text-[11px] font-bold text-slate-500">当前余额</div>
-                        <div className="mt-1 text-sm font-black text-slate-950">{wallet?.balance?.toLocaleString()} PTS</div>
+                        <div className="mt-1 text-sm font-black text-slate-950">{formatPoints(wallet?.balance)}</div>
                       </div>
                     </div>
 
@@ -899,7 +900,7 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
                           <div className="min-w-0 flex-1">
                             <div className="truncate text-xs font-black text-slate-900">{option.label}</div>
                             {option.subLabel && <div className="truncate text-[10px] text-slate-500">{option.subLabel}</div>}
-                            <div className="mt-0.5 text-sm font-black text-emerald-700">{option.oddsDecimal.toFixed(2)}</div>
+                            <div className="mt-0.5 text-sm font-black text-emerald-700">{formatOdds(option.oddsDecimal)}</div>
                           </div>
                         </button>
                       ))}
@@ -908,10 +909,10 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
 
                   <div className="mt-4">
                     <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-slate-600">本次投入积分</label>
+                      <label className="text-xs font-bold text-slate-600">本次投入余额</label>
                       <span className="text-xs text-slate-400">
                         {selectedTournamentOption
-                          ? `预计回收 ${(stake * selectedTournamentOption.oddsDecimal).toFixed(1)}`
+                          ? `预计回收 ${formatReturn(stake, selectedTournamentOption.oddsDecimal)}`
                           : '先选目标再确认'}
                       </span>
                     </div>
@@ -960,19 +961,19 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
                     <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
                       <div className="rounded-2xl bg-white px-3 py-3 ring-1 ring-slate-200">
                         <div className="text-[11px] font-bold text-slate-500">当前指数</div>
-                        <div className="mt-1 text-lg font-black text-slate-950">{selectedOption?.odds.toFixed(2)}</div>
+                        <div className="mt-1 text-lg font-black text-slate-950">{formatOdds(selectedOption?.odds)}</div>
                       </div>
                       <div className="rounded-2xl bg-white px-3 py-3 ring-1 ring-slate-200">
                         <div className="text-[11px] font-bold text-slate-500">预计回收</div>
-                        <div className="mt-1 text-lg font-black text-emerald-700">{(stake * (selectedOption?.odds || 0)).toFixed(1)}</div>
+                        <div className="mt-1 text-lg font-black text-emerald-700">{formatReturn(stake, selectedOption?.odds || 0)}</div>
                       </div>
                     </div>
                   </div>
 
                   <div className="mt-4">
                     <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-slate-600">本次投入积分</label>
-                      <span className="text-xs text-slate-400">余额 {wallet?.balance?.toLocaleString()} PTS</span>
+                      <label className="text-xs font-bold text-slate-600">本次投入余额</label>
+                      <span className="text-xs text-slate-400">余额 {formatPoints(wallet?.balance)}</span>
                     </div>
 
                     <div className="mt-3 grid grid-cols-4 gap-2">
@@ -1000,7 +1001,7 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
                   </div>
 
                   <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-500">
-                    提交后系统会记录这次的指数快照，并在锁盘后保持不变。下单后至少保留100积分。
+                    提交后系统会记录这次的指数快照，并在锁盘后保持不变。下单后至少保留¥100。
                   </div>
 
                   {/* 卡牌选择 */}
@@ -1085,11 +1086,11 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
                         </div>
                         <div className="rounded-xl bg-white py-2">
                           <p className="text-[8px] font-bold text-slate-400 uppercase">赔率</p>
-                          <p className="text-[10px] font-black text-amber-600">@{(selectedOption?.odds || 0).toFixed(2)}</p>
+                          <p className="text-[10px] font-black text-amber-600">@{formatOdds(selectedOption?.odds || 0)}</p>
                         </div>
                         <div className="rounded-xl bg-white py-2">
                           <p className="text-[8px] font-bold text-slate-400 uppercase">投入</p>
-                          <p className="text-[10px] font-black text-slate-800">{stake} PTS</p>
+                          <p className="text-[10px] font-black text-slate-800">{formatPoints(stake)}</p>
                         </div>
                       </div>
 
@@ -1097,7 +1098,7 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
                       <div className="flex items-center justify-between rounded-xl bg-emerald-50/60 px-3 py-2.5">
                         <span className="text-[10px] font-bold text-emerald-600">💰 预计回收</span>
                         <span className="text-xs font-black text-emerald-700 tabular-nums">
-                          +{(stake * (selectedOption?.odds || 0)).toFixed(0)} PTS
+                          +{formatReturn(stake, selectedOption?.odds || 0)}
                         </span>
                       </div>
 
@@ -1207,7 +1208,7 @@ function TournamentMarketCard({
             <div className="min-w-0 flex-1">
               <div className="truncate text-xs font-black text-slate-900">{option.label}</div>
               {option.subLabel && <div className="truncate text-[10px] text-slate-500">{option.subLabel}</div>}
-              <div className="mt-0.5 text-sm font-black text-emerald-700">{option.oddsDecimal.toFixed(2)}</div>
+              <div className="mt-0.5 text-sm font-black text-emerald-700">{formatOdds(option.oddsDecimal)}</div>
             </div>
           </div>
         ))}
@@ -1215,7 +1216,7 @@ function TournamentMarketCard({
 
       {userBet ? (
         <div className="mt-4 rounded-2xl bg-slate-100 px-4 py-3 text-xs text-slate-600">
-          你已经选择了 <span className="font-black text-slate-900">{userBet.targetLabel}</span>，投入 {userBet.stakePoints} 积分。
+          你已经选择了 <span className="font-black text-slate-900">{userBet.targetLabel}</span>，投入 {formatPoints(userBet.stakePoints)}。
         </div>
       ) : (
         <button
@@ -1251,18 +1252,18 @@ function RecordBlock({ title, bets }: { title: string; bets: Prediction[] }) {
                   {bet.match?.homeTeam?.nameZh} vs {bet.match?.awayTeam?.nameZh}
                 </div>
                 <div className="mt-1 text-xs text-slate-500">
-                  {bet.optionLabel} · 指数 {bet.oddsDecimal?.toFixed(2)} · 投入 {bet.stakePoints}
+                  {bet.optionLabel} · 指数 {formatOdds(bet.oddsDecimal)} · 投入 {formatPoints(bet.stakePoints)}
                 </div>
               </div>
               <div className="text-right">
                 {bet.status === 'WON' ? (
                   <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700 ring-1 ring-emerald-100">
                     <CheckCircle2 className="h-3 w-3" />
-                    +{bet.settledProfit}
+                    {formatSignedPoints(bet.settledProfit)}
                   </span>
                 ) : bet.status === 'LOST' ? (
                   <span className="inline-flex rounded-full bg-rose-50 px-2.5 py-1 text-[10px] font-bold text-rose-700 ring-1 ring-rose-100">
-                    {bet.settledProfit}
+                    {formatSignedPoints(bet.settledProfit)}
                   </span>
                 ) : (
                   <span className="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-700 ring-1 ring-amber-100">
@@ -1324,7 +1325,7 @@ function TournamentRecordBlock({ title, bets, markets }: { title: string; bets: 
                     {bet.targetSubLabel ? ` · ${bet.targetSubLabel}` : ''}
                   </div>
                   <div className="mt-0.5 text-xs text-slate-500">
-                    指数 {bet.oddsDecimal?.toFixed(2)} · 投入 {bet.stakePoints}
+                    指数 {formatOdds(bet.oddsDecimal)} · 投入 {formatPoints(bet.stakePoints)}
                   </div>
                 </div>
                 <div className="text-right">

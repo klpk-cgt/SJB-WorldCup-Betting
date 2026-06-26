@@ -31,6 +31,7 @@ import { ADMIN_KEY_STORAGE, apiRequest, ROOM_SLUG_STORAGE, USER_CODE_STORAGE } f
 import { useWebSocket } from './hooks/useWebSocket';
 import { useToast } from './components/ToastProvider';
 import type { User, Wallet } from './types';
+import { formatPoints, formatSignedPoints } from './utils/format';
 
 type RootTab = 'home' | 'matches' | 'prediction' | 'leaderboard' | 'me' | 'admin';
 type PageTab = RootTab | 'match-detail' | 'history-hall' | 'bracket' | 'stats' | 'watchguide' | 'battle-reports';
@@ -100,7 +101,7 @@ export default function App() {
       const won = data.won as boolean;
       const profit = data.settledProfit as number | undefined;
       if (won) {
-        toast.celebrate('竞猜命中！', profit ? `净赚 +${profit.toLocaleString()} 积分` : '恭喜！');
+        toast.celebrate('竞猜命中！', profit ? `净赚 ${formatSignedPoints(profit)}` : '恭喜！');
       }
     },
     onMatchSettled: (data) => {
@@ -351,9 +352,9 @@ export default function App() {
                         观赛模式
                       </span>
                       <h1 className="mt-1.5 text-3xl font-black tracking-tight text-white">
-                        0 <span className="text-xs font-bold text-gray-400">PTS</span>
+                        {formatPoints(0)}
                       </h1>
-                      <p className="text-xs text-gray-400">登录后即可恢复你的积分资产和竞猜记录。</p>
+                      <p className="text-xs text-gray-400">登录后即可恢复你的余额资产和竞猜记录。</p>
                     </div>
                     <UserRound className="h-10 w-10 rounded-2xl border border-slate-800 bg-slate-950 p-2.5 text-emerald-400" />
                   </div>

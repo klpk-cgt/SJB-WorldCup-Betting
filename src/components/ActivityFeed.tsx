@@ -21,6 +21,7 @@ import {
   Crown,
 } from 'lucide-react';
 import SmartAvatar from './SmartAvatar';
+import { formatSignedPoints } from '../utils/format';
 
 export interface ActivityItem {
   id: string;
@@ -173,8 +174,7 @@ export default function ActivityFeed({ activities, loading, emptyText = '群里�
                     }`}
                   >
                     {delta > 0 ? <TrendingUp className="h-2.5 w-2.5" /> : <TrendingDown className="h-2.5 w-2.5" />}
-                    {delta > 0 ? '+' : ''}
-                    {delta.toLocaleString()}
+                    {formatSignedPoints(delta)}
                   </span>
                 )}
                 <span className="ml-auto text-[10px] font-semibold text-slate-400">{formatRelativeTime(act.createdAt)}</span>

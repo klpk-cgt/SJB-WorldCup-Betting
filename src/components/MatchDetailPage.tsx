@@ -1199,7 +1199,7 @@ function AiAnalysisPanel({
             风险提示
           </div>
           <p className="mt-1.5 text-[11px] leading-5 text-amber-700">
-            仅供朋友群娱乐讨论，不代表真实预测结果。临场变化多，娱乐积分别一次性压太重。
+            仅供朋友群娱乐讨论，不代表真实预测结果。临场变化多，娱乐余额别一次性压太重。
           </p>
         </div>
       </div>
@@ -1272,7 +1272,7 @@ function AiAnalysisPanel({
           冷门提醒
         </div>
         <p className="mt-1.5 text-[11px] leading-5 text-amber-700">
-          {aiContent.riskWarning || '注意临场变化，娱乐积分别一次性压太重。'}
+          {aiContent.riskWarning || '注意临场变化，娱乐余额别一次性压太重。'}
         </p>
       </div>
 

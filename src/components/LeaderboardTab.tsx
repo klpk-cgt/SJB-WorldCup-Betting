@@ -8,6 +8,7 @@ import { Award, BarChart2, Coins, Flame, RefreshCw, Sparkles, TrendingDown, Tren
 import { CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { User } from '../types';
 import { apiRequest } from '../utils/api';
+import { formatPoints, formatSignedPoints } from '../utils/format';
 import SmartAvatar from './SmartAvatar';
 import { useStaggerReveal, useScrollReveal } from '../animations';
 
@@ -46,7 +47,7 @@ const tabMeta: Record<
     icon: React.ComponentType<{ className?: string }>;
   }
 > = {
-  total: { label: '总积分', description: '优先看谁在群里稳定领跑。', icon: Trophy },
+  total: { label: '总余额', description: '优先看谁在群里稳定领跑。', icon: Trophy },
   today: { label: '今日榜', description: '只看今天的盈亏变化。', icon: Zap },
   wonProfit: { label: '收益榜', description: '命中带来的累计收益排行。', icon: Coins },
   rate: { label: '命中率', description: '谁的下单更准，一眼看清。', icon: Award },
@@ -61,11 +62,6 @@ const TONE_CLASS: Record<NonNullable<LeaderboardEntry['badgeTone']>, string> = {
   rose: 'bg-rose-50 text-rose-700 ring-1 ring-rose-100',
   slate: 'bg-slate-100 text-slate-600 ring-1 ring-slate-200',
 };
-
-function formatSignedNumber(value?: number) {
-  if (typeof value !== 'number') return '--';
-  return value > 0 ? `+${value}` : `${value}`;
-}
 
 function getRankDeltaMeta(delta?: number) {
   if (!delta) return null;
@@ -94,17 +90,17 @@ function PodiumCard({ item, rank, tabKey }: { item: LeaderboardEntry; rank: 1 | 
   const displayValue = (() => {
     switch (tabKey) {
       case 'total':
-        return item.balance?.toLocaleString() || 0;
+        return formatPoints(item.balance);
       case 'today':
-        return formatSignedNumber(item.todayProfit);
+        return formatSignedPoints(item.todayProfit);
       case 'wonProfit':
-        return `+${item.totalWonProfit?.toLocaleString() || 0}`;
+        return formatSignedPoints(item.totalWonProfit);
       case 'rate':
         return `${item.rate || 0}%`;
       case 'streak':
         return `${item.currentStreak || 0} 连中`;
       default:
-        return item.balance?.toLocaleString() || 0;
+        return formatPoints(item.balance);
     }
   })();
 
@@ -297,7 +293,7 @@ export default function LeaderboardTab({ user }: LeaderboardTabProps) {
                     <div className="mt-1.5 flex items-center gap-2">
                       <SmartAvatar name={todayList[0].displayName} src={todayList[0].avatarUrl} size={24} />
                       <span className="text-sm font-black text-slate-900">{todayList[0].displayName}</span>
-                      <span className="text-sm font-black text-emerald-600">+{todayList[0].todayProfit}</span>
+                      <span className="text-sm font-black text-emerald-600">{formatSignedPoints(todayList[0].todayProfit)}</span>
                     </div>
                     <div className="mt-1 text-[11px] text-amber-700">
                       命中 {todayList[0].wonCount || 0} 场 · 命中率 {todayList[0].rate || 0}%
@@ -422,30 +418,30 @@ export default function LeaderboardTab({ user }: LeaderboardTabProps) {
                     <div className="w-[24%] text-right">
                       {activeLeaderboardTab === 'total' && (
                         <>
-                          <p className="text-sm font-black text-slate-950">{item.balance?.toLocaleString() || 0}</p>
+                          <p className="text-sm font-black text-slate-950">{formatPoints(item.balance)}</p>
                           <p className={`mt-1 text-[11px] font-bold ${(item.netProfit || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                            {formatSignedNumber(item.netProfit)}
+                            {formatSignedPoints(item.netProfit)}
                           </p>
                         </>
                       )}
                       {activeLeaderboardTab === 'today' && (
                         <>
                           <p className={`text-sm font-black ${(item.todayProfit || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                            {formatSignedNumber(item.todayProfit)}
+                            {formatSignedPoints(item.todayProfit)}
                           </p>
                           <p className="mt-1 text-[11px] font-semibold text-slate-500">今日变化</p>
                         </>
                       )}
                       {activeLeaderboardTab === 'wonProfit' && (
                         <>
-                          <p className="text-sm font-black text-violet-700">+{item.totalWonProfit?.toLocaleString() || 0}</p>
+                          <p className="text-sm font-black text-violet-700">{formatSignedPoints(item.totalWonProfit)}</p>
                           <p className="mt-1 text-[11px] font-semibold text-slate-500">累计收益</p>
                         </>
                       )}
                       {activeLeaderboardTab === 'rate' && (
                         <>
                           <p className="text-sm font-black text-slate-900">{item.wonCount || 0} 场</p>
-                          <p className="mt-1 text-[11px] font-semibold text-slate-500">净收益 {formatSignedNumber(item.netProfit)}</p>
+                          <p className="mt-1 text-[11px] font-semibold text-slate-500">净收益 {formatSignedPoints(item.netProfit)}</p>
                         </>
                       )}
                       {activeLeaderboardTab === 'streak' && (
@@ -476,7 +472,7 @@ export default function LeaderboardTab({ user }: LeaderboardTabProps) {
                   战绩分析
                 </h3>
                 <p className="mt-1 text-xs leading-6 text-slate-500">
-                  当前聚焦 <span className="font-bold text-violet-700">{selectedUserName || '加载中'}</span> 的积分走势与命中分布。
+                  当前聚焦 <span className="font-bold text-violet-700">{selectedUserName || '加载中'}</span> 的余额走势与命中分布。
                 </p>
               </div>
               <span className="self-start rounded-full bg-violet-50 px-2.5 py-1 text-[10px] font-bold text-violet-700 ring-1 ring-violet-100">
@@ -489,7 +485,7 @@ export default function LeaderboardTab({ user }: LeaderboardTabProps) {
                 <div className="mb-3 flex items-center justify-between">
                   <h4 className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
                     <TrendingUp className="h-3.5 w-3.5 text-violet-600" />
-                    近七日积分走势
+                    近七日余额走势
                   </h4>
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">财富曲线</span>
                 </div>

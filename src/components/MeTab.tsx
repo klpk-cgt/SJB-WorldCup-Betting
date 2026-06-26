@@ -28,6 +28,7 @@ import { getLevelByNetProfit, LEVEL_CONFIGS } from '../server/config';
 import './profile/profileStyles.css';
 import NetProfitChart from './profile/NetProfitChart';
 import BadgeDetailModal from './profile/BadgeDetailModal';
+import { formatPoints, formatSignedPoints, formatOdds, formatReturn } from '../utils/format';
 
 interface MeTabProps {
   onLogout: () => void;
@@ -112,16 +113,6 @@ const CARD_ICON_SRC: Record<string, string> = {
 // SVG 等级环常量
 const LEVEL_RING_R = 22;
 const LEVEL_RING_C = 2 * Math.PI * LEVEL_RING_R; // ≈138.23
-
-function formatSigned(value?: number | null) {
-  if (value == null) return '0';
-  if (value > 0) return `+${value.toLocaleString()}`;
-  return value.toLocaleString();
-}
-
-function formatCompact(value?: number | null) {
-  return Number(value || 0).toLocaleString();
-}
 
 function getTitleCopy(title?: string) {
   switch (title) {
@@ -361,17 +352,21 @@ export default function MeTab({ onLogout, onAdminLogin }: MeTabProps) {
               <div className="inline-flex items-center gap-1 mt-1 text-[11px] font-semibold text-violet-700 bg-gradient-to-r from-violet-50/80 to-sky-50/80 rounded-full px-2.5 py-0.5 border border-violet-100/60">
                 ⚡ {safeProfileSummary.currentTitle}
               </div>
-              {/* 积分 + 净收益 */}
-              <div className="flex items-center gap-4 mt-[6px]">
-                <div className="flex items-baseline gap-1">
-                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">积分</span>
-                  <span className="text-[17px] font-extrabold text-[#0f172a] leading-none">{formatCompact(wallet?.balance)}</span>
+              {/* 余额 + 净收益 */}
+              <div className="flex items-center gap-2.5 mt-[6px]">
+                <div className="flex items-baseline gap-0.5 whitespace-nowrap">
+                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">余额</span>
+                  <span className="text-[12px] font-bold text-slate-400 leading-none">¥</span>
+                  <span className="text-[15px] font-extrabold text-[#0f172a] leading-none tabular-nums">{Math.round(wallet?.balance || 0).toLocaleString()}</span>
                 </div>
-                <div className="w-px h-5 bg-slate-200 rounded-full" />
-                <div className="flex items-baseline gap-1">
+                <div className="w-px h-5 bg-slate-200 rounded-full shrink-0" />
+                <div className="flex items-baseline gap-0.5 whitespace-nowrap">
                   <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">净收益</span>
-                  <span className={`text-[15px] font-bold leading-none ${stats.netProfit >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
-                    {formatSigned(stats.netProfit)}
+                  <span className={`text-[12px] font-bold leading-none ${stats.netProfit >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
+                    {stats.netProfit > 0 ? '+' : ''}¥
+                  </span>
+                  <span className={`text-[14px] font-bold leading-none tabular-nums ${stats.netProfit >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
+                    {Math.abs(Math.round(stats.netProfit || 0)).toLocaleString()}
                   </span>
                 </div>
               </div>
@@ -410,7 +405,7 @@ export default function MeTab({ onLogout, onAdminLogin }: MeTabProps) {
               <div className="stat-strip-lbl">最长连中</div>
             </div>
             <div className="stat-strip-cell">
-              <div className="stat-strip-val">{formatSigned(stats.biggestWin)}</div>
+              <div className="stat-strip-val">{formatSignedPoints(stats.biggestWin)}</div>
               <div className="stat-strip-lbl">单场最高</div>
             </div>
             <div className="stat-strip-cell">
@@ -523,8 +518,8 @@ export default function MeTab({ onLogout, onAdminLogin }: MeTabProps) {
                           </div>
                         </div>
                         <div className="flex items-center justify-between text-[10px] font-semibold text-slate-500">
-                          <span>投入 <strong className="text-slate-700">{bet.stakePoints}</strong></span>
-                          <span>回报 <strong className="text-emerald-600">{formatCompact(bet.potentialReturn)}</strong></span>
+                          <span>投入 <strong className="text-slate-700">{formatPoints(bet.stakePoints)}</strong></span>
+                          <span>回报 <strong className="text-emerald-600">{formatPoints(bet.potentialReturn)}</strong></span>
                         </div>
                       </div>
                     );
@@ -579,12 +574,12 @@ export default function MeTab({ onLogout, onAdminLogin }: MeTabProps) {
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0891b2" strokeWidth="2.5">
                     <polyline points="20 6 9 17 4 12"/>
                   </svg>
-                  <h3 className="text-[13px] font-bold text-slate-600">积分流水</h3>
+                  <h3 className="text-[13px] font-bold text-slate-600">余额流水</h3>
                 </div>
                 <Layers3 className="h-4 w-4 text-cyan-500" />
               </div>
               {recentTransactions.length === 0 ? (
-                <EmptyState>暂无积分流水。</EmptyState>
+                <EmptyState>暂无余额流水。</EmptyState>
               ) : (
                 <>
                   <TransactionList transactions={showAllTransactions ? recentTransactions : recentTransactions.slice(0, 6)} />
@@ -756,14 +751,14 @@ function SettlementRow({ prediction }: { prediction: PredictionWithMatch; key?: 
         {isWin ? '命中' : '未中'}
       </span>
       <span className={`text-sm font-bold tabular-nums ml-auto shrink-0 ${Number(prediction.settledProfit || 0) >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
-        {formatSigned(prediction.settledProfit || 0)}
+        {formatSignedPoints(prediction.settledProfit || 0)}
       </span>
     </div>
   );
 }
 
 function TransactionList({ transactions }: { transactions: Transaction[] }) {
-  if (transactions.length === 0) return <EmptyState>暂无积分流水。</EmptyState>;
+  if (transactions.length === 0) return <EmptyState>暂无余额流水。</EmptyState>;
   return (
     <div className="divide-y divide-slate-100/60">
       {transactions.map((tx) => {
@@ -780,8 +775,8 @@ function TransactionList({ transactions }: { transactions: Transaction[] }) {
               </div>
             </div>
             <div className="shrink-0 text-right ml-3">
-              <p className={`text-[13px] font-bold ${isPos ? 'text-emerald-600' : 'text-slate-600'}`}>{formatSigned(tx.amount)}</p>
-              <p className="mt-0.5 text-[10px] font-medium text-slate-400">{formatCompact(tx.balanceAfter)}</p>
+              <p className={`text-[13px] font-bold ${isPos ? 'text-emerald-600' : 'text-slate-600'}`}>{formatSignedPoints(tx.amount)}</p>
+              <p className="mt-0.5 text-[10px] font-medium text-slate-400">{formatPoints(tx.balanceAfter)}</p>
             </div>
           </div>
         );
@@ -885,8 +880,8 @@ function TournamentBetStrip({
               <p className="mt-0.5 truncate text-xs font-semibold text-slate-500">{bet.targetLabel}{bet.targetSubLabel ? ` · ${bet.targetSubLabel}` : ''}</p>
             </div>
             <div className="shrink-0 text-right">
-              <p className="text-sm font-black text-slate-900">{formatCompact(bet.potentialReturn)}</p>
-              <p className="mt-0.5 text-[10px] font-bold text-slate-400">{bet.stakePoints} PTS</p>
+              <p className="text-sm font-black text-slate-900">{formatPoints(bet.potentialReturn)}</p>
+              <p className="mt-0.5 text-[10px] font-bold text-slate-400">{formatPoints(bet.stakePoints)}</p>
             </div>
           </div>
         );
