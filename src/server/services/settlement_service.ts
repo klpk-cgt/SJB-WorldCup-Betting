@@ -8,7 +8,7 @@ import { dbService } from '../../db/db_service';
 import { Match, Prediction, TransactionType } from '../../types';
 import { adjustWalletBalance } from './wallet_service';
 import { createId, roundPoints, normalizePredictionMarket } from '../helpers';
-import { applyCardToSettlement, restoreCard } from '../prediction_card_service';
+import { applyCardToSettlement } from '../prediction_card_service';
 import { FINISHED_MATCH_STATUSES, hasResolvableScore } from '../operations';
 import { generatePostMatchReport } from './post_match_report_service';
 import {
@@ -95,7 +95,11 @@ export async function settleMatchById(params: SettleMatchParams): Promise<Settle
     });
   }
 
-  const matchPredictions = db.predictions.filter((p) => p.matchId === match.id);
+  // CANCELLED 预测已通过反悔卡撤销（CARD_REFUND 退过本金），正式结算/重结完全跳过，
+  // 避免二次发奖或二次退款
+  const matchPredictions = db.predictions.filter(
+    (p) => p.matchId === match.id && p.status !== 'CANCELLED',
+  );
 
   if (match.isSettled && params.forceResettle) {
     // 结算入库的正向交易类型（这些类型会向用户钱包添加积分）
@@ -156,24 +160,10 @@ export async function settleMatchById(params: SettleMatchParams): Promise<Settle
         }
       }
 
-      // 恢复卡牌库存：forceResettle 重置状态后重结时 usedCard 仍存在，
-      // 若不退回卡牌会导致一张卡被用两次（首次消耗+重结再次触发效果）
-      if (prediction.usedCard) {
-        try {
-          restoreCard(prediction.userId, prediction.usedCard);
-          logger.info(`[SettleMatch] 回滚恢复卡牌: userId=${prediction.userId} card=${prediction.usedCard}`, {
-            matchId: match.id,
-            predictionId: prediction.id,
-          });
-        } catch (e) {
-          logger.error('[SettleMatch] 回滚恢复卡牌失败', {
-            userId: prediction.userId,
-            card: prediction.usedCard,
-            error: e instanceof Error ? e.message : String(e),
-          });
-        }
-      }
-
+      // forceResettle 不返还卡牌库存（避免退卡后重结再次触发卡牌效果的重复收益）；
+      // 清空 usedCard 防止重结主循环对已消耗卡二次调用 applyCardToSettlement。
+      // 如需退卡，使用反悔卡（useRegretCard）执行完整撤销下注。
+      prediction.usedCard = undefined;
       prediction.status = 'PENDING';
       prediction.settledReturn = 0;
       prediction.settledProfit = 0;
@@ -220,6 +210,11 @@ export async function settleMatchById(params: SettleMatchParams): Promise<Settle
           baseReturn - prediction.stakePoints,
           'WON',
         );
+        if (cardResult.cancelPrediction) {
+          // 反悔卡撤销的预测不参与发奖（防御性检查，正常已在主循环外过滤 CANCELLED）
+          prediction.status = 'CANCELLED';
+          continue;
+        }
         prediction.settledReturn = cardResult.finalReturn;
         prediction.settledProfit = cardResult.finalProfit;
         if (cardResult.cardNote) {
@@ -309,6 +304,10 @@ export async function settleMatchById(params: SettleMatchParams): Promise<Settle
 
       if (prediction.usedCard) {
         const cardResult = applyCardToSettlement(prediction, 0, -prediction.stakePoints, 'LOST');
+        if (cardResult.cancelPrediction) {
+          prediction.status = 'CANCELLED';
+          continue;
+        }
         if (cardResult.finalReturn > 0) {
           prediction.settledReturn = cardResult.finalReturn;
           prediction.settledProfit = cardResult.finalProfit;

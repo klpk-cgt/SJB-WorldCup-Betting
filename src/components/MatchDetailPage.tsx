@@ -304,9 +304,35 @@ export default function MatchDetailPage({
               </div>
 
               <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex items-center gap-2">
-                  <Zap className="h-4 w-4 text-amber-500" />
-                  <h4 className="text-sm font-black text-slate-900">赔率快照</h4>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Zap className="h-4 w-4 text-amber-500" />
+                    <h4 className="text-sm font-black text-slate-900">赔率快照</h4>
+                  </div>
+                  {(match as any).oddsSource && (
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold ring-1 ${
+                        (match as any).oddsSyncStatus === 'SYNCED'
+                          ? 'bg-emerald-50 text-emerald-700 ring-emerald-100'
+                          : (match as any).oddsSyncStatus === 'PARTIAL'
+                            ? 'bg-amber-50 text-amber-700 ring-amber-100'
+                            : 'bg-slate-100 text-slate-600 ring-slate-200'
+                      }`}
+                    >
+                      赔率来源：{(match as any).oddsSource === 'API-Football'
+                        ? 'API-Football'
+                        : (match as any).oddsSource === 'The Odds API'
+                          ? 'The Odds API'
+                          : (match as any).oddsSource === 'Sporttery'
+                            ? '体彩网'
+                            : (match as any).oddsSource === 'MANUAL'
+                              ? '人工录入'
+                              : (match as any).oddsSource}
+                      {(match as any).oddsLastSyncedAt
+                        ? ` · ${formatDate((match as any).oddsLastSyncedAt)}`
+                        : ''}
+                    </span>
+                  )}
                 </div>
                 <p className="mt-2 text-[11px] leading-5 text-slate-600">
                   {match.odds?.h2h

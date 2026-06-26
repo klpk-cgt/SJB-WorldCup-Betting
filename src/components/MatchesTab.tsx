@@ -4,7 +4,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, Calendar, ChevronDown, Filter, Info, RefreshCw, Sparkles } from 'lucide-react';
+import { ArrowRight, Calendar, ChevronDown, Filter, Info, RefreshCw, Sparkles, AlertTriangle } from 'lucide-react';
 import { Match, MatchStatus, Team } from '../types';
 import { apiRequest, formatDate } from '../utils/api';
 import { getMatchesForNearestDays, groupMatchesByDay, sortMatchesByKickoff } from '../utils/matchDisplay';
@@ -52,6 +52,7 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
   const [matches, setMatches] = useState<Match[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [showAllDays, setShowAllDays] = useState(false);
   const [filterTeam, setFilterTeam] = useState('');
@@ -84,9 +85,12 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
 
   useEffect(() => {
     async function init() {
+      setLoadError(null);
       try {
         await loadMatches();
       } catch (error) {
+        const msg = error instanceof Error ? error.message : '加载失败，请重试。';
+        setLoadError(msg);
         console.error('Failed to load matches', error);
       } finally {
         setLoading(false);
@@ -187,6 +191,34 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
             <div className="h-16 animate-pulse rounded-2xl bg-slate-100" />
           </div>
         </div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="space-y-3 py-12 text-center">
+        <AlertTriangle className="mx-auto h-8 w-8 text-amber-500" />
+        <p className="text-xs font-bold text-slate-600">{loadError}</p>
+        <button
+          onClick={() => {
+            setLoading(true);
+            setLoadError(null);
+            const init = async () => {
+              try {
+                await loadMatches();
+              } catch (error) {
+                setLoadError(error instanceof Error ? error.message : '加载失败，请重试。');
+              } finally {
+                setLoading(false);
+              }
+            };
+            init();
+          }}
+          className="rounded-full bg-emerald-500 px-5 py-2 text-xs font-bold text-white transition hover:bg-emerald-600"
+        >
+          重试
+        </button>
       </div>
     );
   }

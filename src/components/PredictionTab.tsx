@@ -20,7 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import { Match, MatchOdds, MatchOperationalStatus, Prediction, TournamentBet, TournamentBetOption, TournamentBetType, User, Wallet } from '../types';
-import { apiRequest, formatDate } from '../utils/api';
+import { apiRequest, clearApiCache, formatDate } from '../utils/api';
 import { SCORE_GROUP_META, getScoreGroup, getScoreDisplayLabel, isOtherScoreKey } from '../utils/odds';
 import type { ScoreGroup } from '../utils/odds';
 import FlagBadge from './home/FlagBadge';
@@ -187,6 +187,7 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
   const [myTournamentBets, setMyTournamentBets] = useState<TournamentBet[]>([]);
   const [tournamentMarkets, setTournamentMarkets] = useState<TournamentMarketConfig[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [activeMode, setActiveMode] = useState<ModeFilter>('H2H');
   const [activeCategory, setActiveCategory] = useState<MatchCategory>('BETTABLE');
@@ -248,12 +249,16 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
 
   useEffect(() => {
     async function init() {
+      setLoading(true);
+      setLoadError(null);
       try {
         await fetchMatches();
         if (user) {
           await fetchHistory(); // fetchHistory 已包含 /api/tournament-bets，无需重复 fetchTournamentData
         }
       } catch (error) {
+        const msg = error instanceof Error ? error.message : '加载失败，请重试。';
+        setLoadError(msg);
         console.error('Failed to load prediction data', error);
       } finally {
         setLoading(false);
@@ -355,6 +360,7 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
         text: `已提交 ${stake} 积分，命中后预计可回收 ${res.prediction.potentialReturn} 积分。`,
       });
       closeModal();
+      clearApiCache();
       await Promise.all([fetchMatches(), fetchHistory(), onRefreshWallet()]);
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : undefined;
@@ -387,6 +393,7 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
         text: `已提交 ${selectedTournamentMarket.label}，本次投入 ${stake} 积分，预计回收 ${res.bet.potentialReturn} 积分。`,
       });
       closeModal();
+      clearApiCache();
       await Promise.all([fetchTournamentData(), fetchHistory(), onRefreshWallet()]);
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : undefined;
@@ -543,6 +550,31 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
           <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent" />
           <p className="text-xs font-bold text-slate-500">正在加载竞猜内容...</p>
         </div>
+      ) : loadError ? (
+        <div className="space-y-3 py-12 text-center">
+          <AlertTriangle className="mx-auto h-8 w-8 text-amber-500" />
+          <p className="text-xs font-bold text-slate-600">{loadError}</p>
+          <button
+            onClick={() => {
+              setLoading(true);
+              setLoadError(null);
+              const init = async () => {
+                try {
+                  await fetchMatches();
+                  if (user) await fetchHistory();
+                } catch (error) {
+                  setLoadError(error instanceof Error ? error.message : '加载失败，请重试。');
+                } finally {
+                  setLoading(false);
+                }
+              };
+              init();
+            }}
+            className="rounded-full bg-emerald-500 px-5 py-2 text-xs font-bold text-white transition hover:bg-emerald-600"
+          >
+            重试
+          </button>
+        </div>
       ) : activeCategory === 'BETTABLE' && betSurface === 'tournament' ? (
         <div className="space-y-4">
           {championMarket && (
@@ -637,6 +669,21 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
 
                 {activeCategory === 'BETTABLE' ? (
                   <>
+                    {match.oddsSyncStatus && match.oddsSyncStatus !== 'SYNCED' && (
+                      <div className="mt-3 flex items-center gap-1.5 rounded-xl bg-amber-50 px-3 py-1.5 text-[11px] font-bold text-amber-700 ring-1 ring-amber-100">
+                        <AlertTriangle className="h-3 w-3" />
+                        赔率待确认
+                        <span className="font-medium text-amber-600">
+                          （{match.oddsSyncStatus === 'PARTIAL'
+                            ? '部分同步'
+                            : match.oddsSyncStatus === 'MANUAL_FALLBACK'
+                              ? '人工兜底'
+                              : match.oddsSyncStatus === 'UNSYNCED'
+                                ? '未同步'
+                                : '同步失败'}）
+                        </span>
+                      </div>
+                    )}
                     {activeMode === 'CORRECT_SCORE' ? (
                       <div className="mt-4 space-y-3">
                         {(['HOME_WIN', 'DRAW', 'AWAY_WIN'] as ScoreGroup[]).map((group) => {
@@ -723,6 +770,10 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
                           </div>
                         )}
                       </>
+                    ) : options.length === 0 ? (
+                      <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-4 text-center text-xs text-slate-400 font-bold">
+                        本场未开售{MARKET_LABELS[activeMode]}玩法
+                      </div>
                     ) : (
                       <div className={`mt-4 grid gap-2 ${activeMode === 'TOTAL_GOALS' ? 'grid-cols-4' : 'sm:grid-cols-3'}`}>
                         {options.map((option) => (

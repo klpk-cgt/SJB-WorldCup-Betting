@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Award, BarChart2, Coins, Flame, RefreshCw, Sparkles, TrendingDown, TrendingUp, Trophy, Zap } from 'lucide-react';
+import { Award, BarChart2, Coins, Flame, RefreshCw, Sparkles, TrendingDown, TrendingUp, Trophy, Zap, AlertTriangle } from 'lucide-react';
 import { CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { User } from '../types';
 import { apiRequest } from '../utils/api';
@@ -159,6 +159,7 @@ export default function LeaderboardTab({ user }: LeaderboardTabProps) {
   const [streakList, setStreakList] = useState<LeaderboardEntry[]>([]);
   const [wonProfitList, setWonProfitList] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [activeLeaderboardTab, setActiveLeaderboardTab] = useState<LeaderboardKey>('total');
   const [selectedUserId, setSelectedUserId] = useState('');
   const [selectedUserName, setSelectedUserName] = useState('');
@@ -172,6 +173,7 @@ export default function LeaderboardTab({ user }: LeaderboardTabProps) {
 
   const fetchRanks = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const resp = await apiRequest('/api/leaderboards');
       setTotalList(resp.totalList || []);
@@ -179,6 +181,9 @@ export default function LeaderboardTab({ user }: LeaderboardTabProps) {
       setRateList(resp.rateList || []);
       setStreakList(resp.streakList || []);
       setWonProfitList(resp.wonProfitList || []);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : '排行榜加载失败，请重试。');
+      console.error('Failed to load leaderboard', error);
     } finally {
       setLoading(false);
     }
@@ -321,6 +326,17 @@ export default function LeaderboardTab({ user }: LeaderboardTabProps) {
             <RefreshCw className="absolute h-8 w-8 animate-spin text-violet-600" />
           </div>
           <p className="text-xs font-bold text-slate-500">正在整理排行榜数据...</p>
+        </div>
+      ) : loadError ? (
+        <div className="space-y-3 rounded-[28px] border border-slate-200 bg-white py-16 text-center shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+          <AlertTriangle className="mx-auto h-8 w-8 text-amber-500" />
+          <p className="text-xs font-bold text-slate-600">{loadError}</p>
+          <button
+            onClick={() => fetchRanks()}
+            className="rounded-full bg-violet-500 px-5 py-2 text-xs font-bold text-white transition hover:bg-violet-600"
+          >
+            重试
+          </button>
         </div>
       ) : (
         <>

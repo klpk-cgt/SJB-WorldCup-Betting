@@ -90,7 +90,7 @@ router.get('/api/users/:id/badges', (req: Request, res: Response) => {
 router.post('/api/activities/record', (req: Request, res: Response) => {
   const { type, userId } = req.body;
   if (!type || !userId) {
-    res.status(400).json({ error: 'Missing type or userId' });
+    res.status(400).json({ error: '缺少 type 或 userId。' });
     return;
   }
 
@@ -98,7 +98,7 @@ router.post('/api/activities/record', (req: Request, res: Response) => {
   const db = dbService.getData();
   const user = db.users.find((u) => u.id === userId);
   if (!user) {
-    res.status(404).json({ error: 'User not found' });
+    res.status(404).json({ error: '用户不存在。' });
     return;
   }
 
@@ -112,7 +112,7 @@ router.post('/api/activities/record', (req: Request, res: Response) => {
     const { newlyUnlocked } = evaluateUserBadges(userId, user.displayName, user.avatarUrl);
     res.json({ recorded: true, newlyUnlocked });
   } else {
-    res.status(400).json({ error: `Unsupported activity type: ${type}` });
+    res.status(400).json({ error: `不支持的活动类型：${type}` });
   }
 });
 

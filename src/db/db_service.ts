@@ -66,6 +66,8 @@ export interface DatabaseSchema {
   postMatchReports?: import('../server/services/post_match_report_service').PostMatchReport[];
   // 竞彩网积分榜快照（V2.4 新增）
   worldCupStandings?: import('../types').WorldCupStandings;
+  // 系统状态：昨日排行榜快照（V3 稳定性修复新增）
+  systemState?: import('./system_state').SystemState;
 }
 
 const DATA_DIR = process.env.APP_DATA_DIR

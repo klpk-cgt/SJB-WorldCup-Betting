@@ -67,6 +67,8 @@ const TEAM_NAME_ALIASES: Record<string, string[]> = {
   CPV: ['cape verde', 'cabo verde'],
   COD: ['dr congo', 'democratic republic of congo', 'congo dr', 'congo-kinshasa'],
   CZE: ['czech republic', 'czechia'],
+  RSA: ['south africa', 'south africa republic', 'bafana bafana'],
+  MEX: ['mexico', 'el tri'],
 };
 
 function buildTeamAliases(team: Team) {
@@ -208,7 +210,9 @@ export async function syncFixturesForDay(params: {
   }
 
   try {
-    const response = await fetchWithRetry(`https://v3.football.api-sports.io/fixtures?date=${date}`, {
+    // 优先带 league=1（世界杯）+ season 过滤，减少非世界杯赛事拉取，节省配额
+    const urlWithLeague = `https://v3.football.api-sports.io/fixtures?date=${date}&league=1&season=2026`;
+    const response = await fetchWithRetry(urlWithLeague, {
       headers: {
         'x-apisports-key': apiKey,
       },
@@ -218,6 +222,11 @@ export async function syncFixturesForDay(params: {
     }
 
     const payload = (await response.json()) as {
+      get?: string;
+      parameters?: Record<string, unknown>;
+      errors?: Array<{ message?: string }> | Record<string, string> | null;
+      results?: number;
+      paging?: { current?: number; total?: number };
       response?: Array<{
         fixture: {
           id: number;
@@ -240,10 +249,41 @@ export async function syncFixturesForDay(params: {
       }>;
     };
 
+    // 提取 API 错误信息（区分"请求成功但无赛事"和"API 返回错误"）
+    const apiErrors = payload.errors;
+    const hasApiError = apiErrors
+      ? Array.isArray(apiErrors)
+        ? apiErrors.length > 0
+        : Object.keys(apiErrors).length > 0
+      : false;
+    const apiErrorDetail = hasApiError ? `API错误: ${JSON.stringify(apiErrors)}` : '';
+    const apiResultsCount = payload.results ?? payload.response?.length ?? 0;
+
+    // 若带 league 过滤返回 0 场且无 API 错误，fallback 一次不带 league 的请求做兜底
+    let effectivePayload = payload;
+    let usedFallback = false;
+    if ((payload.response?.length || 0) === 0 && !hasApiError) {
+      try {
+        const fallbackUrl = `https://v3.football.api-sports.io/fixtures?date=${date}`;
+        const fallbackResponse = await fetchWithRetry(fallbackUrl, {
+          headers: { 'x-apisports-key': apiKey },
+        });
+        if (fallbackResponse.ok) {
+          const fallbackPayload = await fallbackResponse.json();
+          if ((fallbackPayload?.response?.length || 0) > 0) {
+            effectivePayload = fallbackPayload;
+            usedFallback = true;
+          }
+        }
+      } catch {
+        // fallback 失败不中断主流程，按 0 场处理
+      }
+    }
+
     const updatedMatches: Match[] = [];
     const createdMatches: Match[] = [];
     let unmatchedTeams = 0;
-    for (const item of payload.response || []) {
+    for (const item of effectivePayload.response || []) {
       const homeName = item.teams?.home?.name || '';
       const awayName = item.teams?.away?.name || '';
       const homeTeam = resolveTeamByExternalName(db, homeName);
@@ -328,7 +368,34 @@ export async function syncFixturesForDay(params: {
       updatedMatches.push(localMatch);
     }
 
-    const fixtureCount = payload.response?.length || 0;
+    const fixtureCount = effectivePayload.response?.length || 0;
+    const requestUrl = usedFallback
+      ? `GET /fixtures?date=${date} (fallback: 无league过滤)`
+      : `GET /fixtures?date=${date}&league=1&season=2026`;
+
+    // 区分"确无赛事"和"API错误"
+    if (fixtureCount === 0) {
+      const status = hasApiError ? 'FAILED' : 'PARTIAL';
+      const responseSummary = hasApiError
+        ? `API报告${apiResultsCount}场，但返回错误。${apiErrorDetail}`
+        : `该日期确无世界杯赛事（API报告${apiResultsCount}场）${usedFallback ? '，已尝试fallback仍为0' : ''}`;
+      return {
+        updatedMatches: [],
+        createdMatches: [],
+        log: buildLog({
+          source: 'API-Football',
+          action: '按日期同步赛程',
+          syncType: 'fixtures',
+          status,
+          requestSummary: requestUrl,
+          responseSummary,
+          targetDate: date,
+          errorMessage: hasApiError ? apiErrorDetail : undefined,
+          startedAt,
+        }),
+      };
+    }
+
     return {
       updatedMatches,
       createdMatches,
@@ -337,8 +404,8 @@ export async function syncFixturesForDay(params: {
         action: '按日期同步赛程',
         syncType: 'fixtures',
         status: updatedMatches.length > 0 || createdMatches.length > 0 ? 'SUCCESS' : 'PARTIAL',
-        requestSummary: `GET /fixtures?date=${date}`,
-        responseSummary: `共获取${fixtureCount}场赛事，更新${updatedMatches.length}场，新建${createdMatches.length}场，未匹配队伍${unmatchedTeams}支`,
+        requestSummary: requestUrl,
+        responseSummary: `共获取${fixtureCount}场赛事（API报告${apiResultsCount}场${usedFallback ? '，fallback' : ''}），更新${updatedMatches.length}场，新建${createdMatches.length}场，未匹配队伍${unmatchedTeams}支`,
         targetDate: date,
         startedAt,
       }),
@@ -352,7 +419,7 @@ export async function syncFixturesForDay(params: {
         action: '按日期同步赛程',
         syncType: 'fixtures',
         status: 'FAILED',
-        requestSummary: `GET /fixtures?date=${date}`,
+        requestSummary: `GET /fixtures?date=${date}&league=1&season=2026`,
         responseSummary: '同步赛程失败。',
         targetDate: date,
         errorMessage: error instanceof Error ? error.message : '未知同步错误',

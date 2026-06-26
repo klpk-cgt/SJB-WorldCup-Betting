@@ -14,11 +14,35 @@ async function main() {
   const data = await r.json();
   console.log(`Got ${data.matches.length} matches, updated: ${data.updated}`);
 
-  // 筛选有比分的比赛（result 不为空且不为"待定"）
+  // 筛选有比分的比赛：
+  // 1. result 不为空且匹配 X:Y 格式
+  // 2. spf 不为"待定"——竞彩官方未确认结果时 result 可能是占位符(如0:0)
+  // 3. postMatch 非空——证明比赛已实际进行(双重保险)
   const withResult = data.matches.filter(
-    (m) => m.result && !String(m.result).includes('待') && String(m.result).match(/^\d+:\d+$/)
+    (m) =>
+      m.result &&
+      !String(m.result).includes('待') &&
+      String(m.result).match(/^\d+:\d+$/) &&
+      m.spf &&
+      !String(m.spf).includes('待定') &&
+      m.postMatch &&
+      String(m.postMatch).trim().length > 0
   );
-  console.log(`Matches with result: ${withResult.length}`);
+  console.log(`Matches with confirmed result (spf+postMatch verified): ${withResult.length}`);
+
+  // 诊断：有 result 但 spf="待定" 的比赛（可能 result 是占位符）
+  const suspicious = data.matches.filter(
+    (m) =>
+      m.result &&
+      String(m.result).match(/^\d+:\d+$/) &&
+      (!m.spf || String(m.spf).includes('待定'))
+  );
+  if (suspicious.length > 0) {
+    console.log(`WARNING: ${suspicious.length} matches have result but spf="待定" (skipped, result may be placeholder):`);
+    for (const s of suspicious) {
+      console.log(`  id=${s.id}: ${s.home} vs ${s.away} result="${s.result}" spf="${s.spf}" postMatch="${String(s.postMatch || '').slice(0, 40)}..."`);
+    }
+  }
 
   let updated = 0;
   let skipped = 0;

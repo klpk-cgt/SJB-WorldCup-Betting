@@ -38,7 +38,11 @@ export function deriveSettlementStatus(match: Match): SettlementStatus {
 }
 
 export function hasResolvableScore(match: Match) {
-  return typeof match.homeScore === 'number' && typeof match.awayScore === 'number';
+  return (
+    typeof match.homeScore === 'number' &&
+    typeof match.awayScore === 'number' &&
+    !match.scoreUnknown
+  );
 }
 
 export function enrichMatchLifecycle(match: Match, predictionLockMinutes = 5): Match {

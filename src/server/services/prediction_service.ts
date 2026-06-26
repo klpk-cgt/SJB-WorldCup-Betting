@@ -48,7 +48,7 @@ export function placePrediction(params: PlacePredictionParams): PlacePredictionR
   }
 
   if (!market) {
-    throw new Error('Unsupported prediction market.');
+    throw new Error('不支持的预测玩法。');
   }
 
   const match = db.matches.find((item) => item.id === matchId);

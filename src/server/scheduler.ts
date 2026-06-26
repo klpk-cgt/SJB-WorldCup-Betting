@@ -86,6 +86,12 @@ export function initScheduler() {
     logger.info('[Cleanup] Rate limit cache cleanup scheduled');
   });
 
+  // 每天 00:00 北京时间（UTC 16:00）：捕获排行榜余额快照，用于 rankDelta 计算
+  registerTask('leaderboard-snapshot', '0 16 * * *', async () => {
+    const { captureLeaderboardSnapshot } = await import('./services/leaderboard_snapshot_service');
+    captureLeaderboardSnapshot();
+  });
+
   // 启动所有任务
   startAllTasks();
 

@@ -532,7 +532,7 @@ export function appendSyncLog(log: SyncLog) {
   }
   const db = dbService.getData();
   db.syncLogs.unshift(log);
-  db.syncLogs = db.syncLogs.slice(0, 120);
+  db.syncLogs = db.syncLogs.slice(0, 300);
   logger.sync('[SyncLog] entry recorded', {
     id: log.id,
     source: log.source,
@@ -641,31 +641,37 @@ export function resolveOddsSnapshot(matchId: string, market: Prediction['market'
   const db = dbService.getData();
   const odds: MatchOdds | undefined = db.matchOdds[matchId];
   if (!odds) return null;
+  // UNSYNCED 表示赔率尚未同步，禁止下注（避免用占位赔率结算）
+  if (odds.syncStatus === 'UNSYNCED') return null;
 
   const marketUpper = normalizePredictionMarket(market);
   if (!marketUpper) return null;
-  let oddsDecimal = 1;
+  let oddsDecimal: number | undefined;
   if (marketUpper === 'H2H' || marketUpper === 'HANDICAP') {
     // 让球和胜平负共享 H2H/handicap 字段，按 optionKey 的前缀或 market 区分
     const src = marketUpper === 'HANDICAP' ? (odds.handicap || odds.h2h) : odds.h2h;
     oddsDecimal = optionKey === 'home' ? src.homeWin : optionKey === 'draw' ? src.draw : src.awayWin;
   } else if (marketUpper === 'TOTAL_GOALS_PRECISE') {
     const tg = odds.totalGoals.find((item) => `totalGoals_${item.goals}` === optionKey || item.goals === optionKey);
-    oddsDecimal = tg?.odds || odds.totalGoals.find(t => t.goals === '3')?.odds || 4.0;
+    oddsDecimal = tg?.odds;
   } else if (marketUpper === 'CORRECT_SCORE') {
     const score = odds.correctScore.find(
       (item) => `correctScore_${item.score.replace('-', '_')}` === optionKey || item.score === optionKey,
     );
-    oddsDecimal = score?.odds || 9.5;
+    oddsDecimal = score?.odds;
   } else if (marketUpper === 'HAFU') {
     const hft = odds.halfFullTime;
     if (hft) {
-      oddsDecimal = (hft as any)[optionKey] || 3.0;
-    } else {
-      oddsDecimal = 3.0;
+      oddsDecimal = (hft as any)[optionKey];
     }
   } else if (marketUpper === 'QUALIFY') {
-    oddsDecimal = optionKey === 'homeQualify' ? odds.qualify?.homeQualify || 1.8 : odds.qualify?.awayQualify || 1.8;
+    oddsDecimal = optionKey === 'homeQualify' ? odds.qualify?.homeQualify : odds.qualify?.awayQualify;
+  }
+
+  // 找不到对应 optionKey 的有效赔率值时返回 null，由调用方报错"当前没有可用指数"
+  // MANUAL_FALLBACK 赔率若存在有效值则允许下注，source 字段透传 odds.source
+  if (oddsDecimal === undefined || !Number.isFinite(oddsDecimal) || oddsDecimal <= 1) {
+    return null;
   }
 
   return {
@@ -702,15 +708,28 @@ export async function autoSettleFinishedMatches(db: ReturnType<typeof dbService.
       match.isSettled ||
       !FINISHED_MATCH_STATUSES.has(match.status) ||
       typeof match.homeScore !== 'number' ||
-      typeof match.awayScore !== 'number'
+      typeof match.awayScore !== 'number' ||
+      match.scoreUnknown === true
     ) {
       // 降级模式下 scoreUnknown 标记的比赛，记录日志提醒管理员手动录入
-      if ((match as any).scoreUnknown && FINISHED_MATCH_STATUSES.has(match.status)) {
-        logger.warn(`[AutoSettle] 比赛已结束但比分未知，需管理员手动录入: ${match.id}`, {
+      if (match.scoreUnknown && FINISHED_MATCH_STATUSES.has(match.status)) {
+        logger.warn(`[AutoSettle] 比赛已结束但比分未知，已跳过自动结算: ${match.id}`, {
           matchId: match.id,
           status: match.status,
           homeTeamId: match.homeTeamId,
           awayTeamId: match.awayTeamId,
+        });
+      } else if (
+        !match.isSettled &&
+        FINISHED_MATCH_STATUSES.has(match.status) &&
+        (typeof match.homeScore !== 'number' || typeof match.awayScore !== 'number')
+      ) {
+        // 已结束但比分缺失：记录日志提醒管理员检查同步
+        logger.warn(`[AutoSettle] 比赛已结束但比分缺失，已跳过自动结算: ${match.id}`, {
+          matchId: match.id,
+          status: match.status,
+          homeScore: match.homeScore ?? null,
+          awayScore: match.awayScore ?? null,
         });
       }
       continue;
@@ -720,6 +739,23 @@ export async function autoSettleFinishedMatches(db: ReturnType<typeof dbService.
     const lockTime = match.predictionLockedAt ? new Date(match.predictionLockedAt).getTime() : 0;
     if (lockTime > 0 && now - lockTime < 5 * 60 * 1000) {
       // 锁定不到5分钟，跳过（等比分完全确认）
+      logger.info(`[AutoSettle] 跳过：锁定后不足5分钟，等待比分确认: ${match.id}`, {
+        matchId: match.id,
+        lockedAt: match.predictionLockedAt,
+        elapsedMs: now - lockTime,
+      });
+      continue;
+    }
+    // 比赛开始后至少等待2.5小时才结算
+    // 确保API-Football有足够时间同步真实比分，防止 backfill 占位比分被立即结算
+    const matchStartTime = new Date(match.startTimeUtc).getTime();
+    const elapsedSinceStart = now - matchStartTime;
+    if (elapsedSinceStart < 2.5 * 60 * 60 * 1000) {
+      logger.info(`[AutoSettle] 跳过：开赛后不足2.5小时冷却期: ${match.id}`, {
+        matchId: match.id,
+        startTimeUtc: match.startTimeUtc,
+        elapsedMs: elapsedSinceStart,
+      });
       continue;
     }
     try {

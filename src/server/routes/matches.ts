@@ -22,6 +22,7 @@ import {
 import { getRuntimeConfig } from '../config';
 import { emitTournamentBet } from '../activity_service';
 import { getUserProfileSummary } from '../badge_service';
+import { getLeaderboardSnapshot } from '../services/leaderboard_snapshot_service';
 import { getHeadToHead } from '../../data/worldcup/headToHead';
 import { mergeCorrectScoreOdds } from '../../utils/odds';
 import { getTeamProfile } from '../../data/worldcup/teams';
@@ -280,7 +281,7 @@ router.post('/api/predictions', async (req: Request, res: Response) => {
 
   const normalizedMarket = normalizePredictionMarket(market);
   if (!normalizedMarket) {
-    return res.status(400).json({ error: 'Unsupported prediction market.' });
+    return res.status(400).json({ error: '不支持的预测玩法。' });
   }
 
   try {
@@ -444,21 +445,15 @@ router.get('/api/leaderboards', (_req: Request, res: Response) => {
   const db = dbService.getData();
   const groupId = (_req.query.groupId as string) || dbService.getPrimaryRoomId();
   const users = db.users.filter((item) => item.groupId === groupId && item.status !== 'DISABLED');
-  const oneDay = 24 * 60 * 60 * 1000;
 
   // ── 预聚合：单次遍历构建索引 Map (O(P+T+W+B) vs 原来的 O(U×(P+T+W+B))) ──
   const predictionMap = new Map<string, typeof db.predictions>();
   const walletMap = new Map<string, typeof db.wallets[number]>();
   const transactionMap = new Map<string, typeof db.transactions>();
-  let anchorTime = Date.now();
 
   for (const p of db.predictions) {
     if (!predictionMap.has(p.userId)) predictionMap.set(p.userId, []);
     predictionMap.get(p.userId)!.push(p);
-    if (p.settledAt) {
-      const t = new Date(p.settledAt).getTime();
-      if (t > anchorTime) anchorTime = t;
-    }
   }
   for (const w of db.wallets) {
     walletMap.set(w.userId, w);
@@ -468,6 +463,8 @@ router.get('/api/leaderboards', (_req: Request, res: Response) => {
     transactionMap.get(tx.userId)!.push(tx);
   }
   // ── 钱包与历史排名 ──
+  // 优先使用每日快照（北京时间自然日切换时捕获），无快照时回退到最近一笔流水的 balanceBefore
+  const leaderboardSnapshot = getLeaderboardSnapshot(groupId);
   const currentWalletMap = new Map<string, number>();
   const previousBalanceMap = new Map<string, number>();
   for (const user of users) {
@@ -475,15 +472,20 @@ router.get('/api/leaderboards', (_req: Request, res: Response) => {
     const bal = w ? w.balance : 10000;
     currentWalletMap.set(user.id, bal);
 
-    const txs = transactionMap.get(user.id) || [];
-    const latestTx = txs.length > 0
-      ? txs.reduce((latest, tx) => {
-          const a = new Date(latest.createdAt).getTime();
-          const b = new Date(tx.createdAt).getTime();
-          return b > a ? tx : latest;
-        })
-      : null;
-    previousBalanceMap.set(user.id, latestTx ? latestTx.balanceBefore : bal);
+    if (leaderboardSnapshot) {
+      const snapEntry = leaderboardSnapshot.entries.find((e) => e.userId === user.id);
+      previousBalanceMap.set(user.id, snapEntry ? snapEntry.balance : bal);
+    } else {
+      const txs = transactionMap.get(user.id) || [];
+      const latestTx = txs.length > 0
+        ? txs.reduce((latest, tx) => {
+            const a = new Date(latest.createdAt).getTime();
+            const b = new Date(tx.createdAt).getTime();
+            return b > a ? tx : latest;
+          })
+        : null;
+      previousBalanceMap.set(user.id, latestTx ? latestTx.balanceBefore : bal);
+    }
   }
 
   const previousRankMap = new Map(
@@ -518,7 +520,7 @@ router.get('/api/leaderboards', (_req: Request, res: Response) => {
         settledCount++;
         completed.push(p);
       }
-      if (p.settledAt && anchorTime - new Date(p.settledAt).getTime() <= oneDay) {
+      if (p.settledAt && toBeijingDateKey(p.settledAt) === toBeijingDateKey(Date.now())) {
         todayProfit += p.settledProfit || 0;
       }
     }
@@ -596,7 +598,7 @@ router.get('/api/leaderboards', (_req: Request, res: Response) => {
     totalList: sortedByTotal,
     todayList: [...leaderboard].sort((a, b) => b.todayProfit - a.todayProfit),
     rateList: [...leaderboard].sort((a, b) => b.rate - a.rate),
-    streakList: [...leaderboard].sort((a, b) => b.maxStreak - a.maxStreak),
+    streakList: [...leaderboard].sort((a, b) => b.currentStreak - a.currentStreak),
     wonProfitList: [...leaderboard].sort((a, b) => b.totalWonProfit - a.totalWonProfit),
   });
 });

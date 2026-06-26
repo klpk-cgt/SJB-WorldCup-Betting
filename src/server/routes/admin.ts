@@ -532,110 +532,137 @@ router.put('/api/admin/users/:id/avatar', (req: Request, res: Response) => {
   });
 });
 
-router.post('/api/admin/users/:id/adjust-points', (req: Request, res: Response) => {
+router.post('/api/admin/users/:id/adjust-points', async (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
   const amount = Number(req.body.amount);
   if (!Number.isFinite(amount) || amount === 0) {
     return res.status(400).json({ error: '调整额度必须是非 0 数字。' });
   }
 
-  const db = dbService.getData();
-  const wallet = db.wallets.find((item) => item.userId === req.params.id);
-  if (!wallet) return res.status(404).json({ error: '钱包不存在。' });
-
-  const user = db.users.find((u) => u.id === req.params.id);
-
-  const oldBalance = wallet.balance;
-  wallet.balance = Math.max(0, wallet.balance + amount);
   const reason = req.body.reason || '管理员手动调整积分';
-  db.transactions.push({
-    id: createId('adj'),
-    userId: req.params.id,
-    type: 'ADMIN_ADJUST',
-    amount,
-    balanceBefore: oldBalance,
-    balanceAfter: wallet.balance,
-    note: reason,
-    createdAt: new Date().toISOString(),
-  });
 
-  // 触发动态
-  if (user) {
-    try {
-      emitPointsAdjusted({
-        userId: user.id,
-        displayName: user.displayName,
-        avatarUrl: user.avatarUrl,
+  try {
+    const result = await runBusinessTransaction('adminAdjust', async () => {
+      const db = dbService.getData();
+      const user = db.users.find((u) => u.id === req.params.id);
+      // adjustWalletBalance 会校验钱包存在与余额，校验失败时抛错且不修改任何数据
+      const { wallet } = adjustWalletBalance({
+        userId: req.params.id,
         amount,
-        reason,
-        balanceAfter: wallet.balance,
-        groupId: user.groupId,
+        type: 'ADMIN_ADJUST',
+        note: reason,
       });
-    } catch (e) {
-      logger.admin('[Admin] Failed to emit points adjustment activity', {
-        error: e instanceof Error ? e.message : String(e),
-        userId: user.id,
-      });
-    }
-  }
 
-  dbService.save();
-  res.json({ success: true, balance: wallet.balance });
+      if (user) {
+        try {
+          emitPointsAdjusted({
+            userId: user.id,
+            displayName: user.displayName,
+            avatarUrl: user.avatarUrl,
+            amount,
+            reason,
+            balanceAfter: wallet.balance,
+            groupId: user.groupId,
+          });
+        } catch (e) {
+          logger.admin('[Admin] Failed to emit points adjustment activity', {
+            error: e instanceof Error ? e.message : String(e),
+            userId: user.id,
+          });
+        }
+      }
+
+      return { balance: wallet.balance };
+    });
+
+    res.json({ success: true, balance: result.balance });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('钱包不存在') || message.includes('用户不存在')) {
+      return res.status(404).json({ error: message });
+    }
+    if (message.includes('余额不足')) {
+      return res.status(400).json({ error: message });
+    }
+    return res.status(500).json({ error: message });
+  }
 });
 
 // ─── 统一发配积分给全员 ───
-router.post('/api/admin/users/bulk-adjust-points', (req: Request, res: Response) => {
+router.post('/api/admin/users/bulk-adjust-points', async (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
   const amount = Number(req.body.amount);
   if (!Number.isFinite(amount) || amount === 0) {
     return res.status(400).json({ error: '发配额度必须是非 0 数字。' });
   }
 
-  const db = dbService.getData();
   const reason = req.body.reason || '管理员统一发配积分';
-  let affectedCount = 0;
 
-  for (const wallet of db.wallets) {
-    const oldBalance = wallet.balance;
-    wallet.balance = Math.max(0, wallet.balance + amount);
+  try {
+    const result = await runBusinessTransaction('adminBulkAdjust', async () => {
+      const db = dbService.getData();
+      let affectedCount = 0;
+      const failed: Array<{ userId: string; reason: string }> = [];
 
-    db.transactions.push({
-      id: createId('blk'),
-      userId: wallet.userId,
-      type: 'ADMIN_ADJUST',
-      amount,
-      balanceBefore: oldBalance,
-      balanceAfter: wallet.balance,
-      note: reason,
-      createdAt: new Date().toISOString(),
+      for (const walletEntry of db.wallets) {
+        try {
+          const { wallet } = adjustWalletBalance({
+            userId: walletEntry.userId,
+            amount,
+            type: 'ADMIN_ADJUST',
+            note: reason,
+          });
+          affectedCount += 1;
+
+          const user = db.users.find((u) => u.id === walletEntry.userId);
+          if (user) {
+            try {
+              emitPointsAdjusted({
+                userId: user.id,
+                displayName: user.displayName,
+                avatarUrl: user.avatarUrl,
+                amount,
+                reason,
+                balanceAfter: wallet.balance,
+                groupId: user.groupId,
+              });
+            } catch (e) {
+              logger.admin('[Admin] Bulk points adjustment - failed to emit activity', {
+                error: e instanceof Error ? e.message : String(e),
+                userId: user.id,
+              });
+            }
+          }
+        } catch (e) {
+          const failReason = e instanceof Error ? e.message : String(e);
+          failed.push({ userId: walletEntry.userId, reason: failReason });
+          logger.admin('[Admin] Bulk points adjustment - user failed', {
+            userId: walletEntry.userId,
+            error: failReason,
+          });
+        }
+      }
+
+      return { affectedCount, failed };
     });
 
-    const user = db.users.find((u) => u.id === wallet.userId);
-    if (user) {
-      try {
-        emitPointsAdjusted({
-          userId: user.id,
-          displayName: user.displayName,
-          avatarUrl: user.avatarUrl,
-          amount,
-          reason,
-          balanceAfter: wallet.balance,
-          groupId: user.groupId,
-        });
-      } catch (e) {
-        logger.admin('[Admin] Bulk points adjustment - failed to emit activity', {
-          error: e instanceof Error ? e.message : String(e),
-          userId: user.id,
-        });
-      }
-    }
-
-    affectedCount += 1;
+    logger.admin('[Admin] Bulk points adjustment completed', {
+      amount,
+      reason,
+      affectedCount: result.affectedCount,
+      failedCount: result.failed.length,
+    });
+    res.json({
+      success: true,
+      affectedCount: result.affectedCount,
+      failed: result.failed,
+      amount,
+      reason,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return res.status(500).json({ error: message });
   }
-
-  dbService.save();
-  logger.admin('[Admin] Bulk points adjustment completed', { amount, reason, affectedCount });
-  res.json({ success: true, affectedCount, amount, reason });
 });
 
 // ─── 手动同步竞彩网赔率 ───
@@ -931,7 +958,71 @@ router.post('/api/admin/matches/:id/settle', async (req: Request, res: Response)
   }
 });
 
-// 鈹€鈹€鈹€ 鍚屾绠＄悊 鈹€鈹€鈹€
+// 赛前检查：汇总未来 48 小时内可竞猜比赛的赔率同步状态与缺失项
+router.get('/api/admin/pre-match-check', (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const db = dbService.getData();
+  const now = Date.now();
+  const windowMs = 48 * 60 * 60 * 1000;
+
+  const upcoming = db.matches.filter((match) => {
+    const startTime = new Date(match.startTimeUtc).getTime();
+    return startTime >= now - 60 * 60 * 1000 && startTime <= now + windowMs;
+  });
+
+  const items = upcoming.map((match) => {
+    const odds = db.matchOdds[match.id];
+    const operationalStatus = deriveOperationalStatus(match, now, getRuntimeConfig().predictionLockMinutes);
+    const markets = {
+      h2h: Boolean(odds?.h2h && odds.h2h.homeWin > 1),
+      handicap: Boolean(odds?.handicap),
+      correctScore: Boolean(odds?.correctScore && odds.correctScore.length > 0),
+      totalGoals: Boolean(odds?.totalGoals && odds.totalGoals.length > 0),
+      halfFullTime: Boolean(odds?.halfFullTime),
+      qualify: Boolean(odds?.qualify),
+    };
+    const issues: string[] = [];
+    if (!odds) {
+      issues.push('赔率完全缺失');
+    } else {
+      if (odds.syncStatus === 'UNSYNCED') issues.push('赔率未同步（UNSYNCED）');
+      else if (odds.syncStatus === 'FAILED') issues.push('赔率同步失败（FAILED）');
+      else if (odds.syncStatus === 'PARTIAL') issues.push('赔率部分同步（PARTIAL）');
+      if (!markets.h2h) issues.push('胜平负赔率缺失');
+      if (!markets.correctScore) issues.push('比分赔率缺失');
+      if (!markets.totalGoals) issues.push('总进球赔率缺失');
+    }
+    return {
+      matchId: match.id,
+      homeTeamId: match.homeTeamId,
+      awayTeamId: match.awayTeamId,
+      homeTeamName: match.homeTeamId,
+      awayTeamName: match.awayTeamId,
+      stage: match.stage,
+      startTimeUtc: match.startTimeUtc,
+      startTimeBeijing: match.startTimeBeijing,
+      operationalStatus,
+      oddsSyncStatus: odds?.syncStatus || null,
+      oddsSource: odds?.source || null,
+      oddsLastSyncedAt: odds?.lastSyncedAt || null,
+      markets,
+      issues,
+    };
+  });
+
+  const withIssues = items.filter((item) => item.issues.length > 0);
+  res.json({
+    checkedAt: new Date().toISOString(),
+    summary: {
+      total: items.length,
+      withIssues: withIssues.length,
+      missingOdds: items.filter((item) => !item.markets.h2h).length,
+    },
+    matches: items,
+  });
+});
+
+// 鈹€鈹€鈹€ 鍚屾绠＄悊 鈹€鈹€鈹€
 
 router.post('/api/admin/sync/fixtures', async (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
@@ -1224,7 +1315,7 @@ router.post('/api/admin/ai/match/:id/regenerate', async (req: Request, res: Resp
     dbService.save();
     res.json({ success: true, prediction, analysis });
   } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : 'AI regenerate failed.' });
+    res.status(400).json({ error: error instanceof Error ? error.message : 'AI 内容重新生成失败。' });
   }
 });
 
@@ -1255,7 +1346,7 @@ router.post('/api/admin/ai/match/:id/enhance-search', async (req: Request, res: 
     dbService.save();
     res.json({ success: true, analysis });
   } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : 'Search enhancement failed.' });
+    res.status(400).json({ error: error instanceof Error ? error.message : '搜索增强失败。' });
   }
 });
 
@@ -1290,7 +1381,7 @@ router.post('/api/admin/ai/match/:id/enhance-multimodal', async (req: Request, r
     dbService.save();
     res.json({ success: true, analysis });
   } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : 'Multimodal enhancement failed.' });
+    res.status(400).json({ error: error instanceof Error ? error.message : '多模态增强失败。' });
   }
 });
 
@@ -1320,7 +1411,7 @@ router.post('/api/admin/ai/leaderboard/:roomId/regenerate', async (req: Request,
     dbService.save();
     res.json({ success: true, aiContent });
   } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : 'Leaderboard regenerate failed.' });
+    res.status(400).json({ error: error instanceof Error ? error.message : '排行榜重新生成失败。' });
   }
 });
 

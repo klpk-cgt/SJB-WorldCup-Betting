@@ -99,7 +99,7 @@ router.get('/api/ai/match/:id', (req: Request, res: Response) => {
 router.post('/api/ai/generate', async (req: Request, res: Response) => {
   const { type, title, prompt, fallbackBody, matchId, predictionId } = req.body || {};
   if (!type || !title || !prompt || !fallbackBody) {
-    return res.status(400).json({ error: 'type, title, prompt, fallbackBody are required.' });
+    return res.status(400).json({ error: 'type、title、prompt、fallbackBody 为必填项。' });
   }
 
   const aiContent = await generateStructuredAiContent({
@@ -137,7 +137,7 @@ router.post('/api/ai/match/:id/preview', async (req: Request, res: Response) => 
   const db = dbService.getData();
   const match = db.matches.find((item) => item.id === req.params.id);
   if (!match) {
-    return res.status(404).json({ error: 'Match not found.' });
+    return res.status(404).json({ error: '比赛不存在。' });
   }
 
   const promptPayload = buildMatchPreviewPrompt(match, db.matchOdds[match.id]);
@@ -182,23 +182,23 @@ router.post('/api/ai/match/:id/preview', async (req: Request, res: Response) => 
 router.post('/api/ai/share/bet', async (req: Request, res: Response) => {
   const user = getAuthenticatedUser(req);
   if (!user) {
-    return res.status(401).json({ error: 'Please log in first.' });
+    return res.status(401).json({ error: '请先登录。' });
   }
 
   const predictionId = String(req.body?.predictionId || '').trim();
   if (!predictionId) {
-    return res.status(400).json({ error: 'predictionId is required.' });
+    return res.status(400).json({ error: 'predictionId 为必填项。' });
   }
 
   const db = dbService.getData();
   const prediction = db.predictions.find((item) => item.id === predictionId && item.userId === user.id);
   if (!prediction) {
-    return res.status(404).json({ error: 'Prediction not found.' });
+    return res.status(404).json({ error: '预测不存在。' });
   }
 
   const match = db.matches.find((item) => item.id === prediction.matchId);
   if (!match) {
-    return res.status(404).json({ error: 'Match not found.' });
+    return res.status(404).json({ error: '比赛不存在。' });
   }
 
   const serializedMatch = serializeMatch(match);
@@ -269,7 +269,7 @@ router.get('/api/ai/match/:id/crowd-review', async (req: Request, res: Response)
   const db = dbService.getData();
   const match = db.matches.find((m) => m.id === req.params.id);
   if (!match) {
-    return res.status(404).json({ error: 'Match not found.' });
+    return res.status(404).json({ error: '比赛不存在。' });
   }
 
   const predictions = db.predictions.filter((p) => p.matchId === req.params.id);

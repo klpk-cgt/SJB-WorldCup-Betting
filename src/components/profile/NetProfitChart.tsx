@@ -1,10 +1,12 @@
-import { useMemo } from 'react';
-import { Area, AreaChart, ResponsiveContainer, Tooltip, YAxis } from 'recharts';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Area, AreaChart, Tooltip, YAxis } from 'recharts';
 import type { Transaction } from '../../types';
 
 interface NetProfitChartProps {
   transactions: Transaction[];
 }
+
+const CHART_HEIGHT = 110;
 
 function formatSigned(value: number) {
   if (value > 0) return `+${value.toLocaleString()}`;
@@ -43,6 +45,19 @@ export default function NetProfitChart({ transactions }: NetProfitChartProps) {
     return { data: points, currentValue: current, peakValue: peak, isPositive: positive };
   }, [transactions]);
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const update = () => setWidth(el.clientWidth);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   if (data.length <= 1) {
     return (
       <div className="profile-chart-card">
@@ -79,9 +94,9 @@ export default function NetProfitChart({ transactions }: NetProfitChartProps) {
           <p className="text-sm font-extrabold text-amber-600 tabular-nums">{formatSigned(peakValue)}</p>
         </div>
       </div>
-      <div style={{ width: '100%', height: 110 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 6, right: 6, bottom: 6, left: 6 }}>
+      <div ref={containerRef} style={{ width: '100%', height: CHART_HEIGHT }}>
+        {width > 0 && (
+          <AreaChart width={width} height={CHART_HEIGHT} data={data} margin={{ top: 6, right: 6, bottom: 6, left: 6 }}>
             <defs>
               <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={color} stopOpacity={0.35} />
@@ -112,7 +127,7 @@ export default function NetProfitChart({ transactions }: NetProfitChartProps) {
               activeDot={{ r: 4, fill: '#fff', stroke: colorDark, strokeWidth: 2.5 }}
             />
           </AreaChart>
-        </ResponsiveContainer>
+        )}
       </div>
     </div>
   );

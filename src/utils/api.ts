@@ -10,13 +10,29 @@ export const ROOM_SLUG_STORAGE = 'wc_room_slug';
 // ─── 请求缓存 + 去重 ───
 const _cache = new Map<string, { data: unknown; ts: number }>();
 const _pending = new Map<string, Promise<unknown>>();
-const CACHE_TTL = 2 * 60 * 1000; // 2分钟缓存过期
+const CACHE_TTL = 10 * 1000; // 10秒缓存过期（赔率/比分变化快，需及时刷新）
+
+// 不走缓存的接口：数据实时性要求高，每次都需拉取最新
+const NO_CACHE_PATHS = [
+  '/api/wallet',
+  '/api/predictions/me',
+  '/api/tournament-bets',
+  '/api/leaderboards',
+  '/api/cards/inventory',
+  '/api/admin/dashboard',
+  '/api/admin/system/status',
+  '/api/admin/sync-logs',
+];
 
 function _cacheKey(path: string, method: string) {
   return method + '::' + path;
 }
 
-/** 清除所有缓存（登录/登出时调用） */
+function _shouldBypassCache(path: string) {
+  return NO_CACHE_PATHS.some((p) => path === p || path.startsWith(p + '?'));
+}
+
+/** 清除所有缓存（登录/登出/下注后调用，强制刷新数据） */
 export function clearApiCache() {
   _cache.clear();
   _pending.clear();
@@ -25,13 +41,14 @@ export function clearApiCache() {
 export async function apiRequest(path: string, options: RequestInit = {}) {
   const method = (options.method || 'GET').toUpperCase();
   const key = _cacheKey(path, method);
+  const bypassCache = _shouldBypassCache(path);
 
   // GET 请求走缓存+去重，写操作跳过
-  if (method === 'GET') {
+  if (method === 'GET' && !bypassCache) {
     // 1. 去重：相同 GET 请求复用同一个 Promise
     if (_pending.has(key)) return _pending.get(key);
 
-    // 2. 缓存命中（2分钟内）
+    // 2. 缓存命中（10秒内）
     const cached = _cache.get(key);
     if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.data;
   }
@@ -73,15 +90,15 @@ export async function apiRequest(path: string, options: RequestInit = {}) {
 
     const data = await response.json();
 
-    // 缓存 GET 结果
-    if (method === 'GET') {
+    // 缓存 GET 结果（noCache 路径不缓存）
+    if (method === 'GET' && !bypassCache) {
       _cache.set(key, { data, ts: Date.now() });
     }
 
     return data;
   };
 
-  if (method === 'GET') {
+  if (method === 'GET' && !bypassCache) {
     const promise = doFetch();
     _pending.set(key, promise);
     try {

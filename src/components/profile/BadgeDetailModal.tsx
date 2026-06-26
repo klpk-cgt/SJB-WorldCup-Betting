@@ -1,9 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import type { AchievementBadgeSummary } from '../../types';
 
 interface BadgeDetailModalProps {
   badge: AchievementBadgeSummary | null;
   onClose: () => void;
+  iconSrc?: string;
 }
 
 const RARITY_LABEL: Record<string, string> = {
@@ -53,7 +54,9 @@ const RARITY_ANIMATION: Record<string, string> = {
   legendary: 'legendary-pulse 2.5s ease-in-out infinite',
 };
 
-export default function BadgeDetailModal({ badge, onClose }: BadgeDetailModalProps) {
+export default function BadgeDetailModal({ badge, onClose, iconSrc }: BadgeDetailModalProps) {
+  const [imgFailed, setImgFailed] = useState(false);
+
   useEffect(() => {
     if (badge) {
       document.body.style.overflow = 'hidden';
@@ -61,6 +64,10 @@ export default function BadgeDetailModal({ badge, onClose }: BadgeDetailModalPro
         document.body.style.overflow = '';
       };
     }
+  }, [badge]);
+
+  useEffect(() => {
+    setImgFailed(false);
   }, [badge]);
 
   if (!badge) return null;
@@ -103,7 +110,18 @@ export default function BadgeDetailModal({ badge, onClose }: BadgeDetailModalPro
               animation: animation || undefined,
             }}
           >
-            <span style={{ fontSize: 46 }}>{badge.icon}</span>
+            {iconSrc && !imgFailed ? (
+              <img
+                src={iconSrc}
+                alt={badge.label}
+                width={56}
+                height={56}
+                style={{ objectFit: 'contain' }}
+                onError={() => setImgFailed(true)}
+              />
+            ) : (
+              <span style={{ fontSize: 46 }}>{badge.icon}</span>
+            )}
           </div>
         </div>
 
@@ -118,7 +136,7 @@ export default function BadgeDetailModal({ badge, onClose }: BadgeDetailModalPro
           </span>
         </div>
 
-        <p className="text-center text-[13px] text-slate-600 leading-relaxed mb-4.5 px-2.5">
+        <p className="text-center text-[13px] text-slate-600 leading-relaxed mb-[18px] px-2.5">
           {badge.description}
         </p>
 

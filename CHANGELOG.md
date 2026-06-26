@@ -1,5 +1,43 @@
 # 更新日志 (Changelog)
 
+## v2.6.0 - 2026-06-26
+
+### 稳定性修复三阶段实施（17 项改动）
+
+#### 第一阶段：核心玩法一致性
+- **1.1 结算跳过终态预测**：`settlement_service.ts` 主循环前过滤 CANCELLED 状态预测，避免对已取消比赛二次结算
+- **1.2 forceResettle 卡牌规则**：`forceResettle=true` 时清空 `usedCard` 防止卡牌二次生效，移除 `restoreCard` 死代码
+- **1.3 删除死代码**：`prediction_card_service.ts` 移除 `commitCardSettlement` / `cancelPredictionByCard` 等未使用函数
+- **1.4 管理员调账走钱包服务**：`admin.ts` 单/批量调账从直接改 `wallet.balance` 改为走 `adjustWalletBalance` + `runBusinessTransaction`；移除 `Math.max(0,...)` 静默截断，余额不足抛错进 failed 列表
+- **1.5 补核心 Vitest 用例**：新增 4 个测试文件（wallet_service 7 / settlement_service 14 / prediction_service 7 / admin_adjust 8），共 60 测试全通过
+
+#### 第二阶段：同步/赔率/自动结算
+- **2.1 同步 0 场响应诊断**：`sync.ts` 区分 API 错误（FAILED）与无赛事（PARTIAL），新增 0 场诊断信息
+- **2.2 API 请求带 league/season**：URL 增加 `league=1&season=2026`（世界杯）过滤 + 不带 league 的 fallback
+- **2.3 赔率下注守卫**：`helpers.ts` `resolveOddsSnapshot` 移除兜底默认值（4.0/9.5/3.0/1.8），找不到有效赔率时返回 null；UNSYNCED 状态阻断下注；MANUAL_FALLBACK 透传 source
+- **2.4 前端赔率标记**：`PredictionTab.tsx` 当 `oddsSyncStatus !== 'SYNCED'` 显示"赔率待确认"徽章；空 options 显示"本场未开售"
+- **2.5 自动结算日志**：`autoSettleFinishedMatches` 补结构化 skip 日志（比分缺失/锁定不足5分钟/开赛不足2.5小时）
+- **2.6 赛前检查接口**：新增 `GET /api/admin/pre-match-check`，汇总未来48小时比赛赔率同步状态与缺失项
+- **2.7 syncLogs 扩容**：保留数 120 → 300 条
+
+#### 第三阶段：排行榜与用户体验
+- **3.1 今日榜北京自然日**：`matches.ts` todayProfit 改用 `toBeijingDateKey` 判断同日，移除滚动24小时窗口
+- **3.2 昨日排名快照**：新增 `system_state.ts` 类型 + `leaderboard_snapshot_service.ts` + cron `0 16 * * *`（北京午夜）捕获余额快照，排行榜优先用快照计算 rankDelta
+- **3.3 streakList 排序**：改按 `currentStreak` 排序（原为 `maxStreak`）
+- **3.4 前端缓存策略**：`utils/api.ts` TTL 2分钟→10秒 + 8个 noCache 实时接口 + 下注后 `clearApiCache` 刷新
+- **3.5 前端失败态**：PredictionTab/MatchesTab/LeaderboardTab 三组件加 `loadError` state + 重试按钮
+- **3.6 错误消息中文化**：ai.ts/activities.ts/matches.ts/admin.ts/prediction_service.ts 共 15+ 条英文错误消息本地化
+- **3.7 赔率来源标记**：`MatchDetailPage.tsx` 赔率快照区显示 oddsSource 徽章 + 同步时间，按 SYNCED/PARTIAL 着色
+
+### 改动文件
+`settlement_service.ts`, `prediction_card_service.ts`, `admin.ts`, `sync.ts`, `helpers.ts`, `helpers.test.ts`, `prediction_service.ts`, `matches.ts`, `scheduler.ts`, `operations.ts`, `backfill_scores.cjs`, `ai.ts`, `activities.ts`, `db_service.ts`, `api.ts`, `PredictionTab.tsx`, `MatchesTab.tsx`, `LeaderboardTab.tsx`, `MatchDetailPage.tsx`, `MeTab.tsx`, `BadgeDetailModal.tsx`, `NetProfitChart.tsx`, `profileStyles.css`
+
+### 新增文件
+`system_state.ts`, `leaderboard_snapshot_service.ts`, `wallet_service.test.ts`, `settlement_service.test.ts`, `prediction_service.test.ts`, `admin_adjust.test.ts`, `stability-fix-plan.md`
+
+### 测试守门
+60/60 测试通过 · lint 通过 · build 通过
+
 ## v2.5.2 - 2026-06-15
 
 ### Bug 修复：战后战报生成链路修复 + 排行榜结算日志增强 + 资料页战报分页
