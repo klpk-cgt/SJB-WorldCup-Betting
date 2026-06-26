@@ -11,9 +11,14 @@ import { dirname, join } from 'path';
 
 // 真实用户种子数据（从 seed_users.json 加载，含头像 base64）
 // 修改此文件即可更新默认用户，迁移云服务器时一并携带
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const SEED_USERS_PATH = join(__dirname, 'seed_users.json');
+// 兼容 CJS 构建（import.meta 在 CJS 下为空）和 ESM 构建
+let _dirname: string;
+try {
+  _dirname = dirname(fileURLToPath(import.meta.url));
+} catch {
+  _dirname = process.cwd();
+}
+const SEED_USERS_PATH = join(_dirname, 'seed_users.json');
 
 interface SeedUser {
   id: string;
