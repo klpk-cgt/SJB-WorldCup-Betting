@@ -5,7 +5,7 @@
 
 import { Team, Match, MatchOdds, MatchStatus, GroupRoom } from '../types';
 import { generateDefaultOdds } from '../utils/odds';
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -18,7 +18,13 @@ try {
 } catch {
   _dirname = process.cwd();
 }
-const SEED_USERS_PATH = join(_dirname, 'seed_users.json');
+// CJS 构建时 _dirname 指向项目根目录，需检测多个可能路径
+const candidatePaths = [
+  join(_dirname, 'seed_users.json'),
+  join(_dirname, 'src', 'db', 'seed_users.json'),
+  join(process.cwd(), 'src', 'db', 'seed_users.json'),
+];
+const SEED_USERS_PATH = candidatePaths.find((p) => existsSync(p)) || candidatePaths[0];
 
 interface SeedUser {
   id: string;
