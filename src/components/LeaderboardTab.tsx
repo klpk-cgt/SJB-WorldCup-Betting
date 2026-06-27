@@ -26,7 +26,7 @@ type LeaderboardEntry = {
   netProfit?: number;
   todayProfit?: number;
   totalWonProfit?: number;
-  rate?: number;
+  rate?: number | null;
   wonCount?: number;
   totalCount?: number;
   currentStreak?: number;
@@ -96,7 +96,7 @@ function PodiumCard({ item, rank, tabKey }: { item: LeaderboardEntry; rank: 1 | 
       case 'wonProfit':
         return formatSignedPoints(item.totalWonProfit);
       case 'rate':
-        return `${item.rate || 0}%`;
+        return item.rate == null ? '暂无' : `${item.rate}%`;
       case 'streak':
         return `${item.currentStreak || 0} 连中`;
       default:
@@ -296,7 +296,7 @@ export default function LeaderboardTab({ user }: LeaderboardTabProps) {
                       <span className="text-sm font-black text-emerald-600">{formatSignedPoints(todayList[0].todayProfit)}</span>
                     </div>
                     <div className="mt-1 text-[11px] text-amber-700">
-                      命中 {todayList[0].wonCount || 0} 场 · 命中率 {todayList[0].rate || 0}%
+                      命中 {todayList[0].wonCount || 0} 场 · 命中率 {todayList[0].rate == null ? '暂无' : `${todayList[0].rate}%`}
                     </div>
                   </div>
                 </div>
@@ -402,14 +402,14 @@ export default function LeaderboardTab({ user }: LeaderboardTabProps) {
                         </>
                       ) : activeLeaderboardTab === 'rate' ? (
                         <>
-                          <p className="text-sm font-black text-violet-700">{item.rate || 0}%</p>
+                          <p className="text-sm font-black text-violet-700">{item.rate == null ? '暂无' : `${item.rate}%`}</p>
                           <p className="mt-1 text-[11px] font-semibold text-slate-500">
                             {item.wonCount || 0}/{item.totalCount || 0}
                           </p>
                         </>
                       ) : (
                         <>
-                          <p className="text-sm font-black text-slate-900">{item.rate || 0}%</p>
+                          <p className="text-sm font-black text-slate-900">{item.rate == null ? '暂无' : `${item.rate}%`}</p>
                           <p className="mt-1 text-[11px] font-semibold text-slate-500">{item.currentStreak || 0} 连中</p>
                         </>
                       )}
@@ -520,7 +520,7 @@ export default function LeaderboardTab({ user }: LeaderboardTabProps) {
                     命中分布
                   </h4>
                   <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-700 ring-1 ring-violet-100">
-                    {selectedUserDetail?.rate || 0}% 命中率
+                    {selectedUserDetail?.rate == null ? '暂无' : `${selectedUserDetail.rate}%`} 命中率
                   </span>
                 </div>
                 <div className="h-[200px] rounded-3xl border border-slate-200 bg-slate-50 p-3">
@@ -537,7 +537,7 @@ export default function LeaderboardTab({ user }: LeaderboardTabProps) {
                         </PieChart>
                       </ResponsiveContainer>
                       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                        <span className="text-lg font-black text-slate-900">{selectedUserDetail?.rate || 0}%</span>
+                        <span className="text-lg font-black text-slate-900">{selectedUserDetail?.rate == null ? '暂无' : `${selectedUserDetail.rate}%`}</span>
                         <span className="mt-1 text-[10px] font-semibold text-slate-500">命中率</span>
                       </div>
                     </div>

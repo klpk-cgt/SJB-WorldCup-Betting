@@ -695,6 +695,57 @@ export async function settleMatch(match: Match, options: { forceResettle?: boole
 }
 
 /**
+ * 数据一致性修复：基于 transactions 修复 prediction 状态
+ * 当 match.isSettled=true 但 prediction 仍为 PENDING/LOCKED 时，
+ * 根据 PREDICTION_WIN/PREDICTION_LOSE/REFUND 交易记录还原 status/settledAt/settledProfit/settledReturn
+ * @returns 修复的 prediction 数量
+ */
+export function reconcileSettledPredictions(db: ReturnType<typeof dbService.getData>): number {
+  let fixed = 0;
+  for (const match of db.matches) {
+    if (!match.isSettled) continue;
+    const matchPreds = db.predictions.filter((p) => p.matchId === match.id);
+    for (const pred of matchPreds) {
+      if (pred.status === 'PENDING' || pred.status === 'LOCKED') {
+        const winTx = db.transactions.find(
+          (tx) => tx.relatedPredictionId === pred.id && tx.type === 'PREDICTION_WIN',
+        );
+        const loseTx = db.transactions.find(
+          (tx) => tx.relatedPredictionId === pred.id && tx.type === 'PREDICTION_LOSE',
+        );
+        const refundTx = db.transactions.find(
+          (tx) =>
+            tx.relatedPredictionId === pred.id &&
+            tx.type === 'REFUND' &&
+            tx.amount > 0,
+        );
+        if (winTx) {
+          pred.status = 'WON';
+          pred.settledAt = winTx.createdAt;
+          pred.settledReturn = winTx.amount;
+          pred.settledProfit = winTx.amount - pred.stakePoints;
+          fixed++;
+        } else if (loseTx) {
+          pred.status = 'LOST';
+          pred.settledAt = loseTx.createdAt;
+          pred.settledReturn = 0;
+          pred.settledProfit = -pred.stakePoints;
+          fixed++;
+        } else if (refundTx) {
+          // VOID 结算返还本金
+          pred.status = 'VOID';
+          pred.settledAt = refundTx.createdAt;
+          pred.settledReturn = pred.stakePoints;
+          pred.settledProfit = 0;
+          fixed++;
+        }
+      }
+    }
+  }
+  return fixed;
+}
+
+/**
  * 自动结算所有已结束但未结算的比赛
  * 由定时任务调度器调用
  * @returns 结算的比赛数量
@@ -770,6 +821,11 @@ export async function autoSettleFinishedMatches(db: ReturnType<typeof dbService.
     } catch (error) {
       logger.error(`Auto-settle failed for ${match.id}`, { error: error instanceof Error ? error.message : String(error) });
     }
+  }
+  // 结算完成后修复历史 prediction 状态未持久化的数据
+  const fixedCount = reconcileSettledPredictions(db);
+  if (fixedCount > 0) {
+    logger.info(`[AutoSettle] reconcile 修复 ${fixedCount} 条历史 prediction 状态`);
   }
   return settledCount;
 }

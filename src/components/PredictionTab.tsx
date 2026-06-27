@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   AlertTriangle,
@@ -201,7 +201,7 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
   const [submitting, setSubmitting] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [showHistory, setShowHistory] = useState(false);
+  const [showHistory, setShowHistory] = useState(true);
   const [cardInventory, setCardInventory] = useState<any>(null);
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
   const [showAllMatches, setShowAllMatches] = useState(false);
@@ -268,6 +268,17 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
 
     init();
   }, [focusedMatchId, user]);
+
+  // 钱包余额变化时自动刷新记录（结算后 onRefreshWallet 触发）
+  const prevBalanceRef = useRef(wallet?.balance);
+  useEffect(() => {
+    if (prevBalanceRef.current !== wallet?.balance) {
+      prevBalanceRef.current = wallet?.balance;
+      if (user) {
+        fetchHistory();
+      }
+    }
+  }, [wallet?.balance, user]);
 
   const visibleMatches = useMemo(
     () =>

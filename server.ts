@@ -22,7 +22,7 @@ import cors from 'cors';
 import { createServer as createViteServer } from 'vite';
 import { dbService } from './src/db/db_service';
 import { getRuntimeConfig, summarizeProviderConfig } from './src/server/config';
-import { loadAdminSessions, ensureLifecycleForAllMatches, requireAdmin } from './src/server/helpers';
+import { loadAdminSessions, ensureLifecycleForAllMatches, requireAdmin, reconcileSettledPredictions } from './src/server/helpers';
 import { ensureDefaultOdds } from './src/server/sync';
 import logger from './src/server/logger';
 import { createBackup, getDbFileSize, listBackups, readDbJson } from './src/server/backup';
@@ -111,7 +111,13 @@ const PORT = Number(process.env.PORT || 3000);
 const config = getRuntimeConfig();
 
 loadAdminSessions();
-dbService.getData();
+const __db = dbService.getData();
+// 启动时修复历史 prediction 状态未持久化的数据（基于 transactions 还原）
+const __fixedCount = reconcileSettledPredictions(__db);
+if (__fixedCount > 0) {
+  logger.info(`[Startup] reconcile 修复 ${__fixedCount} 条历史 prediction 状态`);
+  dbService.save();
+}
 
 // ─── Register Routes ───
 app.use(authRoutes);

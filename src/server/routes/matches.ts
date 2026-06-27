@@ -525,7 +525,7 @@ router.get('/api/leaderboards', (_req: Request, res: Response) => {
       }
     }
 
-    const rate = settledCount === 0 ? 0 : Math.round((wonCount / settledCount) * 100);
+    const rate: number | null = settledCount === 0 ? null : Math.round((wonCount / settledCount) * 100);
     const netProfit = wallet.balance - (wallet.initialPoints || 10000);
 
     // 按结算时间排序后计算连胜
@@ -545,10 +545,10 @@ router.get('/api/leaderboards', (_req: Request, res: Response) => {
 
     let aiStyle = '稳住节奏派';
     let aiBadge = '数据观察员';
-    if (rate >= 70 && totalCount >= 3) {
+    if (rate !== null && rate >= 70 && totalCount >= 3) {
       aiStyle = '冷静收米派';
       aiBadge = '连击高手';
-    } else if (rate <= 20 && totalCount >= 3) {
+    } else if (rate !== null && rate <= 20 && totalCount >= 3) {
       aiStyle = '逆向预言家';
       aiBadge = '冷门诱捕器';
     } else if (biggestWin > 5000) {
@@ -597,7 +597,7 @@ router.get('/api/leaderboards', (_req: Request, res: Response) => {
   res.json({
     totalList: sortedByTotal,
     todayList: [...leaderboard].sort((a, b) => b.todayProfit - a.todayProfit),
-    rateList: [...leaderboard].sort((a, b) => b.rate - a.rate),
+    rateList: [...leaderboard].sort((a, b) => (b.rate ?? -1) - (a.rate ?? -1)),
     streakList: [...leaderboard].sort((a, b) => b.currentStreak - a.currentStreak),
     wonProfitList: [...leaderboard].sort((a, b) => b.totalWonProfit - a.totalWonProfit),
   });
