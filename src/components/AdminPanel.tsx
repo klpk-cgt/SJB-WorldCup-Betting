@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Shield, Users, Play, RefreshCw, BarChart3, Database, Coins, FileText, Plus, Trash2, Upload, X, Activity, Trophy } from 'lucide-react';
+import { Settings, Shield, Users, Play, RefreshCw, BarChart3, Database, Coins, FileText, Plus, Trash2, Upload, X, Activity, Trophy, Radio } from 'lucide-react';
 import { ADMIN_KEY_STORAGE, apiRequest } from '../utils/api';
 import { Match, SyncLog } from '../types';
 import { useToast } from './ToastProvider';
@@ -600,6 +600,42 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
     }
   };
 
+  const handleEspnScoreboardSync = async () => {
+    setIsWorking(true);
+    setOpsStatusMsg('正在同步 ESPN 赛程/比分...');
+    try {
+      const result = await apiRequest('/api/admin/sync/espn-scoreboard', { method: 'POST' });
+      toast.success('ESPN 同步完成', `更新 ${result.updatedCount} 场比赛，恢复 ${result.recoveredCount} 场比分`);
+      setOpsStatusMsg(`ESPN 同步完成：${result.updatedCount} 场已更新`);
+      await loadAdminData();
+    } catch (e: unknown) {
+      toast.error('ESPN 同步失败', e instanceof Error ? e.message : String(e));
+      setOpsStatusMsg('ESPN 同步失败，请检查网络或稍后重试。');
+    } finally {
+      setIsWorking(false);
+    }
+  };
+
+  const handleEspnStandingsSync = async () => {
+    setIsWorking(true);
+    setOpsStatusMsg('正在同步 ESPN 积分榜...');
+    try {
+      const result = await apiRequest('/api/admin/sync/espn-standings', { method: 'POST' });
+      if (result.synced) {
+        toast.success('ESPN 积分榜同步完成', `${result.groupCount} 个小组排名已更新`);
+        setOpsStatusMsg(`ESPN 积分榜同步完成：${result.groupCount} 组`);
+      } else {
+        toast.error('ESPN 积分榜同步失败', result.error || '未知错误');
+        setOpsStatusMsg('ESPN 积分榜同步失败');
+      }
+    } catch (e: unknown) {
+      toast.error('ESPN 积分榜同步失败', e instanceof Error ? e.message : String(e));
+      setOpsStatusMsg('ESPN 积分榜同步失败，请检查网络或稍后重试。');
+    } finally {
+      setIsWorking(false);
+    }
+  };
+
   const handleHealthCheck = async () => {
     setIsHealthChecking(true);
     setHealthCheckResult(null);
@@ -1110,6 +1146,23 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
                     <div>赛程同步间隔: {syncRuntime?.plan?.fixturesIntervalMs ? `${Math.round(syncRuntime.plan.fixturesIntervalMs / 60000)}分钟` : '已禁用'}</div>
                     <div>比赛日期: {syncRuntime?.plan?.fixturesDates?.length || 0} 天</div>
                   </div>
+                  {syncRuntime?.health && (
+                    <div className="mt-3 pt-2 border-t border-slate-200 space-y-1">
+                      <div className="font-black text-slate-900 text-[11px]">数据源健康</div>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`h-1.5 w-1.5 rounded-full ${syncRuntime.health.fixtures?.isHealthy ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                        <span>ESPN 赛程/比分: {syncRuntime.health.fixtures?.status || '未知'}{syncRuntime.health.fixtures?.lastSyncAt ? ` · ${formatStatusTime(syncRuntime.health.fixtures.lastSyncAt)}` : ''}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`h-1.5 w-1.5 rounded-full ${syncRuntime.health.liveScore?.isHealthy ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                        <span>ESPN 实时比分: {syncRuntime.health.liveScore?.status || '未知'}{syncRuntime.health.liveScore?.lastSyncAt ? ` · ${formatStatusTime(syncRuntime.health.liveScore.lastSyncAt)}` : ''}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`h-1.5 w-1.5 rounded-full ${syncRuntime.health.odds?.isHealthy ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                        <span>赔率: {syncRuntime.health.odds?.status || '未知'}{syncRuntime.health.odds?.reason ? ` · ${syncRuntime.health.odds.reason}` : ''}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1152,6 +1205,22 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
                 >
                   <Play className="h-3.5 w-3.5" />
                   运行同步校验
+                </button>
+                <button
+                  onClick={handleEspnScoreboardSync}
+                  disabled={isWorking}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-xs font-black text-white transition hover:bg-blue-700 disabled:opacity-60"
+                >
+                  <Radio className="h-3.5 w-3.5" />
+                  同步ESPN比分/状态
+                </button>
+                <button
+                  onClick={handleEspnStandingsSync}
+                  disabled={isWorking}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyan-600 px-4 py-3 text-xs font-black text-white transition hover:bg-cyan-700 disabled:opacity-60"
+                >
+                  <Trophy className="h-3.5 w-3.5" />
+                  同步ESPN积分榜
                 </button>
                 <button
                   onClick={handleSportterySync}

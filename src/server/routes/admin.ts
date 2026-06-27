@@ -716,6 +716,73 @@ router.post('/api/admin/sync/sporttery-standings', async (req: Request, res: Res
   }
 });
 
+// ─── 手动同步 ESPN 赛程/比分/状态 ───
+router.post('/api/admin/sync/espn-scoreboard', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const { syncEspnScoreboard } = await import('../espn_sync');
+    const { appendSyncLog } = await import('../helpers');
+    const db = dbService.getData();
+    const result = await syncEspnScoreboard(db);
+    appendSyncLog(result.log);
+
+    // 清除 scoreUnknown（ESPN 提供真实比分）
+    let recoveredCount = 0;
+    for (const m of db.matches) {
+      if ((m as any).scoreUnknown && typeof m.homeScore === 'number' && typeof m.awayScore === 'number') {
+        delete (m as any).scoreUnknown;
+        recoveredCount++;
+      }
+    }
+
+    ensureLifecycleForAllMatches();
+    result.updatedMatches.forEach((item) => markMatchAiStale(item.id));
+    dbService.refreshBracketState();
+    dbService.save();
+
+    logger.admin('[Admin] Manual ESPN scoreboard sync completed', {
+      updated: result.updatedMatches.length,
+      recovered: recoveredCount,
+    });
+
+    res.json({
+      success: result.log.status !== 'FAILED',
+      updatedCount: result.updatedMatches.length,
+      recoveredCount,
+      updatedMatchIds: result.updatedMatches.map((item) => item.id),
+      log: result.log,
+    });
+  } catch (e) {
+    logger.error('[Admin] Manual ESPN scoreboard sync failed', {
+      error: e instanceof Error ? e.message : String(e),
+    });
+    res.status(500).json({ success: false, error: e instanceof Error ? e.message : String(e) });
+  }
+});
+
+// ─── 手动同步 ESPN 积分榜 ───
+router.post('/api/admin/sync/espn-standings', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const { syncEspnStandings } = await import('../espn_sync');
+    const db = dbService.getData();
+    const result = await syncEspnStandings(db);
+    dbService.save();
+
+    if (result.synced) {
+      try {
+        const { broadcastStandingsUpdate } = await import('../websocket');
+        broadcastStandingsUpdate(db.worldCupStandings!);
+      } catch { /* ignore */ }
+    }
+
+    logger.admin('[Admin] ESPN standings sync completed', result);
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ success: false, error: e instanceof Error ? e.message : String(e) });
+  }
+});
+
 // ─── maintenance badges and titles ───
 router.post('/api/admin/badges/reevaluate', (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;

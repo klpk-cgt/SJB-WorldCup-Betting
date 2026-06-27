@@ -158,19 +158,20 @@ export function getSyncHealthStatus() {
     return latestLog?.finishedAt || latestLog?.createdAt || null;
   };
 
-  const fixturesConfigured = hasProviderKey(config.apiFootballKey);
+  // ESPN 免费 API 不需要 Key，始终可用
+  const fixturesConfigured = true;
   const oddsConfigured = hasProviderKey(config.theOddsApiKey);
-  const fixturesHealthy = fixturesConfigured && consecutiveFixturesFailures < MAX_CONSECUTIVE_FAILURES;
+  const fixturesHealthy = consecutiveFixturesFailures < MAX_CONSECUTIVE_FAILURES;
   const oddsHealthy = oddsConfigured && consecutiveOddsFailures < MAX_CONSECUTIVE_FAILURES;
-  const liveScoreHealthy = fixturesConfigured && consecutiveLiveScoreFailures < MAX_CONSECUTIVE_FAILURES;
+  const liveScoreHealthy = consecutiveLiveScoreFailures < MAX_CONSECUTIVE_FAILURES;
 
   return {
     fixtures: {
       hasApiKey: fixturesConfigured,
       consecutiveFailures: consecutiveFixturesFailures,
       isHealthy: fixturesHealthy,
-      status: fixturesConfigured ? (fixturesHealthy ? 'healthy' : 'degraded') : 'disabled',
-      reason: fixturesConfigured ? null : '未配置 API_FOOTBALL_KEY',
+      status: fixturesHealthy ? 'healthy' : 'degraded',
+      reason: fixturesHealthy ? null : 'ESPN API 连续失败',
       lastSyncAt: latestSuccessTimestamp('fixtures'),
     },
     odds: {
@@ -184,8 +185,8 @@ export function getSyncHealthStatus() {
     liveScore: {
       consecutiveFailures: consecutiveLiveScoreFailures,
       isHealthy: liveScoreHealthy,
-      status: fixturesConfigured ? (liveScoreHealthy ? 'healthy' : 'degraded') : 'disabled',
-      reason: fixturesConfigured ? null : '未配置 API_FOOTBALL_KEY',
+      status: liveScoreHealthy ? 'healthy' : 'degraded',
+      reason: liveScoreHealthy ? null : 'ESPN API 连续失败',
       lastSyncAt: latestSuccessTimestamp('livescore'),
     },
     currentPriority: runtimeState.currentPriority,
