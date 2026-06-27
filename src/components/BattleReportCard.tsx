@@ -24,10 +24,10 @@ export interface BattleReportData {
   finalScoreLabel: string;
   hitRate: number;
   totalParticipants: number;
-  biggestWinner?: { userId?: string; displayName: string; profit: number };
-  biggestLoss?: { userId?: string; displayName: string; profit: number };
-  exactPredictor?: { userId?: string; displayName: string; guessedScore: string; profit: number };
-  darkHorse?: { userId?: string; displayName: string; streak: number };
+  biggestWinner?: { userId?: string; displayName: string; avatarUrl?: string; profit: number };
+  biggestLoss?: { userId?: string; displayName: string; avatarUrl?: string; profit: number };
+  exactPredictor?: { userId?: string; displayName: string; avatarUrl?: string; guessedScore: string; profit: number };
+  darkHorse?: { userId?: string; displayName: string; avatarUrl?: string; streak: number };
   popularOpinion?: string;
   aiCommentary?: string;
 }
@@ -52,6 +52,7 @@ function StatRow({
   emoji,
   label,
   name,
+  avatarUrl,
   value,
   valueColor = 'text-slate-700',
   bgClass = 'bg-slate-50',
@@ -59,6 +60,7 @@ function StatRow({
   emoji: string;
   label: string;
   name: string;
+  avatarUrl?: string;
   value: string;
   valueColor?: string;
   bgClass?: string;
@@ -66,7 +68,7 @@ function StatRow({
   return (
     <div className={`flex items-center gap-3 rounded-2xl ${bgClass} px-3 py-2.5`}>
       <span className="text-lg leading-none">{emoji}</span>
-      <SmartAvatar name={name} size={32} className="shrink-0 ring-1 ring-white/70" />
+      <SmartAvatar name={name} src={avatarUrl} size={32} className="shrink-0 ring-1 ring-white/70" />
       <div className="min-w-0 flex-1">
         <p className="text-[10px] font-semibold text-slate-400 leading-tight">{label}</p>
         <p className="text-xs font-black text-slate-800 truncate leading-tight">{name}</p>
@@ -95,6 +97,7 @@ export default function BattleReportCard({
         emoji="🏆"
         label="最大赢家"
         name={report.biggestWinner.displayName}
+        avatarUrl={report.biggestWinner.avatarUrl}
         value={formatSignedPoints(report.biggestWinner.profit)}
         valueColor="text-emerald-600"
         bgClass="bg-emerald-50/70"
@@ -109,6 +112,7 @@ export default function BattleReportCard({
         emoji="📉"
         label="最惨玩家"
         name={report.biggestLoss.displayName}
+        avatarUrl={report.biggestLoss.avatarUrl}
         value={formatSignedPoints(report.biggestLoss.profit)}
         valueColor="text-rose-600"
         bgClass="bg-rose-50/70"
@@ -123,6 +127,7 @@ export default function BattleReportCard({
         emoji="🎯"
         label="最准预言家"
         name={report.exactPredictor.displayName}
+        avatarUrl={report.exactPredictor.avatarUrl}
         value={report.exactPredictor.guessedScore}
         valueColor="text-blue-600"
         bgClass="bg-blue-50/70"
@@ -137,6 +142,7 @@ export default function BattleReportCard({
         emoji="🕯️"
         label="反向明灯"
         name={report.darkHorse.displayName}
+        avatarUrl={report.darkHorse.avatarUrl}
         value={'连黑' + report.darkHorse.streak + '场'}
         valueColor="text-violet-600"
         bgClass="bg-violet-50/70"

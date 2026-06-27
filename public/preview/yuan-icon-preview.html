@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>¥ 图标风格预览</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700;900&family=Orbitron:wght@700;900&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Noto Sans SC', system-ui, sans-serif;
+    background: #0f172a;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+  }
+
+  .gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1.75rem;
+    max-width: 1100px;
+    width: 100%;
+  }
+
+  .card {
+    background: linear-gradient(145deg, #1e293b 0%, #1a2332 100%);
+    border: 1px solid rgba(148,163,184,.12);
+    border-radius: 20px;
+    padding: 2rem 1.5rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.25rem;
+    transition: transform .2s ease, border-color .2s ease;
+    cursor: default;
+  }
+  .card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(148,163,184,.25);
+  }
+
+  .icon-stage {
+    width: 90px;
+    height: 90px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    position: relative;
+  }
+
+  .label {
+    font-size: .875rem;
+    font-weight: 700;
+    color: #e2e8f0;
+    text-align: center;
+    letter-spacing: .02em;
+  }
+
+  .badge {
+    font-size: .7rem;
+    font-weight: 600;
+    padding: .2em .65em;
+    border-radius: 999px;
+    letter-spacing: .04em;
+  }
+  .badge-current { background: rgba(245,158,11,.15); color: #fbbf24; }
+  .badge-flat   { background: rgba(56,189,248,.12); color: #38bdf8; }
+  .badge-pure   { background: rgba(52,211,153,.12); color: #34d399; }
+  .badge-lux    { background: rgba(216,180,128,.12); color: #d8b480; }
+  .badge-neon   { background: rgba(244,114,182,.12); color: #f472b6; }
+  .badge-trad   { background: rgba(239,68,68,.12); color: #ef4444; }
+
+  .page-title {
+    position: fixed;
+    top: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: .8rem;
+    font-weight: 600;
+    color: #64748b;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+
+<span class="page-title">¥ Icon · Style Previews</span>
+
+<div class="gallery">
+
+  <!-- 1. Current / Gold Coin -->
+  <div class="card">
+    <div class="icon-stage" style="background: radial-gradient(circle at 30% 30%, rgba(245,158,11,.18), transparent 70%);">
+      <svg width="52" height="52" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#F59E0B"/>
+            <stop offset="50%" stop-color="#FBBF24"/>
+            <stop offset="100%" stop-color="#D97706"/>
+          </linearGradient>
+        </defs>
+        <circle cx="18" cy="18" r="16" fill="url(#g1)"/>
+        <circle cx="18" cy="18" r="11" fill="#FEF3C7"/>
+        <text x="18" y="20.5" text-anchor="middle" font-size="11" font-weight="900" fill="#B45309" font-family="system-ui, sans-serif">¥</text>
+        <ellipse cx="14" cy="9" rx="5" ry="2.5" fill="white" opacity=".35"/>
+      </svg>
+    </div>
+    <span class="label">当前风格 · Gold Coin</span>
+    <span class="badge badge-current">CLASSIC</span>
+  </div>
+
+  <!-- 2. Modern Flat -->
+  <div class="card">
+    <div class="icon-stage">
+      <svg width="52" height="52" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="2" y="2" width="36" height="36" rx="10" fill="#1e293b" stroke="#fbbf24" stroke-width="2"/>
+        <path d="M20 4c-3 0-4 2-4 2s-1-2-4-2 4 2 2 4c-2 2-4 0-6 1s0 6 3 5c3-1 3-4 5-4s2 3 5 4 3-4 3-5-4 1-6-1c-2-2 5-4 2-4Z" fill="url(#gf2)"/>
+        <text x="20" y="22" text-anchor="middle" font-size="9" font-weight="900" fill="#fbbf24" font-family="system-ui, sans-serif">¥</text>
+        <defs>
+          <linearGradient id="gf2" x1="0" y1="0" x2="40" y2="40">
+            <stop offset="0%" stop-color="#fbbf24"/>
+            <stop offset="100%" stop-color="#92400e"/>
+          </linearGradient>
+        </defs>
+      </svg>
+    </div>
+    <span class="label">现代扁平 · Diamond Badge</span>
+    <span class="badge badge-flat">MODERN</span>
+  </div>
+
+  <!-- 3. Pure Typography -->
+  <div class="card">
+    <div class="icon-stage">
+      <svg width="52" height="52" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="20" cy="20" r="18" fill="#0f172a" stroke="url(#g3s)" stroke-width="1.5"/>
+        <circle cx="20" cy="20" r="14" fill="none" stroke="url(#g3s)" stroke-width=".5" stroke-dasharray="4 3" opacity=".5"/>
+        <text x="20" y="24.5" text-anchor="middle" font-size="16" font-weight="900" fill="url(#g3t)" font-family="'Orbitron', system-ui, sans-serif" letter-spacing="0">¥</text>
+        <defs>
+          <linearGradient id="g3s" x1="0" y1="0" x2="40" y2="40">
+            <stop offset="0%" stop-color="#34d399"/>
+            <stop offset="100%" stop-color="#06b6d4"/>
+          </linearGradient>
+          <linearGradient id="g3t" x1="0" y1="0" x2="40" y2="40">
+            <stop offset="0%" stop-color="#34d399"/>
+            <stop offset="100%" stop-color="#06b6d4"/>
+          </linearGradient>
+        </defs>
+      </svg>
+    </div>
+    <span class="label">纯粹字体 · Crypto Ring</span>
+    <span class="badge badge-pure">MINIMAL</span>
+  </div>
+
+  <!-- 4. Premium Dark Luxury -->
+  <div class="card">
+    <div class="icon-stage" style="background: radial-gradient(circle at 40% 35%, rgba(216,180,128,.2), transparent 65%);">
+      <svg width="52" height="52" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="g4o" x1="10%" y1="0%" x2="90%" y2="100%">
+            <stop offset="0%" stop-color="#2a1f14"/>
+            <stop offset="50%" stop-color="#3d2e1a"/>
+            <stop offset="100%" stop-color="#1a1008"/>
+          </linearGradient>
+          <linearGradient id="g4i" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#d4a853"/>
+            <stop offset="40%" stop-color="#f0d68a"/>
+            <stop offset="100%" stop-color="#8b6914"/>
+          </linearGradient>
+        </defs>
+        <circle cx="18" cy="18" r="16" fill="url(#g4o)" stroke="url(#g4i)" stroke-width="1"/>
+        <circle cx="18" cy="18" r="11" fill="url(#g4o)"/>
+        <text x="18" y="21" text-anchor="middle" font-size="12" font-weight="900" fill="url(#g4i)" font-family="'Noto Sans SC', serif">¥</text>
+        <ellipse cx="14" cy="9" rx="5" ry="2.5" fill="white" opacity=".08"/>
+      </svg>
+    </div>
+    <span class="label">暗金奢华 · Dark Luxury</span>
+    <span class="badge badge-lux">PREMIUM</span>
+  </div>
+
+  <!-- 5. Neon Glow -->
+  <div class="card">
+    <div class="icon-stage" style="filter: drop-shadow(0 0 14px rgba(250,204,21,.45)) drop-shadow(0 0 28px rgba(250,204,21,.18));">
+      <svg width="52" height="52" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="g5r" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#fef08a"/>
+            <stop offset="25%" stop-color="#facc15"/>
+            <stop offset="65%" stop-color="#eab308"/>
+            <stop offset="100%" stop-color="#a16207"/>
+          </radialGradient>
+          <filter id="g5glow">
+            <feGaussianBlur stdDeviation="1.5" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+        <circle cx="18" cy="18" r="16" fill="url(#g5r)" filter="url(#g5glow)"/>
+        <circle cx="18" cy="18" r="12" fill="#1c1917"/>
+        <text x="18" y="21.5" text-anchor="middle" font-size="12" font-weight="900" fill="#facc15" font-family="system-ui, sans-serif" filter="url(#g5glow)">¥</text>
+        <path d="M7 11 L14 7" stroke="#fef08a" stroke-width=".8" opacity=".6" stroke-linecap="round"/>
+        <path d="M22 7 L29 11" stroke="#fef08a" stroke-width=".8" opacity=".6" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <span class="label">霓虹光效 · Neon Glow</span>
+    <span class="badge badge-neon">ENERGETIC</span>
+  </div>
+
+  <!-- 6. Chinese Traditional Red-Gold -->
+  <div class="card">
+    <div class="icon-stage">
+      <svg width="52" height="52" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="g6r" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#dc2626"/>
+            <stop offset="50%" stop-color="#ef4444"/>
+            <stop offset="100%" stop-color="#991b1b"/>
+          </linearGradient>
+          <linearGradient id="g6g" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#fbbf24"/>
+            <stop offset="50%" stop-color="#fcd34d"/>
+            <stop offset="100%" stop-color="#b45309"/>
+          </linearGradient>
+        </defs>
+        <circle cx="18" cy="18" r="16" fill="url(#g6r)"/>
+        <circle cx="18" cy="18" r="12" fill="#7f1d1d"/>
+        <circle cx="18" cy="18" r="12" fill="none" stroke="url(#g6g)" stroke-width=".8" stroke-dasharray="3 3"/>
+        <text x="18" y="21.5" text-anchor="middle" font-size="12" font-weight="900" fill="url(#g6g)" font-family="'Noto Sans SC', serif">¥</text>
+        <ellipse cx="14" cy="9" rx="5" ry="2.5" fill="white" opacity=".08"/>
+      </svg>
+    </div>
+    <span class="label">中国传统 · Red &amp; Gold</span>
+    <span class="badge badge-trad">HERITAGE</span>
+  </div>
+
+</div>
+
+</body>
+</html>

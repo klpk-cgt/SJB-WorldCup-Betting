@@ -1,5 +1,31 @@
 # 更新日志 (Changelog)
 
+## v2.6.2 - 2026-06-27
+
+### 竞猜记录展开 + 排行榜今日榜修复 + 战报头像修复
+
+#### 1. 竞猜"我的记录"默认展开
+- **PredictionTab**：`showHistory` 默认值从 `false` 改为 `true`，打开等待结算即可看到记录
+- 新增钱包余额变化监听（`useRef`），结算后自动刷新记录
+
+#### 2. 排行榜今日榜数据修复
+- **新增 `reconcileSettledPredictions` 函数**：基于 transactions（PREDICTION_WIN/PREDICTION_LOSE/REFUND）修复 prediction 状态
+- 修复21条异常 prediction（PENDING → WON/LOST/VOID），解决"一碗白米饭"今日榜为0的问题
+- `autoSettleFinishedMatches` 结算后自动调用修复
+- 服务器启动时自动执行一次数据修复
+- `rate` 在 settledCount=0 时返回 `null`（前端显示"暂无"），不再显示误导性的"0%"
+
+#### 3. 战后战报头像显示和最惨玩家修复
+- **BattleReportCard**：`StatRow` 传入 `avatarUrl` 给 `SmartAvatar`，修复头像不显示
+- **post_match_report_service**：接口和生成逻辑加入 `avatarUrl` 字段
+- **getRecentReports**：为旧战报动态补充 `avatarUrl`（从用户表查找）
+- **修复 profit 计算**：跳过未结算 prediction，避免 `potentialReturn` 误导战报盈亏
+  - 此前未结算下注的 `settledReturn` 为 undefined，fallback 到 `potentialReturn`（正数）
+  - 导致亏损用户被当作盈利，最惨玩家（biggestLoss）从未显示
+
+### 改动文件
+`src/components/PredictionTab.tsx`, `src/components/LeaderboardTab.tsx`, `src/components/BattleReportCard.tsx`, `src/server/helpers.ts`, `src/server/routes/matches.ts`, `src/server/services/post_match_report_service.ts`, `server.ts`
+
 ## v2.6.1 - 2026-06-26
 
 ### 积分显示统一与首页称号/等级改造

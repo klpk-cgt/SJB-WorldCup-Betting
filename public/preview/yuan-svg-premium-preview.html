@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>¥ 高品质 SVG 金币图标</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700;900&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Noto Sans SC', system-ui, sans-serif;
+    background: linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 2rem;
+    gap: 2rem;
+  }
+  .page-title {
+    font-size: .72rem; font-weight: 600; color: rgba(255,255,255,.2);
+    letter-spacing: .1em; text-transform: uppercase;
+  }
+  .gallery {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+    max-width: 900px;
+    width: 100%;
+  }
+  .card {
+    background: rgba(255,255,255,.03);
+    border: 1px solid rgba(255,255,255,.06);
+    border-radius: 24px;
+    padding: 2.5rem 1.5rem 2rem;
+    display: flex; flex-direction: column; align-items: center; gap: 1.25rem;
+    transition: transform .2s ease;
+  }
+  .card:hover { transform: translateY(-4px); }
+  .icon-stage {
+    width: 80px; height: 80px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .label {
+    font-size: .8rem; font-weight: 700; color: rgba(255,255,255,.65);
+    text-align: center;
+  }
+  .label small {
+    display: block; font-weight: 400; color: rgba(255,255,255,.3);
+    font-size: .65rem; margin-top: 4px;
+  }
+  /* 浅色背景预览区 */
+  .light-preview {
+    background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%);
+    border-radius: 16px;
+    padding: 1.5rem;
+    display: flex; align-items: center; justify-content: center;
+    gap: 2rem;
+    width: 100%;
+    max-width: 600px;
+  }
+  .light-preview .balance-demo {
+    display: flex; align-items: center; gap: 10px;
+  }
+  .light-preview .balance-demo .text-block p:first-child {
+    font-size: 10px; font-weight: 700; color: #94a3b8;
+    text-transform: uppercase; letter-spacing: .05em;
+  }
+  .light-preview .balance-demo .text-block p:last-child {
+    font-size: 20px; font-weight: 900; color: #0f172a;
+    font-variant-numeric: tabular-nums;
+  }
+  .preview-label {
+    font-size: .7rem; color: rgba(255,255,255,.3); margin-top: -.5rem;
+  }
+</style>
+</head>
+<body>
+
+<span class="page-title">¥ Premium SVG Coin · Supercell / EA FC Style</span>
+
+<div class="gallery">
+
+  <!-- 方案 1: Supercell 风格 - 厚边卡通金币 -->
+  <div class="card">
+    <div class="icon-stage">
+      <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <!-- 外环深金渐变 -->
+          <linearGradient id="sc-rim" x1="0" y1="0" x2="0" y2="64">
+            <stop offset="0%" stop-color="#FCD34D"/>
+            <stop offset="40%" stop-color="#F59E0B"/>
+            <stop offset="100%" stop-color="#78350F"/>
+          </linearGradient>
+          <!-- 币面亮金渐变 -->
+          <radialGradient id="sc-face" cx="38%" cy="30%" r="60%">
+            <stop offset="0%" stop-color="#FEF3C7"/>
+            <stop offset="35%" stop-color="#FDE68A"/>
+            <stop offset="75%" stop-color="#F59E0B"/>
+            <stop offset="100%" stop-color="#D97706"/>
+          </radialGradient>
+          <!-- 内凹阴影 -->
+          <radialGradient id="sc-inner-shadow" cx="50%" cy="50%" r="50%">
+            <stop offset="60%" stop-color="rgba(0,0,0,0)"/>
+            <stop offset="100%" stop-color="rgba(120,53,15,0.3)"/>
+          </radialGradient>
+          <!-- 投影 -->
+          <filter id="sc-drop" x="-20%" y="-10%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.3"/>
+          </filter>
+          <!-- ¥ 浮雕效果 -->
+          <filter id="sc-emboss">
+            <feDropShadow dx="0" dy="1.5" stdDeviation="0.8" flood-color="#FEF3C7" flood-opacity="0.8"/>
+            <feDropShadow dx="0" dy="-1" stdDeviation="0.5" flood-color="#78350F" flood-opacity="0.5"/>
+          </filter>
+        </defs>
+        <!-- 投影层 -->
+        <ellipse cx="32" cy="58" rx="20" ry="4" fill="#000" opacity="0.15"/>
+        <!-- 外环（厚边）-->
+        <circle cx="32" cy="30" r="28" fill="url(#sc-rim)" filter="url(#sc-drop)"/>
+        <!-- 币面 -->
+        <circle cx="32" cy="30" r="22" fill="url(#sc-face)"/>
+        <!-- 内凹阴影 -->
+        <circle cx="32" cy="30" r="22" fill="url(#sc-inner-shadow)"/>
+        <!-- 币缘刻线 -->
+        <circle cx="32" cy="30" r="25" fill="none" stroke="rgba(120,53,15,0.2)" stroke-width="0.5"/>
+        <circle cx="32" cy="30" r="22" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="0.5"/>
+        <!-- ¥ 浮雕字 -->
+        <text x="32" y="35" text-anchor="middle" font-size="18" font-weight="900" fill="#92400E" font-family="system-ui, sans-serif" filter="url(#sc-emboss)">¥</text>
+        <!-- 顶部弧形高光 -->
+        <path d="M14 20 A22 22 0 0 1 50 20" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="3" stroke-linecap="round"/>
+        <!-- 亮点 -->
+        <ellipse cx="24" cy="16" rx="5" ry="2.5" fill="white" opacity="0.3"/>
+      </svg>
+    </div>
+    <div class="label">Supercell 风格<small>厚边 + 卡通渲染 + 浮雕¥</small></div>
+  </div>
+
+  <!-- 方案 2: EA FC 风格 - 写实金属金币 -->
+  <div class="card">
+    <div class="icon-stage">
+      <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <!-- 金属外环 -->
+          <linearGradient id="ea-rim" x1="8" y1="4" x2="56" y2="60">
+            <stop offset="0%" stop-color="#FEF08A"/>
+            <stop offset="15%" stop-color="#FCD34D"/>
+            <stop offset="40%" stop-color="#F59E0B"/>
+            <stop offset="70%" stop-color="#B45309"/>
+            <stop offset="100%" stop-color="#451A03"/>
+          </linearGradient>
+          <!-- 币面金属渐变 -->
+          <linearGradient id="ea-face" x1="12" y1="8" x2="52" y2="52">
+            <stop offset="0%" stop-color="#FEF3C7"/>
+            <stop offset="25%" stop-color="#FDE68A"/>
+            <stop offset="55%" stop-color="#FBBF24"/>
+            <stop offset="80%" stop-color="#D97706"/>
+            <stop offset="100%" stop-color="#92400E"/>
+          </linearGradient>
+          <!-- 反光高光 -->
+          <linearGradient id="ea-shine" x1="20" y1="6" x2="44" y2="30">
+            <stop offset="0%" stop-color="rgba(255,255,255,0.5)"/>
+            <stop offset="50%" stop-color="rgba(255,255,255,0.1)"/>
+            <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+          </linearGradient>
+          <!-- 投影 -->
+          <filter id="ea-drop" x="-20%" y="-10%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000" flood-opacity="0.35"/>
+          </filter>
+          <!-- ¥ 深度阴影 -->
+          <filter id="ea-text-shadow">
+            <feDropShadow dx="0" dy="2" stdDeviation="1" flood-color="#451A03" flood-opacity="0.6"/>
+          </filter>
+        </defs>
+        <!-- 投影 -->
+        <ellipse cx="32" cy="58" rx="22" ry="4" fill="#000" opacity="0.2"/>
+        <!-- 外环 -->
+        <circle cx="32" cy="30" r="28" fill="url(#ea-rim)" filter="url(#ea-drop)"/>
+        <!-- 内圈币面 -->
+        <circle cx="32" cy="30" r="21" fill="url(#ea-face)"/>
+        <!-- 反光层 -->
+        <circle cx="32" cy="30" r="21" fill="url(#ea-shine)"/>
+        <!-- 币缘细线 -->
+        <circle cx="32" cy="30" r="28" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="0.5"/>
+        <circle cx="32" cy="30" r="21" fill="none" stroke="rgba(69,26,3,0.2)" stroke-width="0.5"/>
+        <!-- ¥ 字 -->
+        <text x="32" y="36" text-anchor="middle" font-size="17" font-weight="900" fill="#78350F" font-family="system-ui, sans-serif" filter="url(#ea-text-shadow)">¥</text>
+        <!-- 顶部强高光弧 -->
+        <path d="M12 22 A24 24 0 0 1 52 22" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2.5" stroke-linecap="round"/>
+        <!-- 底部微反光 -->
+        <path d="M16 40 A20 20 0 0 0 48 40" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="label">EA FC 风格<small>写实金属 + 反光层 + 深度¥</small></div>
+  </div>
+
+  <!-- 方案 3: Riot 风格 - 锐利现代金币 -->
+  <div class="card">
+    <div class="icon-stage">
+      <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <!-- 外环锐利金 -->
+          <linearGradient id="riot-rim" x1="0" y1="0" x2="64" y2="64">
+            <stop offset="0%" stop-color="#FEF3C7"/>
+            <stop offset="20%" stop-color="#FBBF24"/>
+            <stop offset="50%" stop-color="#D97706"/>
+            <stop offset="80%" stop-color="#78350F"/>
+            <stop offset="100%" stop-color="#451A03"/>
+          </linearGradient>
+          <!-- 币面 -->
+          <linearGradient id="riot-face" x1="10" y1="6" x2="54" y2="54">
+            <stop offset="0%" stop-color="#FFFBEB"/>
+            <stop offset="30%" stop-color="#FDE68A"/>
+            <stop offset="65%" stop-color="#F59E0B"/>
+            <stop offset="100%" stop-color="#B45309"/>
+          </linearGradient>
+          <!-- 对角高光 -->
+          <linearGradient id="riot-glaze" x1="15" y1="5" x2="49" y2="55">
+            <stop offset="0%" stop-color="rgba(255,255,255,0.45)"/>
+            <stop offset="35%" stop-color="rgba(255,255,255,0)"/>
+            <stop offset="65%" stop-color="rgba(0,0,0,0)"/>
+            <stop offset="100%" stop-color="rgba(0,0,0,0.15)"/>
+          </linearGradient>
+          <filter id="riot-drop" x="-15%" y="-5%" width="130%" height="130%">
+            <feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#000" flood-opacity="0.3"/>
+          </filter>
+        </defs>
+        <!-- 投影 -->
+        <ellipse cx="32" cy="58" rx="20" ry="3.5" fill="#000" opacity="0.18"/>
+        <!-- 外环 -->
+        <circle cx="32" cy="30" r="28" fill="url(#riot-rim)" filter="url(#riot-drop)"/>
+        <!-- 币面 -->
+        <circle cx="32" cy="30" r="20" fill="url(#riot-face)"/>
+        <!-- 釉光层 -->
+        <circle cx="32" cy="30" r="20" fill="url(#riot-glaze)"/>
+        <!-- 锐利刻线 -->
+        <circle cx="32" cy="30" r="28" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="0.6"/>
+        <circle cx="32" cy="30" r="20" fill="none" stroke="rgba(69,26,3,0.25)" stroke-width="0.6"/>
+        <!-- ¥ -->
+        <text x="32" y="36" text-anchor="middle" font-size="16" font-weight="900" fill="#78350F" font-family="system-ui, sans-serif" opacity="0.9">¥</text>
+        <!-- 锐利高光 -->
+        <path d="M14 20 A20 20 0 0 1 50 20" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2" stroke-linecap="round"/>
+        <ellipse cx="22" cy="15" rx="6" ry="2" fill="white" opacity="0.25"/>
+      </svg>
+    </div>
+    <div class="label">Riot 风格<small>锐利边线 + 釉光层 + 克制高光</small></div>
+  </div>
+
+</div>
+
+<!-- 实际页面中的效果预览 -->
+<p class="preview-label">↓ 实际页面浅色背景效果预览 ↓</p>
+
+<div class="light-preview">
+  <div class="balance-demo">
+    <svg width="46" height="46" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="lp-rim" x1="0" y1="0" x2="0" y2="64">
+          <stop offset="0%" stop-color="#FCD34D"/>
+          <stop offset="40%" stop-color="#F59E0B"/>
+          <stop offset="100%" stop-color="#78350F"/>
+        </linearGradient>
+        <radialGradient id="lp-face" cx="38%" cy="30%" r="60%">
+          <stop offset="0%" stop-color="#FEF3C7"/>
+          <stop offset="35%" stop-color="#FDE68A"/>
+          <stop offset="75%" stop-color="#F59E0B"/>
+          <stop offset="100%" stop-color="#D97706"/>
+        </radialGradient>
+        <radialGradient id="lp-inner" cx="50%" cy="50%" r="50%">
+          <stop offset="60%" stop-color="rgba(0,0,0,0)"/>
+          <stop offset="100%" stop-color="rgba(120,53,15,0.3)"/>
+        </radialGradient>
+        <filter id="lp-drop" x="-20%" y="-10%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.3"/>
+        </filter>
+        <filter id="lp-emboss">
+          <feDropShadow dx="0" dy="1.5" stdDeviation="0.8" flood-color="#FEF3C7" flood-opacity="0.8"/>
+          <feDropShadow dx="0" dy="-1" stdDeviation="0.5" flood-color="#78350F" flood-opacity="0.5"/>
+        </filter>
+      </defs>
+      <ellipse cx="32" cy="58" rx="20" ry="4" fill="#000" opacity="0.15"/>
+      <circle cx="32" cy="30" r="28" fill="url(#lp-rim)" filter="url(#lp-drop)"/>
+      <circle cx="32" cy="30" r="22" fill="url(#lp-face)"/>
+      <circle cx="32" cy="30" r="22" fill="url(#lp-inner)"/>
+      <circle cx="32" cy="30" r="25" fill="none" stroke="rgba(120,53,15,0.2)" stroke-width="0.5"/>
+      <circle cx="32" cy="30" r="22" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="0.5"/>
+      <text x="32" y="35" text-anchor="middle" font-size="18" font-weight="900" fill="#92400E" font-family="system-ui, sans-serif" filter="url(#lp-emboss)">¥</text>
+      <path d="M14 20 A22 22 0 0 1 50 20" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="3" stroke-linecap="round"/>
+      <ellipse cx="24" cy="16" rx="5" ry="2.5" fill="white" opacity="0.3"/>
+    </svg>
+    <div class="text-block">
+      <p>余额</p>
+      <p>¥10,000</p>
+    </div>
+  </div>
+  <div class="balance-demo">
+    <svg width="46" height="46" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="lp2-rim" x1="8" y1="4" x2="56" y2="60">
+          <stop offset="0%" stop-color="#FEF08A"/>
+          <stop offset="15%" stop-color="#FCD34D"/>
+          <stop offset="40%" stop-color="#F59E0B"/>
+          <stop offset="70%" stop-color="#B45309"/>
+          <stop offset="100%" stop-color="#451A03"/>
+        </linearGradient>
+        <linearGradient id="lp2-face" x1="12" y1="8" x2="52" y2="52">
+          <stop offset="0%" stop-color="#FEF3C7"/>
+          <stop offset="25%" stop-color="#FDE68A"/>
+          <stop offset="55%" stop-color="#FBBF24"/>
+          <stop offset="80%" stop-color="#D97706"/>
+          <stop offset="100%" stop-color="#92400E"/>
+        </linearGradient>
+        <linearGradient id="lp2-shine" x1="20" y1="6" x2="44" y2="30">
+          <stop offset="0%" stop-color="rgba(255,255,255,0.5)"/>
+          <stop offset="50%" stop-color="rgba(255,255,255,0.1)"/>
+          <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+        </linearGradient>
+        <filter id="lp2-drop" x="-20%" y="-10%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000" flood-opacity="0.35"/>
+        </filter>
+        <filter id="lp2-text">
+          <feDropShadow dx="0" dy="2" stdDeviation="1" flood-color="#451A03" flood-opacity="0.6"/>
+        </filter>
+      </defs>
+      <ellipse cx="32" cy="58" rx="22" ry="4" fill="#000" opacity="0.2"/>
+      <circle cx="32" cy="30" r="28" fill="url(#lp2-rim)" filter="url(#lp2-drop)"/>
+      <circle cx="32" cy="30" r="21" fill="url(#lp2-face)"/>
+      <circle cx="32" cy="30" r="21" fill="url(#lp2-shine)"/>
+      <circle cx="32" cy="30" r="28" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="0.5"/>
+      <circle cx="32" cy="30" r="21" fill="none" stroke="rgba(69,26,3,0.2)" stroke-width="0.5"/>
+      <text x="32" y="36" text-anchor="middle" font-size="17" font-weight="900" fill="#78350F" font-family="system-ui, sans-serif" filter="url(#lp2-text)">¥</text>
+      <path d="M12 22 A24 24 0 0 1 52 22" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M16 40 A20 20 0 0 0 48 40" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+    <div class="text-block">
+      <p>余额</p>
+      <p>¥10,000</p>
+    </div>
+  </div>
+  <div class="balance-demo">
+    <svg width="46" height="46" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="lp3-rim" x1="0" y1="0" x2="64" y2="64">
+          <stop offset="0%" stop-color="#FEF3C7"/>
+          <stop offset="20%" stop-color="#FBBF24"/>
+          <stop offset="50%" stop-color="#D97706"/>
+          <stop offset="80%" stop-color="#78350F"/>
+          <stop offset="100%" stop-color="#451A03"/>
+        </linearGradient>
+        <linearGradient id="lp3-face" x1="10" y1="6" x2="54" y2="54">
+          <stop offset="0%" stop-color="#FFFBEB"/>
+          <stop offset="30%" stop-color="#FDE68A"/>
+          <stop offset="65%" stop-color="#F59E0B"/>
+          <stop offset="100%" stop-color="#B45309"/>
+        </linearGradient>
+        <linearGradient id="lp3-glaze" x1="15" y1="5" x2="49" y2="55">
+          <stop offset="0%" stop-color="rgba(255,255,255,0.45)"/>
+          <stop offset="35%" stop-color="rgba(255,255,255,0)"/>
+          <stop offset="65%" stop-color="rgba(0,0,0,0)"/>
+          <stop offset="100%" stop-color="rgba(0,0,0,0.15)"/>
+        </linearGradient>
+        <filter id="lp3-drop" x="-15%" y="-5%" width="130%" height="130%">
+          <feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#000" flood-opacity="0.3"/>
+        </filter>
+      </defs>
+      <ellipse cx="32" cy="58" rx="20" ry="3.5" fill="#000" opacity="0.18"/>
+      <circle cx="32" cy="30" r="28" fill="url(#lp3-rim)" filter="url(#lp3-drop)"/>
+      <circle cx="32" cy="30" r="20" fill="url(#lp3-face)"/>
+      <circle cx="32" cy="30" r="20" fill="url(#lp3-glaze)"/>
+      <circle cx="32" cy="30" r="28" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="0.6"/>
+      <circle cx="32" cy="30" r="20" fill="none" stroke="rgba(69,26,3,0.25)" stroke-width="0.6"/>
+      <text x="32" y="36" text-anchor="middle" font-size="16" font-weight="900" fill="#78350F" font-family="system-ui, sans-serif" opacity="0.9">¥</text>
+      <path d="M14 20 A20 20 0 0 1 50 20" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2" stroke-linecap="round"/>
+      <ellipse cx="22" cy="15" rx="6" ry="2" fill="white" opacity="0.25"/>
+    </svg>
+    <div class="text-block">
+      <p>余额</p>
+      <p>¥10,000</p>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

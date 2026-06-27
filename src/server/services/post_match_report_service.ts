@@ -27,6 +27,7 @@ export interface PostMatchReport {
   exactPredictor?: {
     userId: string;
     displayName: string;
+    avatarUrl?: string;
     guessedScore: string;
     profit: number;
   };
@@ -34,18 +35,21 @@ export interface PostMatchReport {
   biggestWinner?: {
     userId: string;
     displayName: string;
+    avatarUrl?: string;
     profit: number;
   };
   /** 本场最惨玩家（净亏最多） */
   biggestLoss?: {
     userId: string;
     displayName: string;
+    avatarUrl?: string;
     profit: number;
   };
   /** 反向明灯：近期连续猜错最多的玩家 */
   darkHorse?: {
     userId: string;
     displayName: string;
+    avatarUrl?: string;
     streak: number;
   };
   hitRate: number;
@@ -101,16 +105,18 @@ export function generatePostMatchReport(matchId: string): PostMatchReport {
   let biggestLoss: PostMatchReport['biggestLoss'];
 
   if (predictions.length > 0) {
-    const userProfits = new Map<string, { displayName: string; profit: number }>();
+    const userProfits = new Map<string, { displayName: string; avatarUrl?: string; profit: number }>();
     for (const p of predictions) {
+      // 跳过未结算的下注，避免 potentialReturn 误导战报盈亏
+      if (!p.settledAt) continue;
       const userId = p.userId;
-      const profit = (p.settledReturn || p.potentialReturn || 0) - (p.stakePoints || 0);
+      const profit = (p.settledReturn || 0) - (p.stakePoints || 0);
       const existing = userProfits.get(userId);
       if (existing) {
         existing.profit += profit;
       } else {
         const user = db.users.find((u) => u.id === userId);
-        userProfits.set(userId, { displayName: user?.displayName || '未知用户', profit });
+        userProfits.set(userId, { displayName: user?.displayName || '未知用户', avatarUrl: user?.avatarUrl, profit });
       }
     }
 
@@ -137,6 +143,7 @@ export function generatePostMatchReport(matchId: string): PostMatchReport {
     exactPredictor = {
       userId: best.userId,
       displayName: user?.displayName || '未知用户',
+      avatarUrl: user?.avatarUrl,
       guessedScore: best.optionLabel || `${homeScore}:${awayScore}`,
       profit: (best.settledReturn || 0) - (best.stakePoints || 0),
     };
@@ -172,7 +179,8 @@ export function generatePostMatchReport(matchId: string): PostMatchReport {
     }
 
     if (worstStreak >= 3) {
-      darkHorse = { userId: worstUser, displayName: worstName, streak: worstStreak };
+      const u = db.users.find((x) => x.id === worstUser);
+      darkHorse = { userId: worstUser, displayName: worstName, avatarUrl: u?.avatarUrl, streak: worstStreak };
     }
   }
 
@@ -416,10 +424,10 @@ export function getRecentReports(limit = 3): Array<{
   finalScoreLabel: string;
   hitRate: number;
   totalParticipants: number;
-  biggestWinner?: { displayName: string; profit: number };
-  biggestLoss?: { displayName: string; profit: number };
-  exactPredictor?: { displayName: string; guessedScore: string; profit: number };
-  darkHorse?: { displayName: string; streak: number };
+  biggestWinner?: { displayName: string; avatarUrl?: string; profit: number };
+  biggestLoss?: { displayName: string; avatarUrl?: string; profit: number };
+  exactPredictor?: { displayName: string; avatarUrl?: string; guessedScore: string; profit: number };
+  darkHorse?: { displayName: string; avatarUrl?: string; streak: number };
   popularOpinion?: string;
   aiCommentary?: string;
 }> {
@@ -448,6 +456,12 @@ export function getRecentReports(limit = 3): Array<{
   // 重新读取（兜底生成可能新增了战报）
   const updatedReports = db.postMatchReports || [];
 
+  // 旧战报可能缺少 avatarUrl，动态从用户表补充
+  const lookupAvatar = (userId?: string) => {
+    if (!userId) return undefined;
+    return db.users.find((u) => u.id === userId)?.avatarUrl;
+  };
+
   return updatedReports
     .slice(-limit)
     .reverse()
@@ -457,10 +471,18 @@ export function getRecentReports(limit = 3): Array<{
       finalScoreLabel: r.finalScoreLabel,
       hitRate: r.hitRate,
       totalParticipants: r.totalParticipants,
-      biggestWinner: r.biggestWinner,
-      biggestLoss: r.biggestLoss,
-      exactPredictor: r.exactPredictor,
-      darkHorse: r.darkHorse,
+      biggestWinner: r.biggestWinner
+        ? { ...r.biggestWinner, avatarUrl: r.biggestWinner.avatarUrl || lookupAvatar(r.biggestWinner.userId) }
+        : undefined,
+      biggestLoss: r.biggestLoss
+        ? { ...r.biggestLoss, avatarUrl: r.biggestLoss.avatarUrl || lookupAvatar(r.biggestLoss.userId) }
+        : undefined,
+      exactPredictor: r.exactPredictor
+        ? { ...r.exactPredictor, avatarUrl: r.exactPredictor.avatarUrl || lookupAvatar(r.exactPredictor.userId) }
+        : undefined,
+      darkHorse: r.darkHorse
+        ? { ...r.darkHorse, avatarUrl: r.darkHorse.avatarUrl || lookupAvatar(r.darkHorse.userId) }
+        : undefined,
       popularOpinion: r.popularOpinion,
       aiCommentary: r.aiCommentary,
     }));

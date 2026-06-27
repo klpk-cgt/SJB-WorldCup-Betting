@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>¥ 图标 3D 立体风格预览</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700;900&family=Inter:wght@700;900&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', 'Noto Sans SC', system-ui, sans-serif;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 30%, #0f3460 60%, #1a1a2e 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+  }
+
+  .gallery {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+    max-width: 920px;
+    width: 100%;
+  }
+
+  .card {
+    background: rgba(255,255,255,.04);
+    border: 1px solid rgba(255,255,255,.06);
+    border-radius: 24px;
+    padding: 2.5rem 1.5rem 2rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+    transition: transform .25s cubic-bezier(.34,1.56,.64,1),
+                border-color .25s ease,
+                background .25s ease;
+    backdrop-filter: blur(2px);
+    cursor: default;
+  }
+  .card:hover {
+    transform: translateY(-6px) scale(1.02);
+    border-color: rgba(255,255,255,.12);
+    background: rgba(255,255,255,.06);
+  }
+
+  .icon-stage {
+    width: 96px;
+    height: 96px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  .label {
+    font-size: .82rem;
+    font-weight: 700;
+    color: rgba(255,255,255,.7);
+    text-align: center;
+    letter-spacing: .02em;
+    line-height: 1.5;
+  }
+  .label small {
+    display: block;
+    font-weight: 400;
+    color: rgba(255,255,255,.35);
+    font-size: .68rem;
+    margin-top: 2px;
+  }
+
+  .page-title {
+    position: fixed;
+    top: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: .78rem;
+    font-weight: 600;
+    color: rgba(255,255,255,.25);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+
+<span class="page-title">¥ Icon · 3D &amp; Translucent Styles</span>
+
+<div class="gallery">
+
+  <!-- 1. 3D Extrude Coin -->
+  <div class="card">
+    <div class="icon-stage">
+      <svg width="58" height="58" viewBox="0 0 42 42" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="drop1" x="-30%" y="-10%" width="160%" height="150%">
+            <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000" flood-opacity=".5"/>
+          </filter>
+          <linearGradient id="body1" x1="0" y1="0" x2="18" y2="36">
+            <stop offset="0%" stop-color="#fbbf24"/>
+            <stop offset="30%" stop-color="#f59e0b"/>
+            <stop offset="60%" stop-color="#d97706"/>
+            <stop offset="100%" stop-color="#92400e"/>
+          </linearGradient>
+          <linearGradient id="face1" x1="5" y1="8" x2="28" y2="32">
+            <stop offset="0%" stop-color="#fef3c7"/>
+            <stop offset="60%" stop-color="#fde68a"/>
+            <stop offset="100%" stop-color="#f59e0b"/>
+          </linearGradient>
+        </defs>
+        <!-- 立体厚度底边 -->
+        <ellipse cx="21" cy="33" rx="17.5" ry="6" fill="#78350f" opacity=".35"/>
+        <circle cx="21" cy="21" r="18" fill="url(#body1)" filter="url(#drop1)"/>
+        <circle cx="21" cy="19" r="13.5" fill="url(#face1)"/>
+        <text x="21" y="22.5" text-anchor="middle" font-size="10.5" font-weight="900" fill="#92400e" font-family="system-ui, sans-serif">¥</text>
+        <ellipse cx="16" cy="11" rx="5.5" ry="2.8" fill="white" opacity=".3"/>
+      </svg>
+    </div>
+    <div class="label">3D 挤出立体 · Extruded Coin<small>底部厚度 + 强投影</small></div>
+  </div>
+
+  <!-- 2. Frosted Glass Translucent -->
+  <div class="card">
+    <div class="icon-stage">
+      <svg width="58" height="58" viewBox="0 0 46 46" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="drop2" x="-20%" y="-10%" width="140%" height="150%">
+            <feDropShadow dx="0" dy="3" stdDeviation="8" flood-color="#1e1b4b" flood-opacity=".45"/>
+          </filter>
+          <linearGradient id="glassBg" x1="0" y1="0" x2="46" y2="46">
+            <stop offset="0%" stop-color="rgba(255,255,255,.18)"/>
+            <stop offset="50%" stop-color="rgba(255,255,255,.06)"/>
+            <stop offset="100%" stop-color="rgba(255,255,255,.02)"/>
+          </linearGradient>
+          <linearGradient id="glassBorder" x1="0" y1="0" x2="46" y2="46">
+            <stop offset="0%" stop-color="rgba(255,255,255,.35)"/>
+            <stop offset="40%" stop-color="rgba(255,255,255,.08)"/>
+            <stop offset="100%" stop-color="rgba(255,255,255,.15)"/>
+          </linearGradient>
+          <linearGradient id="glassGold" x1="0" y1="0" x2="30" y2="30">
+            <stop offset="0%" stop-color="#fcd34d"/>
+            <stop offset="40%" stop-color="#f59e0b"/>
+            <stop offset="100%" stop-color="#b45309"/>
+          </linearGradient>
+        </defs>
+        <circle cx="23" cy="23" r="20" fill="url(#glassBg)" stroke="url(#glassBorder)" stroke-width="1.2" filter="url(#drop2)"/>
+        <circle cx="23" cy="23" r="14" fill="rgba(255,255,255,.04)" stroke="rgba(255,255,255,.08)" stroke-width=".6"/>
+        <text x="23" y="26" text-anchor="middle" font-size="13" font-weight="900" fill="url(#glassGold)" font-family="system-ui, sans-serif">¥</text>
+        <ellipse cx="17.5" cy="13" rx="6" ry="3" fill="white" opacity=".12"/>
+      </svg>
+    </div>
+    <div class="label">毛玻璃半透明 · Frosted Glass<small>半透底色 + 细边 + 柔投影</small></div>
+  </div>
+
+  <!-- 3. 3D Embossed Floating -->
+  <div class="card">
+    <div class="icon-stage">
+      <svg width="58" height="58" viewBox="0 0 46 46" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="drop3" x="-25%" y="-5%" width="150%" height="140%">
+            <feDropShadow dx="0" dy="5" stdDeviation="7" flood-color="#000" flood-opacity=".55"/>
+            <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000" flood-opacity=".3"/>
+          </filter>
+          <radialGradient id="rad3" cx="35%" cy="30%" r="60%">
+            <stop offset="0%" stop-color="#fef08a"/>
+            <stop offset="15%" stop-color="#fbbf24"/>
+            <stop offset="50%" stop-color="#d97706"/>
+            <stop offset="85%" stop-color="#78350f"/>
+            <stop offset="100%" stop-color="#451a03"/>
+          </radialGradient>
+          <filter id="inner3">
+            <feGaussianBlur in="SourceAlpha" stdDeviation="2" result="blur"/>
+            <feOffset dx="0" dy="-1.5" result="offset"/>
+            <feComposite in="SourceGraphic" in2="offset" operator="over"/>
+          </filter>
+        </defs>
+        <circle cx="23" cy="22" r="20" fill="url(#rad3)" filter="url(#drop3)"/>
+        <circle cx="23" cy="21" r="14" fill="rgba(255,255,255,.07)" stroke="rgba(255,255,255,.1)" stroke-width=".5"/>
+        <text x="23" y="24" text-anchor="middle" font-size="12" font-weight="900" fill="#fef3c7" font-family="system-ui, sans-serif" filter="url(#inner3)">¥</text>
+        <ellipse cx="17" cy="12" rx="6.5" ry="2.5" fill="white" opacity=".18"/>
+      </svg>
+    </div>
+    <div class="label">悬浮浮雕 · Embossed Floating<small>径向渐变 + 双层阴影 + 内浮雕</small></div>
+  </div>
+
+  <!-- 4. Pill Shape 3D Badge -->
+  <div class="card">
+    <div class="icon-stage">
+      <svg width="70" height="52" viewBox="0 0 56 42" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="drop4" x="-30%" y="-10%" width="160%" height="150%">
+            <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000" flood-opacity=".5"/>
+          </filter>
+          <linearGradient id="pillTop" x1="0" y1="0" x2="0" y2="21">
+            <stop offset="0%" stop-color="rgba(255,255,255,.22)"/>
+            <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+          </linearGradient>
+          <linearGradient id="pillBody" x1="0" y1="0" x2="56" y2="42">
+            <stop offset="0%" stop-color="#facc15"/>
+            <stop offset="40%" stop-color="#f59e0b"/>
+            <stop offset="80%" stop-color="#b45309"/>
+            <stop offset="100%" stop-color="#78350f"/>
+          </linearGradient>
+        </defs>
+        <rect x="2" y="5" width="52" height="32" rx="16" fill="url(#pillBody)" filter="url(#drop4)"/>
+        <rect x="2" y="5" width="52" height="32" rx="16" fill="url(#pillTop)"/>
+        <text x="28" y="24.5" text-anchor="middle" font-size="11" font-weight="900" fill="#fef3c7" font-family="system-ui, sans-serif">¥</text>
+        <rect x="8" y="9" width="40" height="5" rx="2.5" fill="white" opacity=".15"/>
+      </svg>
+    </div>
+    <div class="label">胶囊立体徽章 · Pill Badge 3D<small>药丸造型 + 顶部高光条</small></div>
+  </div>
+
+  <!-- 5. Long Shadow Floating -->
+  <div class="card">
+    <div class="icon-stage" style="perspective: 300px;">
+      <svg width="58" height="58" viewBox="0 0 46 46" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="drop5" x="-30%" y="-10%" width="160%" height="150%">
+            <feDropShadow dx="4" dy="6" stdDeviation="0" flood-color="#000" flood-opacity=".12"/>
+            <feDropShadow dx="6" dy="9" stdDeviation="1" flood-color="#000" flood-opacity=".08"/>
+            <feDropShadow dx="0" dy="3" stdDeviation="8" flood-color="#000" flood-opacity=".4"/>
+          </filter>
+          <linearGradient id="longGrad" x1="0" y1="0" x2="46" y2="46">
+            <stop offset="0%" stop-color="#fef08a"/>
+            <stop offset="25%" stop-color="#fbbf24"/>
+            <stop offset="55%" stop-color="#d97706"/>
+            <stop offset="100%" stop-color="#92400e"/>
+          </linearGradient>
+        </defs>
+        <!-- 长投影尾部 -->
+        <circle cx="27" cy="27" r="18" fill="rgba(0,0,0,.08)"/>
+        <circle cx="28" cy="28" r="18" fill="rgba(0,0,0,.05)"/>
+        <circle cx="23" cy="21" r="18" fill="url(#longGrad)" filter="url(#drop5)"/>
+        <circle cx="23" cy="20" r="13" fill="rgba(255,255,255,.08)" stroke="rgba(255,255,255,.12)" stroke-width=".6"/>
+        <text x="23" y="23.5" text-anchor="middle" font-size="12" font-weight="900" fill="#fffef0" font-family="system-ui, sans-serif">¥</text>
+        <ellipse cx="17" cy="12" rx="5.5" ry="2.2" fill="white" opacity=".2"/>
+      </svg>
+    </div>
+    <div class="label">长投影悬浮 · Long Shadow<small>多层方向投影 + 漂浮感</small></div>
+  </div>
+
+  <!-- 6. Crystal Gem 3D -->
+  <div class="card">
+    <div class="icon-stage" style="transform: rotate(-3deg);">
+      <svg width="58" height="58" viewBox="0 0 50 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="drop6" x="-25%" y="-10%" width="150%" height="150%">
+            <feDropShadow dx="0" dy="5" stdDeviation="8" flood-color="#0c0a3e" flood-opacity=".6"/>
+          </filter>
+          <linearGradient id="crys1" x1="0" y1="0" x2="0" y2="50">
+            <stop offset="0%" stop-color="#fef3c7"/>
+            <stop offset="20%" stop-color="#f59e0b"/>
+            <stop offset="55%" stop-color="#d97706"/>
+            <stop offset="100%" stop-color="#451a03"/>
+          </linearGradient>
+          <linearGradient id="crysInner" x1="5" y1="5" x2="45" y2="45">
+            <stop offset="0%" stop-color="rgba(255,255,255,.25)"/>
+            <stop offset="30%" stop-color="rgba(255,255,255,0)"/>
+            <stop offset="70%" stop-color="rgba(0,0,0,0)"/>
+            <stop offset="100%" stop-color="rgba(0,0,0,.15)"/>
+          </linearGradient>
+          <linearGradient id="crysFacet" x1="0" y1="0" x2="50" y2="50">
+            <stop offset="0%" stop-color="rgba(255,255,255,.3)"/>
+            <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+          </linearGradient>
+        </defs>
+        <!-- 宝石切割面 -->
+        <polygon points="25,2 48,20 42,40 8,40 2,20" fill="url(#crys1)" filter="url(#drop6)"/>
+        <polygon points="25,2 48,20 42,40 8,40 2,20" fill="url(#crysInner)"/>
+        <!-- 切面线 -->
+        <line x1="25" y1="2" x2="25" y2="40" stroke="rgba(255,255,255,.08)" stroke-width=".5"/>
+        <line x1="8" y1="40" x2="48" y2="20" stroke="rgba(255,255,255,.05)" stroke-width=".3"/>
+        <text x="25" y="24" text-anchor="middle" font-size="11" font-weight="900" fill="#fef3c7" font-family="system-ui, sans-serif">¥</text>
+        <polygon points="25,2 38,16 25,18" fill="url(#crysFacet)"/>
+      </svg>
+    </div>
+    <div class="label">宝石切割 · Crystal Gem<small>多棱面 + 切面高光 + 旋转角度</small></div>
+  </div>
+
+</div>
+
+</body>
+</html>
