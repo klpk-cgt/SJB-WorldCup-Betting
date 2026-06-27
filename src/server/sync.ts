@@ -50,7 +50,7 @@ async function fetchWithRetry(url: string, options: RequestInit, retries = 1, de
   throw new Error('Max retries exceeded');
 }
 
-function normalizeName(value: string) {
+export function normalizeName(value: string) {
   return value
     .toLowerCase()
     .normalize('NFD')
@@ -58,7 +58,7 @@ function normalizeName(value: string) {
     .replace(/[^a-z0-9]+/g, '');
 }
 
-const TEAM_NAME_ALIASES: Record<string, string[]> = {
+export const TEAM_NAME_ALIASES: Record<string, string[]> = {
   USA: ['united states', 'usa'],
   KOR: ['south korea', 'korea republic', 'republic of korea', 'korea'],
   CUR: ['curacao', 'curaçao'],
@@ -71,7 +71,7 @@ const TEAM_NAME_ALIASES: Record<string, string[]> = {
   MEX: ['mexico', 'el tri'],
 };
 
-function buildTeamAliases(team: Team) {
+export function buildTeamAliases(team: Team) {
   return [
     team.id,
     team.code,
@@ -83,7 +83,7 @@ function buildTeamAliases(team: Team) {
     .filter(Boolean);
 }
 
-function resolveTeamByExternalName(db: DatabaseSchema, teamName: string) {
+export function resolveTeamByExternalName(db: DatabaseSchema, teamName: string) {
   const normalized = normalizeName(teamName);
   if (!normalized) return null;
   return db.teams.find((team) => buildTeamAliases(team).includes(normalized)) || null;

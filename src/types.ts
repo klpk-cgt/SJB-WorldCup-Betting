@@ -108,6 +108,7 @@ export interface MatchEvent {
 
 export interface MatchProviderMeta {
   apiFootballFixtureId?: number;
+  espnEventId?: string;
   oddsEventId?: string;
   lastFixturesSyncAt?: string;
   lastOddsSyncAt?: string;
@@ -561,7 +562,7 @@ export interface ShareCardRecord {
   debugMeta?: Record<string, string | number | boolean | null>;
 }
 
-export type SyncProvider = 'API-Football' | 'The Odds API' | 'DeepSeek' | 'Mimo' | 'Gemini' | 'Local' | 'Sporttery';
+export type SyncProvider = 'API-Football' | 'The Odds API' | 'DeepSeek' | 'Mimo' | 'Gemini' | 'Local' | 'Sporttery' | 'ESPN';
 export type SyncStatus = 'SUCCESS' | 'FAILED' | 'PARTIAL';
 export type SyncType = 'fixtures' | 'livescore' | 'lineups' | 'events' | 'odds' | 'ai' | 'standings' | 'schedule';
 
@@ -614,7 +615,7 @@ export interface WorldCupStandings {
   /** 按小组 key (A-L) 分组的排名数据 */
   groups: Record<string, StandingTeamRow[]>;
   /** 数据来源 */
-  source: 'Sporttery' | 'COMPUTED';
+  source: 'ESPN' | 'Sporttery' | 'COMPUTED';
   /** 最后更新时间 */
   lastUpdated: string;
 }

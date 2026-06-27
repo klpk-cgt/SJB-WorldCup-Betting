@@ -12,7 +12,7 @@
  */
 
 import { dbService } from '../../db/db_service';
-import { Match, MatchStatus } from '../../types';
+import { MatchStatus } from '../../types';
 import { getRuntimeConfig, hasProviderKey } from '../config';
 import logger from '../logger';
 import { broadcastScoreUpdate } from '../websocket';
@@ -414,23 +414,19 @@ export async function runDynamicSyncTick() {
     }
   }
 
-  // 2. 赛程同步
+  // 2. 赛程同步（ESPN API，替代 API-Football）
   if (shouldSyncFixtures(plan)) {
     if (acquireLock('fixtures')) {
       try {
-        const { syncFixturesForDateWindow } = await import('../sync');
+        const { syncEspnScoreboard } = await import('../espn_sync');
         const { appendSyncLog } = await import('../helpers');
         const db = dbService.getData();
-        const config = getRuntimeConfig();
 
-        const result = await syncFixturesForDateWindow({
-          apiKey: config.apiFootballKey,
-          db,
-        });
+        const result = await syncEspnScoreboard(db);
         appendSyncLog(result.log);
         markFixturesSynced();
         resetFixturesFailures();
-        // 清除降级模式下标记的 scoreUnknown（此时 API Key 可用，比分已从同步中获取）
+        // 清除降级模式下标记的 scoreUnknown（ESPN 提供真实比分）
         let recoveredCount = 0;
         for (const m of db.matches) {
           if ((m as any).scoreUnknown && typeof m.homeScore === 'number' && typeof m.awayScore === 'number') {
@@ -506,15 +502,15 @@ export async function runDynamicSyncTick() {
     }
   }
 
-  // 4. 竞彩网积分榜同步（每 2 小时，NORMAL 及以上）
+  // 4. ESPN 积分榜同步（每 2 小时，NORMAL 及以上，替代竞彩网）
   if (plan.priority !== 'LOW') {
     const standingsInterval = 2 * MS_PER_HOUR;
     const shouldSyncStandings = !runtimeState.lastStandingsSyncAt || (Date.now() - runtimeState.lastStandingsSyncAt >= standingsInterval);
     if (shouldSyncStandings && acquireLock('standings')) {
       try {
-        const { syncWorldCupStandings } = await import('../sporttery_sync');
+        const { syncEspnStandings } = await import('../espn_sync');
         const db = dbService.getData();
-        const result = await syncWorldCupStandings(db);
+        const result = await syncEspnStandings(db);
         if (result.synced) {
           runtimeState.lastStandingsSyncAt = Date.now();
           dbService.save();
@@ -522,7 +518,7 @@ export async function runDynamicSyncTick() {
             const { broadcastStandingsUpdate } = await import('../websocket');
             broadcastStandingsUpdate(db.worldCupStandings);
           } catch { /* ignore */ }
-          logger.info(`[SyncScheduler] Sporttery standings synced: ${result.groupCount} groups`);
+          logger.info(`[SyncScheduler] ESPN standings synced: ${result.groupCount} groups`);
         }
       } catch (e) {
         logger.warn('[SyncScheduler] Standings sync failed', {
@@ -538,41 +534,24 @@ export async function runDynamicSyncTick() {
   if (shouldSyncLiveScore(plan)) {
     if (acquireLock('liveScore')) {
       try {
-        const { syncFixturesForDay } = await import('../sync');
+        const { syncEspnScoreboard } = await import('../espn_sync');
         const { appendSyncLog } = await import('../helpers');
         const db = dbService.getData();
-        const config = getRuntimeConfig();
 
-        // 获取进行中比赛的日期
-        const liveDates = Array.from(
-          new Set(
-            db.matches
-              .filter((m: Match) => LIVE_STATUSES.has(m.status))
-              .map((m: Match) => m.startTimeUtc.slice(0, 10)),
-          ),
-        );
+        // ESPN 一次拉取全部赛程，不需要按日期逐日同步
+        const result = await syncEspnScoreboard(db);
+        appendSyncLog({
+          ...result.log,
+          action: '同步进行中比赛的实时比分',
+          requestSummary: `${result.log.requestSummary} [live-dynamic]`,
+        });
 
-        let changed = false;
-        for (const date of liveDates) {
-          const result = await syncFixturesForDay({
-            apiKey: config.apiFootballKey,
-            date,
-            db,
-          });
-          appendSyncLog({
-            ...result.log,
-            action: '同步进行中比赛的实时比分',
-            requestSummary: `${result.log.requestSummary} [live-dynamic]`,
-          });
-          if (result.updatedMatches.length > 0 || result.createdMatches.length > 0) {
-            changed = true;
-          }
-        }
+        let changed = result.updatedMatches.length > 0;
 
         markLiveScoreSynced();
         resetLiveScoreFailures();
 
-        // 清除 scoreUnknown：如果之前兜底模式标记了比分未知，现在 API 拿到了真实比分就恢复
+        // 清除 scoreUnknown：如果之前兜底模式标记了比分未知，现在 ESPN 拿到了真实比分就恢复
         let scoreRecovered = 0;
         for (const m of db.matches) {
           if ((m as any).scoreUnknown && typeof m.homeScore === 'number' && typeof m.awayScore === 'number') {
@@ -588,7 +567,7 @@ export async function runDynamicSyncTick() {
         if (scoreRecovered > 0) {
           logger.info(`[SyncScheduler] Recovered ${scoreRecovered} scoreUnknown matches via live score sync`);
         }
-        logger.info(`[SyncScheduler] Live score synced for ${liveDates.length} dates`);
+        logger.info(`[SyncScheduler] Live score synced via ESPN`);
       } catch (error) {
         recordLiveScoreFailure();
         logger.error('[SyncScheduler] Live score sync failed', {
@@ -600,17 +579,16 @@ export async function runDynamicSyncTick() {
     }
   }
 
-  // 5. 降级方案：无外部 API key 时，基于时间自动推断比赛状态
-  //    或 API Key 有效但因免费套餐限制无法同步历史比赛时（如6月11-23日的比赛）
-  const config = getRuntimeConfig();
+  // 5. 降级方案：ESPN 同步失败时，基于时间自动推断比赛状态
+  //    检测有比赛开赛超过 2 小时但仍为 NS 且无 ESPN 关联（说明 ESPN 同步未覆盖到）
   const _dbForCheck = dbService.getData();
   const hasUnsyncedStartedMatches = _dbForCheck.matches.some(
     (m) =>
       m.status === MatchStatus.NS &&
-      !m.providerMeta?.apiFootballFixtureId &&
+      !m.providerMeta?.espnEventId &&
       Date.now() - new Date(m.startTimeUtc).getTime() > 2 * MS_PER_HOUR
   );
-  if (!hasProviderKey(config.apiFootballKey) || hasUnsyncedStartedMatches) {
+  if (hasUnsyncedStartedMatches) {
     if (acquireLock('fallback-status')) {
       try {
         const db = dbService.getData();
