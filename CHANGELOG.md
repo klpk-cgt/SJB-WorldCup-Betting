@@ -1,5 +1,40 @@
 # 更新日志 (Changelog)
 
+## v2.6.3 - 2026-06-28
+
+### maxBuffer修复 + The Odds API异常赔率纠正 + m-72结算修复
+
+#### 1. 修复maxBuffer限制导致PM2重启时数据库被重置（严重）
+- **根因**：`STORAGE_SCRIPT_MAX_BUFFER` 设为 16MB，但数据库实际大小 16.27MB，超出缓冲区限制
+- **故障链**：PM2重启 → `readMySqlSnapshot()` 读取失败（超出16MB）→ 触发 `resetToDefaults()` → 数据库被重置为初始状态
+- **修复**：`maxBuffer` 从 16MB 提升至 64MB
+- **影响文件**：`src/db/db_service.ts`, `src/server/backup.ts`, `dist/server.cjs`（云服务器热补丁）
+
+#### 2. The Odds API异常赔率纠正
+- 清理14条 The Odds API matchOdds（source→MANUAL, syncStatus→SYNCED）
+- 重新结算 pred-f424c06b（m-71 CORRECT_SCORE）：赔率 33.51→9.25，回滚 ¥24,260
+- user-52d9aa8c 钱包：¥59,901 → ¥35,641
+- 更新61条 predictions 的 oddsSnapshot.source: The Odds API → MANUAL
+- 重新生成 m-71 postMatchReport
+- 添加审计日志和回滚交易记录
+
+#### 3. 修复m-72手动结算遗漏的8条PENDING predictions
+- **问题**：阿尔及利亚vs奥地利(3-3)手动结算时仅处理1条prediction，遗漏8条PENDING
+- **修复**：8条PENDING全部结算为LOST（无下注3-3平局或H2H draw）
+  - H2H away/home × 3条 → LOST（平局非主/客胜）
+  - CORRECT_SCORE 2-0/2-1/0-0/1-0/1-1 × 5条 → LOST（实际3-3）
+- 修复后 m-72 共9条predictions全部结算（WON:0, LOST:9, PENDING:0）
+
+### 改动文件
+`src/db/db_service.ts`, `src/server/backup.ts`, `scripts/correct-theodds-api.cjs`（新增）, `scripts/fix-m72-pending.cjs`（新增）, `dist/server.cjs`（云服务器热补丁）
+
+### 数据库变更
+- matchOdds: 14条 The Odds API → MANUAL
+- predictions: 1条重新结算 + 8条PENDING→LOST + 61条source更新
+- wallets: user-52d9aa8c 回滚 ¥24,260
+- transactions: 新增1条回滚交易
+- syncLogs: 新增2条审计日志
+
 ## v2.6.2 - 2026-06-27
 
 ### 竞猜记录展开 + 排行榜今日榜修复 + 战报头像修复
