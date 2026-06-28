@@ -180,6 +180,19 @@ export async function settleMatchById(params: SettleMatchParams): Promise<Settle
     const wallet = db.wallets.find((w) => w.userId === prediction.userId);
     if (!wallet) continue;
 
+    // 监控：检测异常赔率来源（不阻止结算，仅告警）
+    const oddsSource = prediction.oddsSnapshot?.source;
+    if (oddsSource === 'The Odds API' || oddsSource === 'INFERRED_FROM_H2H') {
+      logger.warn('[SettleMatch] 检测到异常赔率来源的预测（建议人工核查）', {
+        matchId: match.id,
+        predictionId: prediction.id,
+        userId: prediction.userId,
+        market: prediction.market,
+        oddsDecimal: prediction.oddsDecimal,
+        oddsSource,
+      });
+    }
+
     const won = judgePrediction(prediction, match);
 
     if (won === null) {

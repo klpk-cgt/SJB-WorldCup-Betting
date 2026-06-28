@@ -432,11 +432,25 @@ export async function syncSportteryOdds(db: DatabaseSchema): Promise<SyncResult>
   }
 
   // 记录未能匹配的比赛
+  // 关键修复：对于已有 Sporttery 旧赔率的比赛，竞彩网未返回时（如开赛前下架）保留旧赔率，
+  // 仅更新 lastSyncedAt，不降级为 UNSYNCED，避免下注被拒绝或降级到 The Odds API 兜底
   for (const matchId of unsyncedSet) {
     const existing = db.matchOdds[matchId];
-    if (!existing) continue;
+    if (!existing) {
+      // 无任何旧赔率数据，标记 UNSYNCED
+      result.unsyncedMatchIds.push(matchId);
+      result.unsyncedReasons[matchId] = '竞彩网 API 未找到此比赛的赔率数据，且本地无历史赔率。';
+      continue;
+    }
+    if (existing.source === 'Sporttery' && existing.syncStatus === 'SYNCED') {
+      // 已有竞彩网旧赔率：保留旧数据，仅更新 lastSyncedAt，不降级
+      existing.lastSyncedAt = new Date().toISOString();
+      logger.admin('[Sporttery] Preserved stale odds (开赛期间竞彩网下架)', { matchId });
+      continue;
+    }
+    // 其他来源（如 The Odds API 残留）：标记 UNSYNCED，等待人工处理
     result.unsyncedMatchIds.push(matchId);
-    result.unsyncedReasons[matchId] = '竞彩网 API 未找到此比赛的赔率数据。';
+    result.unsyncedReasons[matchId] = `竞彩网未返回此比赛赔率，旧赔率来源为 ${existing.source || '未知'}，已标记为待确认。`;
   }
 
   // 对已匹配但缺少竞彩网赔率的比赛，标记 PARTIAL

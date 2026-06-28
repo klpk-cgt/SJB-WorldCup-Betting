@@ -858,6 +858,26 @@ export function evaluateUserBadges(userId: string, displayName: string, avatarUr
   const db = dbService.getData();
   (db as any).userBadges = records.filter((record) => record.userId !== userId);
   (db as any).userBadges.push(...updated);
+
+  // 存储新解锁成就的通知（供机器人轮询推送）
+  if (newlyUnlocked.length > 0) {
+    const notifs = (db as any).achievementNotifications || [];
+    for (const id of newlyUnlocked) {
+      const def = BADGE_DEFINITIONS[id];
+      notifs.push({
+        id: `${userId}-${id}-${Date.now()}`,
+        userId,
+        displayName,
+        badgeId: id,
+        badgeLabel: def.label,
+        badgeRarity: def.rarity,
+        matchId: '',
+        createdAt: new Date().toISOString(),
+        pushed: false,
+      });
+    }
+    (db as any).achievementNotifications = notifs;
+  }
   dbService.save();
 
   for (const id of newlyUnlocked) {

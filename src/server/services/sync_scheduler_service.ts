@@ -13,7 +13,7 @@
 
 import { dbService } from '../../db/db_service';
 import { MatchStatus } from '../../types';
-import { getRuntimeConfig, hasProviderKey } from '../config';
+import { getRuntimeConfig } from '../config';
 import logger from '../logger';
 import { broadcastScoreUpdate } from '../websocket';
 
@@ -40,6 +40,12 @@ export interface SyncPlan {
   oddsIntervalMs: number;
   /** 比分同步最小间隔（毫秒） */
   liveScoreIntervalMs: number;
+  /** 是否存在未替换的 TBD 淘汰赛种子比赛 */
+  hasTbdKnockout: boolean;
+  /** 需要拉取 summary 的比赛 ID 列表（已结束且无 statistics） */
+  summaryMatchIds: string[];
+  /** 是否存在淘汰赛比赛（用于触发 bracket 同步） */
+  hasKnockoutStarted: boolean;
 }
 
 export interface SyncRuntimeState {
@@ -49,6 +55,8 @@ export interface SyncRuntimeState {
   lastSettlementCheckAt: number;
   lastAiRefreshAt: number;
   lastStandingsSyncAt: number;
+  lastSummarySyncAt: number;
+  lastBracketSyncAt: number;
   currentPriority: SyncPriority;
   currentReason: string;
 }
@@ -98,6 +106,8 @@ let runtimeState: SyncRuntimeState = {
   lastSettlementCheckAt: 0,
   lastAiRefreshAt: 0,
   lastStandingsSyncAt: 0,
+  lastSummarySyncAt: 0,
+  lastBracketSyncAt: 0,
   currentPriority: 'LOW',
   currentReason: '初始化',
 };
@@ -116,7 +126,7 @@ function resetLiveScoreFailures() { consecutiveLiveScoreFailures = 0; }
 function recordFixturesFailure() {
   consecutiveFixturesFailures += 1;
   if (consecutiveFixturesFailures === MAX_CONSECUTIVE_FAILURES) {
-    logger.error(`[SyncScheduler] ⚠️ 赛程同步连续失败 ${MAX_CONSECUTIVE_FAILURES} 次，请检查 API_FOOTBALL_KEY 配置和网络连接！`);
+    logger.error(`[SyncScheduler] ⚠️ 赛程同步连续失败 ${MAX_CONSECUTIVE_FAILURES} 次，请检查 ESPN API 网络连接！`);
     try { const { broadcastNotification } = require('../websocket'); broadcastNotification('赛程同步连续失败，请管理员检查 API Key 配置', 'warn'); } catch {}
   }
 }
@@ -160,9 +170,10 @@ export function getSyncHealthStatus() {
 
   // ESPN 免费 API 不需要 Key，始终可用
   const fixturesConfigured = true;
-  const oddsConfigured = hasProviderKey(config.theOddsApiKey);
+  // 竞彩网无需 API Key，始终可用（已移除 The Odds API 兜底）
+  const oddsConfigured = true;
   const fixturesHealthy = consecutiveFixturesFailures < MAX_CONSECUTIVE_FAILURES;
-  const oddsHealthy = oddsConfigured && consecutiveOddsFailures < MAX_CONSECUTIVE_FAILURES;
+  const oddsHealthy = consecutiveOddsFailures < MAX_CONSECUTIVE_FAILURES;
   const liveScoreHealthy = consecutiveLiveScoreFailures < MAX_CONSECUTIVE_FAILURES;
 
   return {
@@ -178,8 +189,8 @@ export function getSyncHealthStatus() {
       hasApiKey: oddsConfigured,
       consecutiveFailures: consecutiveOddsFailures,
       isHealthy: oddsHealthy,
-      status: oddsConfigured ? (oddsHealthy ? 'healthy' : 'degraded') : 'disabled',
-      reason: oddsConfigured ? null : '未配置 THE_ODDS_API_KEY',
+      status: oddsHealthy ? 'healthy' : 'degraded',
+      reason: oddsHealthy ? null : '竞彩网同步连续失败',
       lastSyncAt: latestSuccessTimestamp('odds'),
     },
     liveScore: {
@@ -234,16 +245,29 @@ export function getSyncPlan(): SyncPlan {
   const oddsMatchIds: string[] = [];
   const liveMatchIds: string[] = [];
   const settlementMatchIds: string[] = [];
+  const summaryMatchIds: string[] = [];
 
   let hasMatchWithin24h = false;
   let hasMatchWithin2h = false;
   let hasLiveMatch = false;
+  let hasTbdKnockout = false;
+  let hasKnockoutStarted = false;
 
   for (const match of matches) {
     const startTime = new Date(match.startTimeUtc).getTime();
     const timeUntilStart = startTime - now;
     const dateKey = match.startTimeUtc.slice(0, 10);
     fixturesDates.add(dateKey);
+
+    // 检测未替换的 TBD 淘汰赛种子比赛
+    if (match.homeTeamId === 'TBD' && match.awayTeamId === 'TBD' && match.stage !== 'Group Stage') {
+      hasTbdKnockout = true;
+    }
+
+    // 检测淘汰赛已开始（有非 Group Stage 比赛）
+    if (match.stage !== 'Group Stage') {
+      hasKnockoutStarted = true;
+    }
 
     // 进行中
     if (LIVE_STATUSES.has(match.status)) {
@@ -256,6 +280,16 @@ export function getSyncPlan(): SyncPlan {
     // 已结束未结算
     if (FINISHED_STATUSES.has(match.status) && !match.isSettled) {
       settlementMatchIds.push(match.id);
+      // 已结束且无 statistics 且有 espnEventId，加入 summary 同步队列
+      if (!match.statistics && match.providerMeta?.espnEventId) {
+        summaryMatchIds.push(match.id);
+      }
+      continue;
+    }
+
+    // 已结束已结算但无 statistics（补拉 summary）
+    if (FINISHED_STATUSES.has(match.status) && match.isSettled && !match.statistics && match.providerMeta?.espnEventId) {
+      summaryMatchIds.push(match.id);
       continue;
     }
 
@@ -284,6 +318,9 @@ export function getSyncPlan(): SyncPlan {
   } else if (hasMatchWithin24h) {
     priority = 'NORMAL';
     reason = '有比赛24小时内开赛';
+  } else if (hasTbdKnockout) {
+    priority = 'LOW';
+    reason = '存在未确定的淘汰赛对阵';
   } else {
     priority = 'LOW';
     reason = '无近期比赛';
@@ -305,6 +342,9 @@ export function getSyncPlan(): SyncPlan {
     fixturesIntervalMs: intervals.fixturesMs,
     oddsIntervalMs: intervals.oddsMs,
     liveScoreIntervalMs: intervals.liveScoreMs,
+    hasTbdKnockout,
+    summaryMatchIds,
+    hasKnockoutStarted,
   };
 }
 
@@ -320,8 +360,8 @@ export function shouldSyncFixtures(plan: SyncPlan): boolean {
  * 判断是否应该执行赔率同步
  */
 export function shouldSyncOdds(plan: SyncPlan): boolean {
-  if (plan.oddsMatchIds.length === 0) return false;
   if (plan.oddsIntervalMs === 0) return false;
+  if (plan.oddsMatchIds.length === 0 && !plan.hasTbdKnockout) return false;
   return Date.now() - runtimeState.lastOddsSyncAt >= plan.oddsIntervalMs;
 }
 
@@ -339,6 +379,24 @@ export function shouldSyncLiveScore(plan: SyncPlan): boolean {
  */
 export function shouldCheckSettlement(): boolean {
   return Date.now() - runtimeState.lastSettlementCheckAt >= 10 * MS_PER_MINUTE;
+}
+
+/**
+ * 判断是否应该执行 summary 同步
+ * 已结束比赛数据稳定，12 小时拉取一次即可
+ */
+export function shouldSyncSummary(plan: SyncPlan): boolean {
+  if (plan.summaryMatchIds.length === 0) return false;
+  return Date.now() - runtimeState.lastSummarySyncAt >= 12 * MS_PER_HOUR;
+}
+
+/**
+ * 判断是否应该执行 bracket 同步
+ * 淘汰赛阶段每 2 小时拉取一次（双校验本地数据）
+ */
+export function shouldSyncBracket(plan: SyncPlan): boolean {
+  if (!plan.hasKnockoutStarted) return false;
+  return Date.now() - runtimeState.lastBracketSyncAt >= 2 * MS_PER_HOUR;
 }
 
 /**
@@ -362,6 +420,14 @@ export function markSettlementChecked() {
 
 export function markAiRefreshed() {
   runtimeState.lastAiRefreshAt = Date.now();
+}
+
+export function markSummarySynced() {
+  runtimeState.lastSummarySyncAt = Date.now();
+}
+
+export function markBracketSynced() {
+  runtimeState.lastBracketSyncAt = Date.now();
 }
 
 /**
@@ -415,7 +481,7 @@ export async function runDynamicSyncTick() {
     }
   }
 
-  // 2. 赛程同步（ESPN API，替代 API-Football）
+  // 2. 赛程同步（ESPN API）
   if (shouldSyncFixtures(plan)) {
     if (acquireLock('fixtures')) {
       try {
@@ -451,42 +517,33 @@ export async function runDynamicSyncTick() {
     }
   }
 
-  // 3. 赔率同步（竞彩网 > The Odds API > Elo 降级）
+  // 3. 赔率同步（竞彩网为主，无兜底；保留旧赔率避免开赛期间无赔率可用）
   if (shouldSyncOdds(plan)) {
     if (acquireLock('odds')) {
       try {
         const { syncSportteryOdds } = await import('../sporttery_sync');
-        const { syncOddsForMatches } = await import('../sync');
         const { appendSyncLog } = await import('../helpers');
         const db = dbService.getData();
-        const config = getRuntimeConfig();
 
-        // 第一步：竞彩网 API（主赔率源）
+        // 竞彩网 API（主赔率源，未返回数据的比赛保留旧赔率）
         let sportteryResult = null;
         try {
           sportteryResult = await syncSportteryOdds(db);
           if (sportteryResult.log) appendSyncLog(sportteryResult.log);
           logger.info(`[SyncScheduler] Sporttery synced: ${sportteryResult.updatedMatchIds.length} matches`);
         } catch (e) {
-          logger.warn('[SyncScheduler] Sporttery sync failed, falling back to The Odds API', {
+          logger.warn('[SyncScheduler] Sporttery sync failed', {
             error: e instanceof Error ? e.message : String(e),
           });
         }
 
-        // 第二步：The Odds API（辅助兜底，补充竞彩网未覆盖的比赛）
-        if (config.theOddsApiKey && hasProviderKey(config.theOddsApiKey)) {
-          try {
-            const oddsResult = await syncOddsForMatches({
-              apiKey: config.theOddsApiKey,
-              db,
-            });
-            appendSyncLog(oddsResult.log);
-            logger.info(`[SyncScheduler] The Odds synced: ${oddsResult.log.responseSummary}`);
-          } catch (e) {
-            logger.warn('[SyncScheduler] The Odds API sync failed', {
-              error: e instanceof Error ? e.message : String(e),
-            });
-          }
+        // 监控残留：检查是否有 source='The Odds API' 的历史 MatchOdds
+        // 注意：db.matchOdds 是 Record<string, MatchOdds>，不是数组，需用 Object.values
+        const residualTheOdds = Object.values(db.matchOdds || {}).filter((o) => o.source === 'The Odds API');
+        if (residualTheOdds.length > 0) {
+          logger.warn(`[SyncScheduler] Detected ${residualTheOdds.length} residual The Odds API matchOdds records`, {
+            matchIds: residualTheOdds.map((o) => o.matchId).slice(0, 10),
+          });
         }
 
         markOddsSynced();
@@ -658,6 +715,71 @@ export async function runDynamicSyncTick() {
         });
       } finally {
         releaseLock('fallback-status');
+      }
+    }
+  }
+
+  // 7. ESPN summary 同步（对已结束且无 statistics 的比赛，12 小时拉取一次）
+  if (shouldSyncSummary(plan)) {
+    if (acquireLock('summary')) {
+      try {
+        const { syncEspnSummary } = await import('../espn_sync');
+        const { appendSyncLog } = await import('../helpers');
+        const db = dbService.getData();
+
+        let syncedCount = 0;
+        // 限制单次最多拉取 5 场，避免一次性请求过多
+        const matchIdsToSync = plan.summaryMatchIds.slice(0, 5);
+        for (const matchId of matchIdsToSync) {
+          try {
+            const result = await syncEspnSummary(db, matchId);
+            appendSyncLog(result.log);
+            if (result.updated) syncedCount++;
+          } catch (e) {
+            logger.warn(`[SyncScheduler] Summary sync failed for ${matchId}`, {
+              error: e instanceof Error ? e.message : String(e),
+            });
+          }
+        }
+
+        markSummarySynced();
+        if (syncedCount > 0) {
+          dbService.save();
+          logger.info(`[SyncScheduler] ESPN summary synced: ${syncedCount}/${matchIdsToSync.length} matches`);
+        }
+      } catch (error) {
+        logger.error('[SyncScheduler] Summary sync batch failed', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      } finally {
+        releaseLock('summary');
+      }
+    }
+  }
+
+  // 8. ESPN bracket 同步（淘汰赛阶段，每 2 小时双校验）
+  if (shouldSyncBracket(plan)) {
+    if (acquireLock('bracket')) {
+      try {
+        const { syncEspnBracket } = await import('../espn_sync');
+        const { appendSyncLog } = await import('../helpers');
+        const db = dbService.getData();
+
+        const result = await syncEspnBracket(db);
+        appendSyncLog(result.log);
+        markBracketSynced();
+
+        if (result.synced) {
+          dbService.refreshBracketState();
+          dbService.save();
+          logger.info('[SyncScheduler] ESPN bracket synced');
+        }
+      } catch (error) {
+        logger.error('[SyncScheduler] Bracket sync failed', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      } finally {
+        releaseLock('bracket');
       }
     }
   }

@@ -35,7 +35,6 @@ export function getLevelByNetProfit(netProfit: number): LevelConfig {
 }
 
 export interface RuntimeConfig {
-  apiFootballKey: string;
   theOddsApiKey: string;
   sportteryApiBaseUrl: string;
   sportterySyncIntervalMinutes: number;
@@ -70,7 +69,6 @@ function readEnv(name: string, fallback = '') {
 
 export function getRuntimeConfig(): RuntimeConfig {
   return {
-    apiFootballKey: readEnv('API_FOOTBALL_KEY'),
     theOddsApiKey: readEnv('THE_ODDS_API_KEY'),
     sportteryApiBaseUrl: readEnv('SPORTTERY_API_BASE_URL', 'https://webapi.sporttery.cn/gateway'),
     sportterySyncIntervalMinutes: Math.max(5, Number(process.env.SPORTTERY_SYNC_INTERVAL_MINUTES || 60)),
@@ -106,7 +104,7 @@ export function hasProviderKey(key: string) {
 
 export function summarizeProviderConfig(config: RuntimeConfig) {
   return {
-    fixtures: { configured: hasProviderKey(config.apiFootballKey), env: 'API_FOOTBALL_KEY' },
+    fixtures: { configured: true, env: 'ESPN（免费无需Key）' },
     odds: { configured: hasProviderKey(config.theOddsApiKey), env: 'THE_ODDS_API_KEY' },
     deepseek: {
       configured: hasProviderKey(config.deepSeekApiKey),

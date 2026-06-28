@@ -286,11 +286,11 @@ class DatabaseService {
     const syncLogs: SyncLog[] = [
       {
         id: 'log-1',
-        source: 'API-Football',
+        source: 'ESPN',
         action: 'Fetch WC 2026 Fixtures',
         status: 'SUCCESS',
-        requestSummary: 'GET /fixtures?league=1&season=2026',
-        responseSummary: '成功拉取 104 场 2026 世界杯赛程，本地同步写入 5 场焦点赛事缓存。',
+        requestSummary: 'GET /sports/soccer/fifa.world/scoreboard',
+        responseSummary: '成功拉取 2026 世界杯赛程，本地同步写入 5 场焦点赛事缓存。',
         createdAt: new Date(Date.now() - 3600000).toISOString()
       },
       {

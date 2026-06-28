@@ -116,4 +116,36 @@ router.post('/api/activities/record', (req: Request, res: Response) => {
   }
 });
 
+/**
+ * 获取未推送的成就通知（供机器人轮询）
+ */
+router.get('/api/achievements/notifications', (req: Request, res: Response) => {
+  const db = dbService.getData();
+  const notifications = (db as any).achievementNotifications || [];
+  const unpushed = notifications.filter((n: any) => !n.pushed);
+  res.json({ notifications: unpushed, total: unpushed.length });
+});
+
+/**
+ * 标记成就通知为已推送
+ * Body: { ids: ["id1", "id2", ...] }
+ */
+router.post('/api/achievements/notifications/ack', (req: Request, res: Response) => {
+  const db = dbService.getData();
+  const notifications = (db as any).achievementNotifications || [];
+  const ids: string[] = req.body.ids || [];
+  let updated = 0;
+  for (const notif of notifications) {
+    if (ids.includes(notif.id) && !notif.pushed) {
+      notif.pushed = true;
+      notif.pushedAt = new Date().toISOString();
+      updated++;
+    }
+  }
+  if (updated > 0) {
+    dbService.save();
+  }
+  res.json({ acked: updated });
+});
+
 export default router;

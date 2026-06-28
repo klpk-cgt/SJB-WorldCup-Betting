@@ -20,7 +20,6 @@ import {
   deriveOperationalStatus,
   deriveSettlementStatus,
 } from '../operations';
-import { syncFixturesForDateWindow, syncFixturesForDay, syncOddsForMatches } from '../sync';
 import {
   createId,
   createAdminSession,
@@ -142,37 +141,30 @@ router.post('/api/admin/integrations/test-sync', async (req: Request, res: Respo
   const db = dbService.getData();
   const date = String(req.body?.date || pickNearestMatchDay());
   const startedAt = new Date().toISOString();
-  const fixtureResult = await syncFixturesForDay({
-    apiKey: config.apiFootballKey,
-    date,
-    db,
-  });
+  const { syncEspnScoreboard } = await import('../espn_sync');
+  const fixtureResult = await syncEspnScoreboard(db);
   appendSyncLog(fixtureResult.log);
 
   const sampleMatches = db.matches
     .filter((match) => match.startTimeUtc.slice(0, 10) === date)
     .slice(0, 3);
 
+  // 使用竞彩网做样本赔率同步（一次性批量调用后过滤样本）
+  const { syncSportteryOdds } = await import('../sporttery_sync');
+  const sportteryResult = await syncSportteryOdds(db);
+  appendSyncLog(sportteryResult.log);
+
   const oddsResults: SyncSampleOddsResult[] = [];
   for (const match of sampleMatches) {
-    const oddsResult = await syncOddsForMatches({
-      apiKey: config.theOddsApiKey,
-      db,
-      targetMatchId: match.id,
-    });
-    appendSyncLog({
-      ...oddsResult.log,
-      targetMatchId: match.id,
-    });
     oddsResults.push({
       matchId: match.id,
       homeTeam: db.teams.find((team) => team.id === match.homeTeamId)?.nameZh || match.homeTeamId,
       awayTeam: db.teams.find((team) => team.id === match.awayTeamId)?.nameZh || match.awayTeamId,
-      synced: oddsResult.updatedMatchIds.includes(match.id),
+      synced: sportteryResult.updatedMatchIds.includes(match.id),
       syncStatus: db.matchOdds[match.id]?.syncStatus || 'FAILED',
       source: db.matchOdds[match.id]?.source || 'MANUAL',
       lastSyncedAt: db.matchOdds[match.id]?.lastSyncedAt || null,
-      unsyncedReason: oddsResult.unsyncedReasons[match.id] || null,
+      unsyncedReason: sportteryResult.unsyncedReasons[match.id] || null,
     });
   }
 
@@ -194,7 +186,7 @@ router.post('/api/admin/integrations/test-sync', async (req: Request, res: Respo
 
 /**
  * API 连通性健康检查
- * 分别检测 API-Football、The Odds API、Gemini AI 三个外部服务的连通性
+ * 分别检测 The Odds API、Gemini AI 两个外部服务的连通性
  */
 router.post('/api/admin/integrations/health-check', async (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
@@ -239,35 +231,13 @@ router.post('/api/admin/integrations/health-check', async (req: Request, res: Re
     error: string | null; detail: string;
   }> = [];
 
-  // 1. API-Football 检测
-  if (hasProviderKey(config.apiFootballKey)) {
-    checks.push(await checkApi('API-Football', 'https://v3.football.api-sports.io/status', {
-      'x-apisports-key': config.apiFootballKey,
-    }));
-  } else {
-    checks.push({
-      apiName: 'API-Football', configured: false, healthy: false,
-      statusCode: null, latencyMs: 0,
-      error: '未配置 API_FOOTBALL_KEY',
-      detail: '请在环境变量中设置有效的 API_FOOTBALL_KEY',
-    });
+  // 1. 竞彩网 API 检测（已替代 The Odds API）
+  {
+    const sportteryUrl = `${config.sportteryApiBaseUrl}/uniform/football/getMatchCalculatorV1.qry?channel=c&poolCode=hhad,had,crs,ttg,hafu`;
+    checks.push(await checkApi('竞彩网 Sporttery', sportteryUrl, {}));
   }
 
-  // 2. The Odds API 检测
-  if (hasProviderKey(config.theOddsApiKey)) {
-    checks.push(await checkApi('The Odds API',
-      `https://api.the-odds-api.com/v4/sports/soccer_fifa_world_cup/odds/?regions=eu&markets=h2h&apiKey=${encodeURIComponent(config.theOddsApiKey)}`,
-      {}));
-  } else {
-    checks.push({
-      apiName: 'The Odds API', configured: false, healthy: false,
-      statusCode: null, latencyMs: 0,
-      error: '未配置 THE_ODDS_API_KEY',
-      detail: '请在环境变量中设置有效的 THE_ODDS_API_KEY',
-    });
-  }
-
-  // 3. Gemini AI 检测
+  // 2. Gemini AI 检测
   if (hasProviderKey(config.geminiApiKey)) {
     checks.push(await checkApi('Gemini AI',
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(config.geminiApiKey)}`,
@@ -783,6 +753,50 @@ router.post('/api/admin/sync/espn-standings', async (req: Request, res: Response
   }
 });
 
+// ─── 手动同步 ESPN 比赛摘要（statistics/lineups/events） ───
+router.post('/api/admin/sync/espn-summary/:matchId', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const { syncEspnSummary } = await import('../espn_sync');
+    const { appendSyncLog } = await import('../helpers');
+    const db = dbService.getData();
+    const matchId = String(req.params.matchId);
+    const result = await syncEspnSummary(db, matchId);
+    appendSyncLog(result.log);
+
+    if (result.updated) {
+      dbService.save();
+      logger.admin('[Admin] ESPN summary sync completed', { matchId });
+    }
+
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ success: false, error: e instanceof Error ? e.message : String(e) });
+  }
+});
+
+// ─── 手动同步 ESPN 淘汰赛对阵图（bracket） ───
+router.post('/api/admin/sync/espn-bracket', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const { syncEspnBracket } = await import('../espn_sync');
+    const { appendSyncLog } = await import('../helpers');
+    const db = dbService.getData();
+    const result = await syncEspnBracket(db);
+    appendSyncLog(result.log);
+
+    if (result.synced) {
+      dbService.refreshBracketState();
+      dbService.save();
+      logger.admin('[Admin] ESPN bracket sync completed');
+    }
+
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ success: false, error: e instanceof Error ? e.message : String(e) });
+  }
+});
+
 // ─── maintenance badges and titles ───
 router.post('/api/admin/badges/reevaluate', (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
@@ -1094,29 +1108,19 @@ router.get('/api/admin/pre-match-check', (req: Request, res: Response) => {
 router.post('/api/admin/sync/fixtures', async (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
   const db = dbService.getData();
-  const date = req.body?.date as string | undefined;
-  const result = date
-    ? await syncFixturesForDay({
-        apiKey: config.apiFootballKey,
-        date,
-        db,
-      })
-    : await syncFixturesForDateWindow({
-        apiKey: config.apiFootballKey,
-        db,
-      });
+  const { syncEspnScoreboard } = await import('../espn_sync');
+  const result = await syncEspnScoreboard(db);
   appendSyncLog(result.log);
   if (result.log.status !== 'FAILED') {
     markFixturesSynced();
   }
   ensureLifecycleForAllMatches();
-  [...result.updatedMatches, ...result.createdMatches].forEach((item) => markMatchAiStale(item.id));
+  result.updatedMatches.forEach((item) => markMatchAiStale(item.id));
   dbService.refreshBracketState();
   dbService.save();
   res.json({
     success: result.log.status !== 'FAILED',
     updatedMatches: result.updatedMatches.map((item) => item.id),
-    createdMatches: result.createdMatches.map((item) => item.id),
     log: result.log,
   });
 });
@@ -1124,28 +1128,20 @@ router.post('/api/admin/sync/fixtures', async (req: Request, res: Response) => {
 router.post('/api/admin/sync/window', async (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
   const db = dbService.getData();
-  const result = await syncFixturesForDateWindow({
-    apiKey: config.apiFootballKey,
-    db,
-    anchorDate: req.body?.anchorDate ? String(req.body.anchorDate) : undefined,
-    pastDays: Number.isFinite(Number(req.body?.pastDays)) ? Number(req.body.pastDays) : undefined,
-    futureDays: Number.isFinite(Number(req.body?.futureDays)) ? Number(req.body.futureDays) : undefined,
-  });
-
+  const { syncEspnScoreboard } = await import('../espn_sync');
+  const result = await syncEspnScoreboard(db);
   appendSyncLog(result.log);
   if (result.log.status !== 'FAILED') {
     markFixturesSynced();
   }
   ensureLifecycleForAllMatches();
-  [...result.updatedMatches, ...result.createdMatches].forEach((item) => markMatchAiStale(item.id));
+  result.updatedMatches.forEach((item) => markMatchAiStale(item.id));
   dbService.refreshBracketState();
   dbService.save();
 
   res.json({
     success: result.log.status !== 'FAILED',
-    dates: result.dates,
     updatedMatches: result.updatedMatches.map((item) => item.id),
-    createdMatches: result.createdMatches.map((item) => item.id),
     log: result.log,
   });
 });
@@ -1153,14 +1149,10 @@ router.post('/api/admin/sync/window', async (req: Request, res: Response) => {
 router.post('/api/admin/sync/today', async (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
   const db = dbService.getData();
-  const fixturesResult = await syncFixturesForDateWindow({
-    apiKey: config.apiFootballKey,
-    db,
-  });
-  const oddsResult = await syncOddsForMatches({
-    apiKey: config.theOddsApiKey,
-    db,
-  });
+  const { syncEspnScoreboard } = await import('../espn_sync');
+  const { syncSportteryOdds } = await import('../sporttery_sync');
+  const fixturesResult = await syncEspnScoreboard(db);
+  const oddsResult = await syncSportteryOdds(db);
   appendSyncLog(fixturesResult.log);
   appendSyncLog(oddsResult.log);
   if (fixturesResult.log.status !== 'FAILED') {
@@ -1170,14 +1162,13 @@ router.post('/api/admin/sync/today', async (req: Request, res: Response) => {
     markOddsSynced();
   }
   ensureLifecycleForAllMatches();
-  [...fixturesResult.updatedMatches, ...fixturesResult.createdMatches].forEach((item) => markMatchAiStale(item.id));
+  fixturesResult.updatedMatches.forEach((item) => markMatchAiStale(item.id));
   oddsResult.updatedMatchIds.forEach((item) => markMatchAiStale(item));
   dbService.refreshBracketState();
   dbService.save();
   res.json({
     success: fixturesResult.log.status !== 'FAILED' || oddsResult.log.status !== 'FAILED',
     fixturesUpdated: fixturesResult.updatedMatches.map((item) => item.id),
-    fixturesCreated: fixturesResult.createdMatches.map((item) => item.id),
     oddsUpdated: oddsResult.updatedMatchIds,
   });
 });
@@ -1186,45 +1177,23 @@ router.post('/api/admin/sync/live-scores', async (req: Request, res: Response) =
   if (!requireAdmin(req, res)) return;
 
   const db = dbService.getData();
-  const liveDates = Array.from(
-    new Set(
-      db.matches
-        .filter((item) => item.status === 'LIVE' || item.status === 'HT')
-        .map((item) => item.startTimeUtc.slice(0, 10)),
-    ),
-  );
+  const liveMatches = db.matches.filter((item) => item.status === 'LIVE' || item.status === 'HT');
 
-  if (liveDates.length === 0) {
+  if (liveMatches.length === 0) {
     return res.json({
       success: true,
       updatedMatches: [],
-      dates: [],
       message: '当前没有进行中的比赛需要同步比分。',
     });
   }
 
-  const updatedMatches = new Set<string>();
-  const logs: Array<Record<string, unknown>> = [];
-  for (const date of liveDates) {
-    const result = await syncFixturesForDay({
-      apiKey: config.apiFootballKey,
-      date,
-      db,
-    });
-    appendSyncLog({
-      ...result.log,
-      action: '同步进行中比赛比分',
-      requestSummary: `${result.log.requestSummary} [admin-live]`,
-    });
-    result.updatedMatches.forEach((item) => updatedMatches.add(item.id));
-    result.createdMatches.forEach((item) => updatedMatches.add(item.id));
-    logs.push({
-      date,
-      status: result.log.status,
-      responseSummary: result.log.responseSummary,
-      errorMessage: result.log.errorMessage || null,
-    });
-  }
+  const { syncEspnScoreboard } = await import('../espn_sync');
+  const result = await syncEspnScoreboard(db);
+  appendSyncLog({
+    ...result.log,
+    action: '同步进行中比赛比分',
+    requestSummary: `${result.log.requestSummary} [admin-live]`,
+  });
 
   ensureLifecycleForAllMatches();
   dbService.refreshBracketState();
@@ -1232,9 +1201,7 @@ router.post('/api/admin/sync/live-scores', async (req: Request, res: Response) =
 
   res.json({
     success: true,
-    dates: liveDates,
-    updatedMatches: Array.from(updatedMatches),
-    logs,
+    updatedMatches: result.updatedMatches.map((item) => item.id),
   });
 });
 
@@ -1244,17 +1211,11 @@ router.post('/api/admin/sync/matches/:id', async (req: Request, res: Response) =
   const match = db.matches.find((item) => item.id === req.params.id);
   if (!match) return res.status(404).json({ error: '比赛不存在。' });
 
-  const date = match.startTimeUtc.slice(0, 10);
-  const fixturesResult = await syncFixturesForDay({
-    apiKey: config.apiFootballKey,
-    date,
-    db,
-  });
-  const oddsResult = await syncOddsForMatches({
-    apiKey: config.theOddsApiKey,
-    db,
-    targetMatchId: match.id,
-  });
+  const { syncEspnScoreboard } = await import('../espn_sync');
+  const { syncSportteryOdds } = await import('../sporttery_sync');
+  const fixturesResult = await syncEspnScoreboard(db);
+  // 竞彩网是批量 API，调用后通过 updatedMatchIds 判断目标比赛是否被同步
+  const oddsResult = await syncSportteryOdds(db);
   appendSyncLog({
     ...fixturesResult.log,
     targetMatchId: match.id,
@@ -1270,14 +1231,13 @@ router.post('/api/admin/sync/matches/:id', async (req: Request, res: Response) =
     markOddsSynced();
   }
   ensureLifecycleForAllMatches();
-  [...fixturesResult.updatedMatches, ...fixturesResult.createdMatches].forEach((item) => markMatchAiStale(item.id));
+  fixturesResult.updatedMatches.forEach((item) => markMatchAiStale(item.id));
   oddsResult.updatedMatchIds.forEach((item) => markMatchAiStale(item));
   dbService.refreshBracketState();
   dbService.save();
   res.json({
     success: true,
     updatedMatch: serializeMatch(match),
-    fixturesCreated: fixturesResult.createdMatches.map((item) => item.id),
     oddsUpdated: oddsResult.updatedMatchIds.includes(match.id),
   });
 });
@@ -1286,14 +1246,11 @@ router.post('/api/admin/sync/matches/:id', async (req: Request, res: Response) =
 
 router.post('/api/admin/sync/odds', async (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
-  const cfg = getRuntimeConfig();
   const db = dbService.getData();
-  if (!cfg.theOddsApiKey) {
-    return res.status(400).json({ error: 'THE_ODDS_API_KEY 未配置。请在 .env 中设置。' });
-  }
 
   const startedAt = Date.now();
-  const result = await syncOddsForMatches({ apiKey: cfg.theOddsApiKey, db });
+  const { syncSportteryOdds } = await import('../sporttery_sync');
+  const result = await syncSportteryOdds(db);
   appendSyncLog(result.log);
   if (result.log.status !== 'FAILED') {
     markOddsSynced();
@@ -1776,9 +1733,8 @@ router.get('/api/admin/dashboard/featured-match', (req: Request, res: Response) 
   const awayTeam = db.teams.find((t) => t.id === match.awayTeamId);
   const odds = db.matchOdds[match.id] || null;
 
-  // 3. 数据源状态
-  const hasApiKey = hasProviderKey(config.apiFootballKey);
-  const isFallbackActive = !hasApiKey;
+  // 3. 数据源状态（ESPN 免费可用，无需 API Key）
+  const isFallbackActive = false;
   const scoreUnknown = Boolean((match as any).scoreUnknown);
 
   const providerMeta = match.providerMeta || {};
@@ -1800,9 +1756,6 @@ router.get('/api/admin/dashboard/featured-match', (req: Request, res: Response) 
 
   // 6. 运维建议
   const recommendations: string[] = [];
-  if (isFallbackActive) {
-    recommendations.push('API Key 未配置，系统以兜底模式运行，将根据时间自动推断比赛状态');
-  }
   if (scoreUnknown && match.status === 'FT') {
     recommendations.push('本场比赛已结束但比分未知(兜底标记)，建议手动录入比分后触发结算');
   }
@@ -1866,7 +1819,7 @@ router.get('/api/admin/dashboard/featured-match', (req: Request, res: Response) 
       isSettled: match.isSettled,
     },
     dataSource: {
-      apiFootballKeyConfigured: hasApiKey,
+      apiFootballKeyConfigured: true,
       isFallbackActive,
       fixturesLastSyncAt: providerMeta.lastFixturesSyncAt || null,
       fixturesLastSyncAge: formatAge(providerMeta.lastFixturesSyncAt),
@@ -1878,7 +1831,6 @@ router.get('/api/admin/dashboard/featured-match', (req: Request, res: Response) 
       oddsSyncStatus: odds?.syncStatus || null,
       oddsSourceLabel:
         odds?.source === 'The Odds API' ? 'The Odds API'
-        : odds?.source === 'API-Football' ? 'API-Football'
         : odds?.source === 'MANUAL' ? '本地手动/兜底'
         : '无数据',
       oddsSyncStatusLabel:
@@ -1892,7 +1844,7 @@ router.get('/api/admin/dashboard/featured-match', (req: Request, res: Response) 
     recommendations,
     severity:
       scoreUnknown && match.status === 'FT' ? 'critical'
-      : isFallbackActive || odds?.syncStatus === 'MANUAL_FALLBACK' ? 'warning'
+      : odds?.syncStatus === 'MANUAL_FALLBACK' ? 'warning'
       : 'normal',
   });
 });

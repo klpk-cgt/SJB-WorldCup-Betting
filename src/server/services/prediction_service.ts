@@ -63,6 +63,14 @@ export function placePrediction(params: PlacePredictionParams): PlacePredictionR
 
   const snapshot = resolveOddsSnapshot(matchId, market, optionKey);
   if (!snapshot) {
+    // 增强错误信息：检查 MatchOdds 状态给出更精确提示
+    const rawOdds = db.matchOdds[matchId];
+    if (rawOdds?.source === 'The Odds API') {
+      throw new Error('赔率源异常（仅竞彩网赔率可用），请稍后再试。');
+    }
+    if (rawOdds?.syncStatus === 'UNSYNCED') {
+      throw new Error('赔率待同步，请稍后再试。');
+    }
     throw new Error('当前没有可用指数，请稍后再试。');
   }
 

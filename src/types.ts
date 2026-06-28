@@ -107,7 +107,6 @@ export interface MatchEvent {
 }
 
 export interface MatchProviderMeta {
-  apiFootballFixtureId?: number;
   espnEventId?: string;
   oddsEventId?: string;
   lastFixturesSyncAt?: string;
@@ -200,7 +199,7 @@ export interface MatchOdds {
     awayQualify: number;
   };
   lastUpdated: string;
-  source?: 'API-Football' | 'The Odds API' | 'MANUAL' | 'Sporttery';
+  source?: 'The Odds API' | 'MANUAL' | 'Sporttery';
   syncStatus?: 'SYNCED' | 'PARTIAL' | 'MANUAL_FALLBACK' | 'FAILED' | 'UNSYNCED';
   lastSyncedAt?: string;
   correctScoreSource?: 'MANUAL' | 'INFERRED_FROM_H2H' | 'THIRD_PARTY' | 'SPORTTERY';
@@ -328,7 +327,7 @@ export interface OddsSnapshotRecord {
   optionLabel: string;
   oddsDecimal: number;
   capturedAt: string;
-  source: 'API-Football' | 'The Odds API' | 'MANUAL' | 'LOCAL';
+  source: 'The Odds API' | 'MANUAL' | 'LOCAL' | 'Sporttery';
 }
 
 export interface Prediction {
@@ -562,7 +561,7 @@ export interface ShareCardRecord {
   debugMeta?: Record<string, string | number | boolean | null>;
 }
 
-export type SyncProvider = 'API-Football' | 'The Odds API' | 'DeepSeek' | 'Mimo' | 'Gemini' | 'Local' | 'Sporttery' | 'ESPN';
+export type SyncProvider = 'The Odds API' | 'DeepSeek' | 'Mimo' | 'Gemini' | 'Local' | 'Sporttery' | 'ESPN';
 export type SyncStatus = 'SUCCESS' | 'FAILED' | 'PARTIAL';
 export type SyncType = 'fixtures' | 'livescore' | 'lineups' | 'events' | 'odds' | 'ai' | 'standings' | 'schedule';
 

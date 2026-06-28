@@ -475,12 +475,13 @@ export function serializeMatch(match: Match) {
   const awayTeam = db.teams.find((team) => team.id === match.awayTeamId) || seedTeamMap.get(match.awayTeamId);
   const rawOdds = db.matchOdds[match.id] || null;
   // 合并完整比分选项，确保前端拿到所有32个选项
+  // 防御性：The Odds API 来源的赔率强制标记为 INFERRED_FROM_H2H（前端展示"赔率待确认"badge）
   const odds = rawOdds
     ? {
         ...rawOdds,
         correctScoreSource:
           rawOdds.correctScoreSource ||
-          (rawOdds.source === 'The Odds API' ? 'INFERRED_FROM_H2H' : 'MANUAL'),
+          (rawOdds.source === 'The Odds API' || rawOdds.source === 'The Odds API ' ? 'INFERRED_FROM_H2H' : 'MANUAL'),
         correctScore: mergeCorrectScoreOdds(rawOdds.correctScore).map(({ score, odds }) => ({ score, odds })),
       }
     : null;
@@ -643,6 +644,8 @@ export function resolveOddsSnapshot(matchId: string, market: Prediction['market'
   if (!odds) return null;
   // UNSYNCED 表示赔率尚未同步，禁止下注（避免用占位赔率结算）
   if (odds.syncStatus === 'UNSYNCED') return null;
+  // 防御性：拒绝 The Odds API 来源赔率（历史残留），仅允许 Sporttery 或 MANUAL 来源下注
+  if (odds.source === 'The Odds API') return null;
 
   const marketUpper = normalizePredictionMarket(market);
   if (!marketUpper) return null;
@@ -797,12 +800,12 @@ export async function autoSettleFinishedMatches(db: ReturnType<typeof dbService.
       });
       continue;
     }
-    // 比赛开始后至少等待2.5小时才结算
-    // 确保API-Football有足够时间同步真实比分，防止 backfill 占位比分被立即结算
+    // 比赛开始后至少等待10分钟才结算
+    // ESPN 提供实时比分，缩短冷却期加快结算速度
     const matchStartTime = new Date(match.startTimeUtc).getTime();
     const elapsedSinceStart = now - matchStartTime;
-    if (elapsedSinceStart < 2.5 * 60 * 60 * 1000) {
-      logger.info(`[AutoSettle] 跳过：开赛后不足2.5小时冷却期: ${match.id}`, {
+    if (elapsedSinceStart < 10 * 60 * 1000) {
+      logger.info(`[AutoSettle] 跳过：开赛后不足10分钟冷却期: ${match.id}`, {
         matchId: match.id,
         startTimeUtc: match.startTimeUtc,
         elapsedMs: elapsedSinceStart,
@@ -830,113 +833,10 @@ export async function autoSettleFinishedMatches(db: ReturnType<typeof dbService.
   return settledCount;
 }
 
-// ─── Scheduled Maintenance ───
-
-let lastScheduledSyncAt = 0;
-let lastLiveMatchSyncAt = 0;
-let scheduledSyncRunning = false;
-
 export function ensureLifecycleForAllMatches() {
   const db = dbService.getData();
   for (const match of db.matches) {
     applyLifecycleUpdates(match, config.predictionLockMinutes);
-  }
-}
-
-export async function runScheduledMaintenance(forceSync = false) {
-  ensureLifecycleForAllMatches();
-  const db = dbService.getData();
-  let changed = false;
-  const now = Date.now();
-
-  for (const match of db.matches) {
-    if (
-      deriveOperationalStatus(match, Date.now(), config.predictionLockMinutes) === 'WAITING_SETTLEMENT' &&
-      !match.isSettled &&
-      FINISHED_MATCH_STATUSES.has(match.status)
-    ) {
-      try {
-        await settleMatch(match);
-        changed = true;
-      } catch (error) {
-        console.error('Auto settlement failed', error);
-      }
-    }
-  }
-
-  const shouldRunSync =
-    forceSync || now - lastScheduledSyncAt >= config.syncIntervalMinutes * 60 * 1000;
-  if (shouldRunSync && !scheduledSyncRunning) {
-    scheduledSyncRunning = true;
-    try {
-      const { syncFixturesForDateWindow, syncOddsForMatches } = await import('./sync');
-      const fixturesResult = await syncFixturesForDateWindow({
-        apiKey: config.apiFootballKey,
-        db,
-      });
-      appendSyncLog(fixturesResult.log);
-
-      const oddsResult = await syncOddsForMatches({
-        apiKey: config.theOddsApiKey,
-        db,
-      });
-      appendSyncLog(oddsResult.log);
-
-      [...fixturesResult.updatedMatches, ...fixturesResult.createdMatches].forEach((item) => markMatchAiStale(item.id));
-      oddsResult.updatedMatchIds?.forEach((item) => markMatchAiStale(item));
-      dbService.refreshBracketState();
-
-      lastScheduledSyncAt = Date.now();
-      lastLiveMatchSyncAt = lastScheduledSyncAt;
-      changed = true;
-    } finally {
-      scheduledSyncRunning = false;
-    }
-  }
-
-  const liveMatchDates = Array.from(
-    new Set(
-      db.matches
-        .filter((match) => match.status === MatchStatus.LIVE || match.status === MatchStatus.HT)
-        .map((match) => match.startTimeUtc.slice(0, 10)),
-    ),
-  );
-  const shouldRunLiveSync =
-    liveMatchDates.length > 0 &&
-    !scheduledSyncRunning &&
-    (forceSync || now - lastLiveMatchSyncAt >= 60 * 1000);
-
-  if (shouldRunLiveSync) {
-    scheduledSyncRunning = true;
-    try {
-      const { syncFixturesForDay } = await import('./sync');
-      for (const date of liveMatchDates) {
-        const fixturesResult = await syncFixturesForDay({
-          apiKey: config.apiFootballKey,
-          date,
-          db,
-        });
-        appendSyncLog({
-          ...fixturesResult.log,
-          action: '同步进行中比赛的实时比分',
-          requestSummary: `${fixturesResult.log.requestSummary} [live-1m]`,
-        });
-        [...fixturesResult.updatedMatches, ...fixturesResult.createdMatches].forEach((item) => markMatchAiStale(item.id));
-        if (fixturesResult.updatedMatches.length > 0 || fixturesResult.createdMatches.length > 0) {
-          changed = true;
-        }
-      }
-      if (changed) {
-        dbService.refreshBracketState();
-      }
-      lastLiveMatchSyncAt = Date.now();
-    } finally {
-      scheduledSyncRunning = false;
-    }
-  }
-
-  if (changed) {
-    dbService.save();
   }
 }
 
@@ -945,7 +845,7 @@ export async function runScheduledMaintenance(forceSync = false) {
 export function getIntegrationStatusPayload() {
   const db = dbService.getData();
   const providerConfig = summarizeProviderConfig(config);
-  const fixtureLog = getLatestSyncLog('fixtures', 'API-Football');
+  const fixtureLog = getLatestSyncLog('fixtures', 'ESPN');
   const oddsLog = getLatestSyncLog('odds', 'The Odds API');
   const aiLog = getLatestSyncLog('ai');
   const syncedOddsCount = Object.values(db.matchOdds).filter((odds) => odds.source === 'The Odds API').length;
@@ -1066,7 +966,7 @@ export function getSystemStatusPayload() {
     },
     sync: {
       latest: latestSyncLog,
-      latestFixtures: getLatestSyncLog('fixtures', 'API-Football') || null,
+      latestFixtures: getLatestSyncLog('fixtures', 'ESPN') || null,
       latestOdds: getLatestSyncLog('odds', 'The Odds API') || null,
     },
     odds: {

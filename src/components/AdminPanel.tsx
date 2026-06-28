@@ -1461,9 +1461,9 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
                     <div className="text-[11px] font-black text-slate-700 mb-3">📡 数据源状态</div>
                     <div className="space-y-2">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-500">API-Football Key</span>
-                        <span className={`font-bold ${featuredMatchData.dataSource.apiFootballKeyConfigured ? 'text-emerald-600' : 'text-amber-600'}`}>
-                          {featuredMatchData.dataSource.apiFootballKeyConfigured ? '✅ 已配置' : '⚠️ 未配置'}
+                        <span className="text-slate-500">ESPN 数据源</span>
+                        <span className="font-bold text-emerald-600">
+                          ✅ 免费可用
                         </span>
                       </div>
                       <div className="flex items-center justify-between text-xs">

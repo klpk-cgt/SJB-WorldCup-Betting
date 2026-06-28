@@ -319,15 +319,13 @@ export default function MatchDetailPage({
                             : 'bg-slate-100 text-slate-600 ring-slate-200'
                       }`}
                     >
-                      赔率来源：{(match as any).oddsSource === 'API-Football'
-                        ? 'API-Football'
-                        : (match as any).oddsSource === 'The Odds API'
-                          ? 'The Odds API'
-                          : (match as any).oddsSource === 'Sporttery'
-                            ? '体彩网'
-                            : (match as any).oddsSource === 'MANUAL'
-                              ? '人工录入'
-                              : (match as any).oddsSource}
+                      赔率来源：{(match as any).oddsSource === 'The Odds API'
+                        ? 'The Odds API'
+                        : (match as any).oddsSource === 'Sporttery'
+                          ? '体彩网'
+                          : (match as any).oddsSource === 'MANUAL'
+                            ? '人工录入'
+                            : (match as any).oddsSource}
                       {(match as any).oddsLastSyncedAt
                         ? ` · ${formatDate((match as any).oddsLastSyncedAt)}`
                         : ''}

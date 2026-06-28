@@ -172,7 +172,6 @@ export async function generateStructuredAiContent(params:
           aiEnableWebSearch: false,
           aiEnableMultimodal: false,
           aiCacheTtlMinutes: 30,
-          apiFootballKey: '',
           theOddsApiKey: '',
           deepSeekModel: 'deepseek-chat',
           geminiTextModel: DEFAULT_GEMINI_MODEL,
