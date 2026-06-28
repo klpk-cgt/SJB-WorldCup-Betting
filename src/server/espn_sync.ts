@@ -5,7 +5,7 @@
  */
 
 import { DatabaseSchema } from '../db/db_service';
-import { Match, MatchStatus, StandingTeamRow, SyncLog, SyncProvider, SyncStatus, SyncType, WorldCupStandings } from '../types';
+import { Match, MatchEvent, MatchLineupSide, MatchStatistics, MatchStatus, StandingTeamRow, SyncLog, SyncProvider, SyncStatus, SyncType, WorldCupStandings } from '../types';
 import { broadcastScoreUpdate } from './websocket';
 import { resolveTeamByExternalName } from './sync';
 import { logger } from './logger';
@@ -13,6 +13,8 @@ import { logger } from './logger';
 const ESPN_API_TIMEOUT_MS = 15_000;
 const ESPN_SCOREBOARD_URL = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard';
 const ESPN_STANDINGS_URL = 'https://site.web.api.espn.com/apis/v2/sports/soccer/fifa.world/standings';
+const ESPN_SUMMARY_URL = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/summary';
+const ESPN_BRACKET_URL = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/tournament/bracket';
 // 2026 世界杯赛程日期范围（覆盖整个赛事周期）
 const WC_DATE_RANGE = '20260611-20260721';
 
@@ -56,6 +58,72 @@ interface EspnStandingsGroup {
 
 interface EspnStandingsPayload {
   children?: EspnStandingsGroup[];
+}
+
+interface EspnStatistic {
+  name: string;
+  displayValue: string;
+  label?: string;
+}
+
+interface EspnBoxscoreTeam {
+  team?: { id?: string; displayName?: string; abbreviation?: string };
+  statistics?: EspnStatistic[];
+}
+
+interface EspnSummaryPayload {
+  boxscore?: {
+    teams?: EspnBoxscoreTeam[];
+  };
+  rosters?: Array<{
+    team?: { id?: string; displayName?: string; abbreviation?: string };
+    formation?: string;
+    coach?: { displayName?: string };
+    lineup?: Array<{
+      athlete?: { id?: string; displayName?: string; jersey?: string };
+      position?: { displayName?: string; abbreviation?: string };
+      formationPlace?: number;
+    }>;
+    reserve?: Array<{
+      athlete?: { id?: string; displayName?: string; jersey?: string };
+      position?: { displayName?: string; abbreviation?: string };
+    }>;
+  }>;
+  keyEvents?: Array<{
+    id?: string;
+    type?: { text?: string };
+    clock?: { displayValue?: string };
+    team?: { id?: string; abbreviation?: string };
+    athletesInvolved?: Array<{ id?: string; displayName?: string; jersey?: string }>;
+    text?: string;
+  }>;
+}
+
+interface EspnBracketMatchup {
+  id?: string;
+  name?: string;
+  date?: string;
+  homeTeam?: { id?: string; abbreviation?: string; displayName?: string; seed?: number };
+  awayTeam?: { id?: string; abbreviation?: string; displayName?: string; seed?: number };
+  homeScore?: number | null;
+  awayScore?: number | null;
+  winner?: { id?: string; abbreviation?: string } | null;
+  homeWinnerTo?: { round?: number; matchupId?: string; slot?: string } | null;
+  awayWinnerTo?: { round?: number; matchupId?: string; slot?: string } | null;
+}
+
+interface EspnBracketRound {
+  round?: number;
+  label?: string;
+  matchups?: EspnBracketMatchup[];
+}
+
+interface EspnBracketPayload {
+  content?: {
+    bracket?: {
+      rounds?: EspnBracketRound[];
+    };
+  };
 }
 
 async function fetchEspn(url: string): Promise<Response> {
@@ -132,7 +200,110 @@ function extractGroupKey(groupName?: string): string {
 }
 
 /**
- * 同步赛程/比分/状态（替代 API-Football 的 syncFixturesForDateWindow + syncFixturesForDay）
+ * 根据日期推断淘汰赛阶段
+ */
+function inferKnockoutStage(date: string): Match['stage'] {
+  const d = new Date(date + 'T00:00:00Z');
+  if (d < new Date('2026-06-29T00:00:00Z')) return 'Round of 32';
+  if (d < new Date('2026-07-05T00:00:00Z')) return 'Round of 32';
+  if (d < new Date('2026-07-10T00:00:00Z')) return 'Round of 16';
+  if (d < new Date('2026-07-15T00:00:00Z')) return 'Quarter-finals';
+  if (d < new Date('2026-07-19T00:00:00Z')) return 'Semi-finals';
+  if (d < new Date('2026-07-20T00:00:00Z')) return 'Third-place play-off';
+  return 'Final';
+}
+
+/**
+ * 尝试用 ESPN 数据替换 TBD 淘汰赛种子比赛或创建新比赛
+ * 逻辑与 sporttery_sync.ts 的 tryCreateOrUpdateKnockoutMatch 保持一致
+ */
+function tryReplaceOrCreateKnockoutFromEspn(
+  db: DatabaseSchema,
+  event: EspnEvent,
+  homeTeamId: string,
+  awayTeamId: string,
+): Match | null {
+  const eventDateStr = (event.date || '').slice(0, 10);
+  if (!eventDateStr) return null;
+
+  // 小时级匹配：避免同一天的多场 TBD 种子被错误替换
+  // event.date 格式: '2026-07-03T22:00Z'，startTimeUtc 格式: '2026-07-03T22:00:00.000Z'
+  // slice(0, 13) 提取 'YYYY-MM-DDTHH'，允许分钟差异但要求小时匹配
+  const eventHour = (event.date || '').slice(0, 13);
+  const dateMatches = (m: Match): boolean => {
+    const utcHour = (m.startTimeUtc || '').slice(0, 13);
+    return utcHour === eventHour;
+  };
+
+  // 0. 已存在相同队伍+日期的比赛则跳过（避免重复）
+  const existing = db.matches.find(
+    (m) =>
+      m.homeTeamId === homeTeamId &&
+      m.awayTeamId === awayTeamId &&
+      dateMatches(m),
+  );
+  if (existing) return existing;
+
+  // 1. 查找同日期的未替换 TBD 淘汰赛种子比赛
+  const tbdSeed = db.matches.find(
+    (m) =>
+      m.homeTeamId === 'TBD' &&
+      m.awayTeamId === 'TBD' &&
+      m.stage !== 'Group Stage' &&
+      dateMatches(m),
+  );
+
+  if (tbdSeed) {
+    tbdSeed.homeTeamId = homeTeamId;
+    tbdSeed.awayTeamId = awayTeamId;
+    tbdSeed.operationalStatus = 'UNSYNCED';
+    logger.info('[ESPN] Replaced TBD seed match', {
+      matchId: tbdSeed.id,
+      stage: tbdSeed.stage,
+    });
+    return tbdSeed;
+  }
+
+  // 2. 创建新比赛记录
+  const stage = inferKnockoutStage(eventDateStr);
+  const roundNameMap: Record<string, string> = {
+    'Round of 32': '1/32决赛',
+    'Round of 16': '1/16决赛',
+    'Quarter-finals': '1/4决赛',
+    'Semi-finals': '半决赛',
+    'Third-place play-off': '季军赛',
+    'Final': '决赛',
+  };
+
+  const newMatch: Match = {
+    id: `fx-espn-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    homeTeamId,
+    awayTeamId,
+    stage,
+    roundName: roundNameMap[stage] || stage,
+    venueName: '',
+    venueCity: '',
+    startTimeUtc: event.date ? new Date(event.date).toISOString() : `${eventDateStr}T00:00:00.000Z`,
+    startTimeBeijing: `${eventDateStr}T08:00:00+08:00`,
+    status: 'NS' as Match['status'],
+    isOddsFrozen: false,
+    isPredictionLocked: false,
+    isSettled: false,
+    autoLockAt: `${eventDateStr}T00:00:00.000Z`,
+    operationalStatus: 'UNSYNCED',
+    settlementStatus: 'PENDING',
+  };
+
+  db.matches.push(newMatch);
+  logger.info('[ESPN] Created knockout match', {
+    matchId: newMatch.id,
+    stage,
+  });
+  return newMatch;
+}
+
+/**
+ * 同步赛程/比分/状态（ESPN scoreboard 端点）
  */
 export async function syncEspnScoreboard(db: DatabaseSchema): Promise<{
   updatedMatches: Match[];
@@ -167,6 +338,7 @@ export async function syncEspnScoreboard(db: DatabaseSchema): Promise<{
 
     const updatedMatches: Match[] = [];
     let unmatchedTeams = 0;
+    let createdKnockout = 0;
 
     for (const event of events) {
       const competition = event.competitions?.[0];
@@ -185,25 +357,36 @@ export async function syncEspnScoreboard(db: DatabaseSchema): Promise<{
         continue;
       }
 
-      // 匹配本地比赛：优先 espnEventId → 队伍+日期
+      // 匹配本地比赛：优先 espnEventId（即使日期不一致也接受，并同步更新 startTimeUtc）→ 队伍+日期 → TBD种子替换 → 仅队伍降级
       const eventDate = event.date || '';
       const eventDateStr = eventDate.slice(0, 10);
       let localMatch =
-        db.matches.find((m) => m.providerMeta?.espnEventId === event.id) ||
+        db.matches.find(
+          (m) => m.providerMeta?.espnEventId === event.id,
+        ) ||
         db.matches.find(
           (m) =>
             m.homeTeamId === homeTeam.id &&
             m.awayTeamId === awayTeam.id &&
             m.startTimeUtc.slice(0, 10) === eventDateStr,
-        ) ||
-        db.matches.find(
-          (m) => m.homeTeamId === homeTeam.id && m.awayTeamId === awayTeam.id,
         );
 
+      // 如果没有精确匹配，先尝试替换 TBD 种子（避免 TBD 种子遗留）
       if (!localMatch) {
-        // ESPN 返回的比赛在本地不存在，跳过（不自动创建，保持本地种子数据为准）
-        continue;
+        localMatch = tryReplaceOrCreateKnockoutFromEspn(db, event, homeTeam.id, awayTeam.id);
+        if (localMatch) {
+          createdKnockout++;
+        }
       }
+
+      // 最后降级到仅队伍匹配（可能日期被ESPN更新过）
+      if (!localMatch) {
+        localMatch = db.matches.find(
+          (m) => m.homeTeamId === homeTeam.id && m.awayTeamId === awayTeam.id,
+        );
+      }
+
+      if (!localMatch) continue;
 
       const newStatus = mapEspnStatus(event.status?.type?.state, event.status?.type?.shortDetail);
       const newHomeScore = parseScore(homeComp.score);
@@ -219,6 +402,16 @@ export async function syncEspnScoreboard(db: DatabaseSchema): Promise<{
         espnEventId: event.id,
         lastFixturesSyncAt: new Date().toISOString(),
       };
+
+      // 同步 startTimeUtc：如果本地日期与 ESPN 不一致（可能之前同步错误导致），用 ESPN 的时间修正
+      if (eventDate && localMatch.startTimeUtc.slice(0, 10) !== eventDateStr) {
+        logger.info('[ESPN] Correcting startTimeUtc mismatch', {
+          matchId: localMatch.id,
+          oldTime: localMatch.startTimeUtc,
+          newTime: eventDate,
+        });
+        localMatch.startTimeUtc = new Date(eventDate).toISOString();
+      }
 
       localMatch.status = newStatus;
       if (newHomeScore !== undefined) localMatch.homeScore = newHomeScore;
@@ -252,7 +445,7 @@ export async function syncEspnScoreboard(db: DatabaseSchema): Promise<{
         syncType: 'fixtures',
         status: updatedMatches.length > 0 ? 'SUCCESS' : 'PARTIAL',
         requestSummary: `GET scoreboard?dates=${WC_DATE_RANGE}`,
-        responseSummary: `共获取${events.length}场赛事，更新${updatedMatches.length}场，未匹配队伍${unmatchedTeams}支`,
+        responseSummary: `共获取${events.length}场赛事，更新${updatedMatches.length}场，新建淘汰赛${createdKnockout}场，未匹配队伍${unmatchedTeams}支`,
         startedAt,
       }),
     };
@@ -362,5 +555,415 @@ export async function syncEspnStandings(db: DatabaseSchema): Promise<{
     const errMsg = error instanceof Error ? error.message : String(error);
     logger.admin('[ESPN] Standings sync failed', { error: errMsg });
     return { synced: false, groupCount: 0, source: 'ESPN', error: errMsg };
+  }
+}
+
+/**
+ * 从 statistics 数组中按 name 查找 displayValue
+ */
+function getStatValue(stats: EspnStatistic[] | undefined, name: string): string | undefined {
+  return stats?.find((s) => s.name === name)?.displayValue;
+}
+
+/**
+ * 将 displayValue 解析为数字（容错）
+ */
+function parseStatNumber(value: string | undefined): number {
+  if (!value) return 0;
+  const num = parseFloat(value);
+  return isNaN(num) ? 0 : num;
+}
+
+/**
+ * 将 ESPN keyEvents 类型文本映射到本地 MatchEvent 类型
+ */
+function mapEventType(text?: string): MatchEvent['type'] | null {
+  if (!text) return null;
+  const lower = text.toLowerCase();
+  if (lower.includes('goal')) return 'GOAL';
+  if (lower.includes('yellow')) return 'YELLOW_CARD';
+  if (lower.includes('red')) return 'RED_CARD';
+  if (lower.includes('substitution') || lower.includes('sub')) return 'SUBSTITUTION';
+  if (lower.includes('penalty')) return 'PENALTY';
+  return null;
+}
+
+/**
+ * 从 clock.displayValue（如 "23'"）解析分钟数
+ */
+function parseMinute(displayValue?: string): number {
+  if (!displayValue) return 0;
+  const match = displayValue.match(/(\d+)/);
+  return match ? parseInt(match[1], 10) : 0;
+}
+
+/**
+ * 同步比赛摘要（statistics / lineups / events）
+ * 对已结束比赛一次性拉取 summary 端点
+ */
+export async function syncEspnSummary(
+  db: DatabaseSchema,
+  matchId: string,
+): Promise<{ updated: boolean; log: SyncLog }> {
+  const startedAt = new Date().toISOString();
+  const match = db.matches.find((m) => m.id === matchId);
+
+  if (!match) {
+    return {
+      updated: false,
+      log: buildLog({
+        source: 'ESPN',
+        action: '同步比赛摘要',
+        syncType: 'fixtures',
+        status: 'FAILED',
+        requestSummary: `summary matchId=${matchId}`,
+        responseSummary: '比赛未找到',
+        errorMessage: 'Match not found',
+        startedAt,
+      }),
+    };
+  }
+
+  const espnEventId = match.providerMeta?.espnEventId;
+  if (!espnEventId) {
+    return {
+      updated: false,
+      log: buildLog({
+        source: 'ESPN',
+        action: '同步比赛摘要',
+        syncType: 'fixtures',
+        status: 'PARTIAL',
+        requestSummary: `summary matchId=${matchId}`,
+        responseSummary: '无 espnEventId，无法拉取 summary',
+        startedAt,
+      }),
+    };
+  }
+
+  const url = `${ESPN_SUMMARY_URL}?event=${espnEventId}`;
+
+  try {
+    const response = await fetchEspn(url);
+    if (!response.ok) {
+      return {
+        updated: false,
+        log: buildLog({
+          source: 'ESPN',
+          action: '同步比赛摘要',
+          syncType: 'fixtures',
+          status: 'FAILED',
+          requestSummary: `GET summary?event=${espnEventId}`,
+          responseSummary: `HTTP ${response.status}`,
+          errorMessage: `ESPN summary API failed (${response.status})`,
+          startedAt,
+        }),
+      };
+    }
+
+    const payload = (await response.json()) as EspnSummaryPayload;
+    const teams = payload.boxscore?.teams || [];
+
+    // 用 abbreviation 匹配本地队伍（与 scoreboard 逻辑一致）
+    const homeTeam = db.teams.find((t) => t.id === match.homeTeamId);
+    const awayTeam = db.teams.find((t) => t.id === match.awayTeamId);
+
+    const homeStats = teams.find(
+      (t) => t.team?.abbreviation === homeTeam?.code || t.team?.abbreviation === match.homeTeamId,
+    );
+    const awayStats = teams.find(
+      (t) => t.team?.abbreviation === awayTeam?.code || t.team?.abbreviation === match.awayTeamId,
+    );
+
+    let updatedFields: string[] = [];
+
+    // 1. 填充 statistics
+    if (homeStats?.statistics || awayStats?.statistics) {
+      const possessionHome = getStatValue(homeStats?.statistics, 'possessionPct');
+      const possessionAway = getStatValue(awayStats?.statistics, 'possessionPct');
+
+      match.statistics = {
+        ballPossession: {
+          home: possessionHome ? `${possessionHome}%` : '-',
+          away: possessionAway ? `${possessionAway}%` : '-',
+        },
+        shotsOnGoal: {
+          home: parseStatNumber(getStatValue(homeStats?.statistics, 'shotsOnTarget')),
+          away: parseStatNumber(getStatValue(awayStats?.statistics, 'shotsOnTarget')),
+        },
+        fouls: {
+          home: parseStatNumber(getStatValue(homeStats?.statistics, 'foulsCommitted')),
+          away: parseStatNumber(getStatValue(awayStats?.statistics, 'foulsCommitted')),
+        },
+        cornerKicks: {
+          home: parseStatNumber(getStatValue(homeStats?.statistics, 'wonCorners')),
+          away: parseStatNumber(getStatValue(awayStats?.statistics, 'wonCorners')),
+        },
+      } satisfies MatchStatistics;
+      updatedFields.push('statistics');
+    }
+
+    // 2. 填充 lineups（若 summary 返回 rosters）
+    if (payload.rosters && payload.rosters.length >= 2) {
+      const buildLineupSide = (roster: (typeof payload.rosters)[number]): MatchLineupSide => ({
+        formation: roster.formation || '',
+        coach: roster.coach?.displayName || '',
+        starting: (roster.lineup || []).map((p) => ({
+          number: parseInt(p.athlete?.jersey || '0', 10),
+          name: p.athlete?.displayName || '',
+          position: p.position?.displayName || p.position?.abbreviation || '',
+        })),
+        substitutes: (roster.reserve || []).map((p) => ({
+          number: parseInt(p.athlete?.jersey || '0', 10),
+          name: p.athlete?.displayName || '',
+          position: p.position?.displayName || p.position?.abbreviation || '',
+        })),
+      });
+
+      const homeRoster = payload.rosters.find(
+        (r) => r.team?.abbreviation === homeTeam?.code || r.team?.abbreviation === match.homeTeamId,
+      ) || payload.rosters[0];
+      const awayRoster = payload.rosters.find(
+        (r) => r.team?.abbreviation === awayTeam?.code || r.team?.abbreviation === match.awayTeamId,
+      ) || payload.rosters[1];
+
+      if (homeRoster && awayRoster) {
+        match.lineups = {
+          home: buildLineupSide(homeRoster),
+          away: buildLineupSide(awayRoster),
+        };
+        updatedFields.push('lineups');
+      }
+    }
+
+    // 3. 填充 events（若 summary 返回 keyEvents）
+    if (payload.keyEvents && payload.keyEvents.length > 0) {
+      const events: MatchEvent[] = [];
+      for (const ke of payload.keyEvents) {
+        const type = mapEventType(ke.type?.text);
+        if (!type) continue;
+
+        const teamAbbrev = ke.team?.abbreviation;
+        const team = db.teams.find((t) => t.code === teamAbbrev);
+        const teamId = team?.id || teamAbbrev || '';
+
+        const athlete = ke.athletesInvolved?.[0];
+        events.push({
+          type,
+          minute: parseMinute(ke.clock?.displayValue),
+          teamId,
+          playerName: athlete?.displayName || '',
+          detail: ke.text,
+        });
+      }
+
+      if (events.length > 0) {
+        match.events = events;
+        updatedFields.push('events');
+      }
+    }
+
+    logger.info('[ESPN] Summary synced', {
+      matchId,
+      fields: updatedFields.join(','),
+    });
+
+    return {
+      updated: true,
+      log: buildLog({
+        source: 'ESPN',
+        action: '同步比赛摘要',
+        syncType: 'fixtures',
+        status: 'SUCCESS',
+        requestSummary: `GET summary?event=${espnEventId}`,
+        responseSummary: `更新字段: ${updatedFields.join(', ') || '无'}`,
+        startedAt,
+      }),
+    };
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    logger.error('[ESPN] Summary sync failed', { error: errMsg, matchId });
+    return {
+      updated: false,
+      log: buildLog({
+        source: 'ESPN',
+        action: '同步比赛摘要',
+        syncType: 'fixtures',
+        status: 'FAILED',
+        requestSummary: `GET summary?event=${espnEventId}`,
+        responseSummary: '请求失败',
+        errorMessage: errMsg,
+        startedAt,
+      }),
+    };
+  }
+}
+
+/**
+ * 同步淘汰赛对阵图（bracket 端点）
+ * 小组赛阶段返回 404，淘汰赛开始后自动生效
+ * 用于双校验本地 buildBracketState 和填充 nextMatchId 晋级链接
+ */
+export async function syncEspnBracket(
+  db: DatabaseSchema,
+): Promise<{ synced: boolean; error?: string; log: SyncLog }> {
+  const startedAt = new Date().toISOString();
+
+  try {
+    const response = await fetchEspn(ESPN_BRACKET_URL);
+
+    // 小组赛阶段返回 404，属正常情况
+    if (response.status === 404) {
+      return {
+        synced: false,
+        error: 'bracket 端点暂未开放（淘汰赛未开始）',
+        log: buildLog({
+          source: 'ESPN',
+          action: '同步淘汰赛对阵图',
+          syncType: 'fixtures',
+          status: 'PARTIAL',
+          requestSummary: 'GET tournament/bracket',
+          responseSummary: '淘汰赛未开始，bracket 端点返回 404',
+          startedAt,
+        }),
+      };
+    }
+
+    if (!response.ok) {
+      return {
+        synced: false,
+        error: `HTTP ${response.status}`,
+        log: buildLog({
+          source: 'ESPN',
+          action: '同步淘汰赛对阵图',
+          syncType: 'fixtures',
+          status: 'FAILED',
+          requestSummary: 'GET tournament/bracket',
+          responseSummary: `HTTP ${response.status}`,
+          errorMessage: `ESPN bracket API failed (${response.status})`,
+          startedAt,
+        }),
+      };
+    }
+
+    const payload = (await response.json()) as EspnBracketPayload;
+    const rounds = payload.content?.bracket?.rounds || [];
+
+    if (rounds.length === 0) {
+      return {
+        synced: false,
+        error: 'bracket 数据为空',
+        log: buildLog({
+          source: 'ESPN',
+          action: '同步淘汰赛对阵图',
+          syncType: 'fixtures',
+          status: 'PARTIAL',
+          requestSummary: 'GET tournament/bracket',
+          responseSummary: 'bracket rounds 为空',
+          startedAt,
+        }),
+      };
+    }
+
+    let doubleChecked = 0;
+    let tbdReplaced = 0;
+
+    // 遍历 rounds[].matchups[]，双校验本地比赛
+    for (const round of rounds) {
+      for (const matchup of round.matchups || []) {
+        const homeAbbrev = matchup.homeTeam?.abbreviation;
+        const awayAbbrev = matchup.awayTeam?.abbreviation;
+
+        if (!homeAbbrev || !awayAbbrev) continue;
+
+        // 用 abbreviation 匹配本地队伍
+        const homeTeam = resolveTeamByExternalName(db, homeAbbrev);
+        const awayTeam = resolveTeamByExternalName(db, awayAbbrev);
+
+        if (!homeTeam || !awayTeam) continue;
+
+        // 查找本地比赛（按队伍+日期）
+        const matchupDate = matchup.date ? matchup.date.slice(0, 10) : '';
+        const localMatch = db.matches.find(
+          (m) =>
+            m.homeTeamId === homeTeam.id &&
+            m.awayTeamId === awayTeam.id &&
+            (!matchupDate || m.startTimeUtc.slice(0, 10) === matchupDate),
+        );
+
+        if (localMatch) {
+          // 双校验：更新比分和状态
+          if (matchup.homeScore != null && matchup.awayScore != null) {
+            if (localMatch.homeScore !== matchup.homeScore) {
+              localMatch.homeScore = matchup.homeScore;
+              doubleChecked++;
+            }
+            if (localMatch.awayScore !== matchup.awayScore) {
+              localMatch.awayScore = matchup.awayScore;
+              doubleChecked++;
+            }
+          }
+        } else {
+          // 本地不存在，尝试替换 TBD 种子
+          const tbdSeed = db.matches.find(
+            (m) =>
+              m.homeTeamId === 'TBD' &&
+              m.awayTeamId === 'TBD' &&
+              m.stage !== 'Group Stage' &&
+              (!matchupDate ||
+                m.startTimeUtc.slice(0, 10) === matchupDate ||
+                (m.startTimeBeijing || '').slice(0, 10) === matchupDate),
+          );
+
+          if (tbdSeed) {
+            tbdSeed.homeTeamId = homeTeam.id;
+            tbdSeed.awayTeamId = awayTeam.id;
+            tbdSeed.operationalStatus = 'UNSYNCED';
+            tbdReplaced++;
+            logger.info('[ESPN Bracket] Replaced TBD seed', {
+              matchId: tbdSeed.id,
+              stage: tbdSeed.stage,
+              home: homeTeam.code,
+              away: awayTeam.code,
+            });
+          }
+        }
+      }
+    }
+
+    logger.admin('[ESPN] Bracket synced', {
+      rounds: rounds.length,
+      doubleChecked,
+      tbdReplaced,
+    });
+
+    return {
+      synced: true,
+      log: buildLog({
+        source: 'ESPN',
+        action: '同步淘汰赛对阵图',
+        syncType: 'fixtures',
+        status: 'SUCCESS',
+        requestSummary: 'GET tournament/bracket',
+        responseSummary: `共${rounds.length}轮，双校验${doubleChecked}场，替换TBD${tbdReplaced}场`,
+        startedAt,
+      }),
+    };
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    logger.error('[ESPN] Bracket sync failed', { error: errMsg });
+    return {
+      synced: false,
+      error: errMsg,
+      log: buildLog({
+        source: 'ESPN',
+        action: '同步淘汰赛对阵图',
+        syncType: 'fixtures',
+        status: 'FAILED',
+        requestSummary: 'GET tournament/bracket',
+        responseSummary: '请求失败',
+        errorMessage: errMsg,
+        startedAt,
+      }),
+    };
   }
 }

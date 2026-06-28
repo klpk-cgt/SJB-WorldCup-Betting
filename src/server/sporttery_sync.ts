@@ -116,9 +116,133 @@ function matchByTeamCodes(
   return db.matches.find((m) => {
     if (m.homeTeamId !== homeTeam.id || m.awayTeamId !== awayTeam.id) return false;
     const utcDate = normalizeDate(m.startTimeUtc?.slice(0, 10) || '');
-    const beijingDate = normalizeDate(m.startTimeBeijing?.slice(0, 10) || '');
+    // startTimeBeijing 格式可能为 '2026/7/1 01:00:00'，slice(0,10) 会截断得到 '2026/7/1 0'，
+    // 用 split(' ')[0] 提取日期部分 '2026/7/1'
+    const beijingDateRaw = (m.startTimeBeijing || '').split(' ')[0] || '';
+    const beijingDate = normalizeDate(beijingDateRaw);
     return utcDate === normalizedApiDate || beijingDate === normalizedApiDate;
   }) || null;
+}
+
+/**
+ * 从竞彩网数据项解析本地队伍（代码优先，中文队名降级）
+ */
+function resolveTeamsFromItem(db: DatabaseSchema, item: SportteryMatchItem): { homeTeam: Team; awayTeam: Team } | null {
+  let homeTeam = db.teams.find((t) => t.code?.toUpperCase() === item.homeTeamCode.toUpperCase());
+  let awayTeam = db.teams.find((t) => t.code?.toUpperCase() === item.awayTeamCode.toUpperCase());
+
+  if (!homeTeam) homeTeam = db.teams.find((t) => t.nameZh === item.homeTeamAbbName || t.nameZh?.includes(item.homeTeamAbbName) || item.homeTeamAbbName?.includes(t.nameZh || ''));
+  if (!awayTeam) awayTeam = db.teams.find((t) => t.nameZh === item.awayTeamAbbName || t.nameZh?.includes(item.awayTeamAbbName) || item.awayTeamAbbName?.includes(t.nameZh || ''));
+
+  if (!homeTeam || !awayTeam) return null;
+  return { homeTeam, awayTeam };
+}
+
+/**
+ * 根据日期推断淘汰赛阶段
+ */
+function inferKnockoutStage(date: string): Match['stage'] {
+  const d = new Date(date + 'T00:00:00Z');
+  if (d < new Date('2026-06-29T00:00:00Z')) return 'Round of 32';
+  if (d < new Date('2026-07-05T00:00:00Z')) return 'Round of 32';
+  if (d < new Date('2026-07-10T00:00:00Z')) return 'Round of 16';
+  if (d < new Date('2026-07-15T00:00:00Z')) return 'Quarter-finals';
+  if (d < new Date('2026-07-19T00:00:00Z')) return 'Semi-finals';
+  if (d < new Date('2026-07-20T00:00:00Z')) return 'Third-place play-off';
+  return 'Final';
+}
+
+/**
+ * 尝试为淘汰赛建立比赛记录
+ * 1. 优先替换同日期的 TBD 种子比赛（保留预置时间/场地）
+ * 2. 找不到 TBD 种子比赛时创建新比赛记录
+ */
+function tryCreateOrUpdateKnockoutMatch(
+  db: DatabaseSchema,
+  item: SportteryMatchItem,
+  teams: { homeTeam: Team; awayTeam: Team },
+): Match | null {
+  const normalizedApiDate = normalizeDate(item.matchDate);
+
+  // 辅助：判断比赛日期是否匹配（同时兼容 UTC 日期和北京时间日期，因竞彩网返回的是北京时间日期）
+  const dateMatches = (m: Match): boolean => {
+    const utcDate = normalizeDate(m.startTimeUtc?.slice(0, 10) || '');
+    // startTimeBeijing 格式可能为 '2026/7/1 01:00:00'，slice(0,10) 会截断得到 '2026/7/1 0'，
+    // 用 split(' ')[0] 提取日期部分 '2026/7/1'
+    const bjDateRaw = (m.startTimeBeijing || '').split(' ')[0] || '';
+    const bjDate = normalizeDate(bjDateRaw);
+    return utcDate === normalizedApiDate || bjDate === normalizedApiDate;
+  };
+
+  // 0. 已存在相同队伍+日期的比赛则跳过（避免重复）
+  const existing = db.matches.find(
+    (m) =>
+      m.homeTeamId === teams.homeTeam.id &&
+      m.awayTeamId === teams.awayTeam.id &&
+      dateMatches(m),
+  );
+  if (existing) return existing;
+
+  // 1. 查找同日期的未替换 TBD 淘汰赛种子比赛
+  const tbdSeed = db.matches.find(
+    (m) =>
+      m.homeTeamId === 'TBD' &&
+      m.awayTeamId === 'TBD' &&
+      m.stage !== 'Group Stage' &&
+      dateMatches(m),
+  );
+
+  if (tbdSeed) {
+    tbdSeed.homeTeamId = teams.homeTeam.id;
+    tbdSeed.awayTeamId = teams.awayTeam.id;
+    tbdSeed.operationalStatus = 'UNSYNCED';
+    logger.admin('[Sporttery] Replaced TBD seed match', {
+      matchId: tbdSeed.id,
+      stage: tbdSeed.stage,
+      home: teams.homeTeam.nameZh,
+      away: teams.awayTeam.nameZh,
+    });
+    return tbdSeed;
+  }
+
+  // 2. 创建新比赛记录
+  const stage = inferKnockoutStage(normalizedApiDate);
+  const roundNameMap: Record<string, string> = {
+    'Round of 32': '1/32决赛',
+    'Round of 16': '1/16决赛',
+    'Quarter-finals': '1/4决赛',
+    'Semi-finals': '半决赛',
+    'Third-place play-off': '季军赛',
+    'Final': '决赛',
+  };
+
+  const newMatch: Match = {
+    id: createId('fx-st-'),
+    homeTeamId: teams.homeTeam.id,
+    awayTeamId: teams.awayTeam.id,
+    stage,
+    roundName: roundNameMap[stage] || stage,
+    venueName: '',
+    venueCity: '',
+    startTimeUtc: `${normalizedApiDate}T00:00:00.000Z`,
+    startTimeBeijing: `${normalizedApiDate}T08:00:00+08:00`,
+    status: 'NS' as Match['status'],
+    isOddsFrozen: false,
+    isPredictionLocked: false,
+    isSettled: false,
+    autoLockAt: `${normalizedApiDate}T00:00:00.000Z`,
+    operationalStatus: 'UNSYNCED',
+    settlementStatus: 'PENDING',
+  };
+
+  db.matches.push(newMatch);
+  logger.admin('[Sporttery] Created knockout match', {
+    matchId: newMatch.id,
+    stage,
+    home: teams.homeTeam.nameZh,
+    away: teams.awayTeam.nameZh,
+  });
+  return newMatch;
 }
 
 function buildLog(override: Partial<SyncLog>): Partial<SyncLog> {
@@ -182,20 +306,31 @@ export async function syncSportteryOdds(db: DatabaseSchema): Promise<SyncResult>
 
   let matched = 0;
   let unmatched = 0;
+  let createdKnockout = 0;
   const allMatchIds = db.matches.map((m) => m.id);
   const unsyncedSet = new Set(allMatchIds);
 
   for (const item of allMatches) {
-    const match = matchByTeamCodes(db, item.homeTeamCode, item.awayTeamCode, item.matchDate, item.homeTeamAbbName, item.awayTeamAbbName);
+    let match = matchByTeamCodes(db, item.homeTeamCode, item.awayTeamCode, item.matchDate, item.homeTeamAbbName, item.awayTeamAbbName);
     if (!match) {
-      unmatched++;
-      logger.admin('[Sporttery] Unmatched match', {
-        home: item.homeTeamCode,
-        away: item.awayTeamCode,
-        date: item.matchDate,
-        label: `${item.homeTeamAbbName} vs ${item.awayTeamAbbName}`,
-      });
-      continue;
+      // 未匹配：尝试为淘汰赛创建/替换比赛记录
+      const teams = resolveTeamsFromItem(db, item);
+      if (teams) {
+        match = tryCreateOrUpdateKnockoutMatch(db, item, teams);
+        if (match) {
+          createdKnockout++;
+        }
+      }
+      if (!match) {
+        unmatched++;
+        logger.admin('[Sporttery] Unmatched match', {
+          home: item.homeTeamCode,
+          away: item.awayTeamCode,
+          date: item.matchDate,
+          label: `${item.homeTeamAbbName} vs ${item.awayTeamAbbName}`,
+        });
+        continue;
+      }
     }
 
     unsyncedSet.delete(match.id);
@@ -321,11 +456,11 @@ export async function syncSportteryOdds(db: DatabaseSchema): Promise<SyncResult>
     action: '同步竞彩网赔率',
     status: 'SUCCESS',
     syncType: 'odds',
-    detail: `匹配 ${matched} 场，${unmatched} 场未匹配到本地比赛`,
-    targetMatchId: `${matched}场匹配,${unmatched}场未匹配`,
+    detail: `匹配 ${matched} 场，${unmatched} 场未匹配，新建淘汰赛 ${createdKnockout} 场`,
+    targetMatchId: `${matched}场匹配,${unmatched}场未匹配,${createdKnockout}场新建`,
   });
 
-  logger.admin('[Sporttery] Sync completed', { matched, unmatched, updated: result.updatedMatchIds.length });
+  logger.admin('[Sporttery] Sync completed', { matched, unmatched, createdKnockout, updated: result.updatedMatchIds.length });
 
   return result;
 }
@@ -503,5 +638,5 @@ export async function syncWorldCupStandings(db: DatabaseSchema): Promise<{
 
 // ═══════════════════════════════════════════════════════════
 //  竞彩网赛程赛果 API 不可用（EdgeOne 403/567 拦截），已移除。
-//  赛程比分来源：API-Football(主) → 种子数据(兜底)
+//  赛程比分来源：ESPN(主) → 种子数据(兜底)
 // ═══════════════════════════════════════════════════════════
