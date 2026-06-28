@@ -1,5 +1,52 @@
 # 更新日志 (Changelog)
 
+## v2.6.4 - 2026-06-28
+
+### 让球结算Bug修复 + handicap字段持久化 + 5种玩法结算逻辑审查
+
+#### 1. 修复m-71让球结算错误（严重）
+- **根因**：`matchOdds['m-71'].handicap` 字段缺失，`judgePrediction` 中 `goalLine = odds?.handicap?.goalLine || 0` 默认0，导致让球未生效按0球结算
+- **实际让球数**：2球（阿根廷让2球，从optionLabel "阿根廷(-2) 胜" 推断）
+- **让球后比分**：1+2=3 vs 3 → 平局
+- **错误结算**：HANDICAP draw LOST，HANDICAP away WON
+- **正确结算**：HANDICAP draw WON，HANDICAP away LOST
+- **受影响3条下注**：
+  - pred-9f20dd30 (user-55f4c47c) draw ¥2000: LOST→WON (+¥7,800)
+  - pred-308dc96d (user-52d9aa8c) draw ¥5000: LOST→WON (+¥19,500)
+  - pred-7ee47ecb (user-39d8ea17) away ¥3000: WON→LOST (-¥5,970)
+
+#### 2. 修复settlement_service.ts让球结算防御逻辑
+- **问题**：handicap字段缺失时默认goalLine=0，导致按0球错误结算
+- **修复**：handicap缺失或goalLine无效时返回`null`，走VOID流程返还本金
+- **影响文件**：`src/server/services/settlement_service.ts`
+
+#### 3. 修复handicap字段未持久化到MySQL（根因修复）
+- **问题**：Prisma schema的MatchOdds模型缺少handicap相关字段，db-storage.mjs的normalizeMatchOddsRows未映射handicap，导致应用重启后handicap数据丢失
+- **修复**：
+  - `prisma/schema.prisma`：MatchOdds模型新增4个字段（handicapGoalLine, handicapHomeWin, handicapDraw, handicapAwayWin）
+  - `scripts/db-storage.mjs`：normalizeMatchOddsRows添加handicap映射，loadSnapshot重建handicap对象
+  - `scripts/db-storage.mjs`：两个$transaction调用增加timeout:60000, maxWait:10000（默认5000ms在大数据量恢复时超时）
+  - 云服务器执行 `npx prisma db push` 同步表结构
+- **影响文件**：`prisma/schema.prisma`, `scripts/db-storage.mjs`
+
+#### 4. 5种玩法结算逻辑审查
+- **H2H（胜平负）**：逻辑正确，无问题
+- **HANDICAP（让球胜平负）**：已修复（见上）
+- **CORRECT_SCORE（比分）**：逻辑正确，支持精确比分+other兜底
+- **TOTAL_GOALS（总进球）**：逻辑正确，支持新旧格式
+- **HAFU（半全场）**：半场比分暂不支持，统一VOID返还本金，逻辑正确
+
+### 改动文件
+`src/server/services/settlement_service.ts`, `prisma/schema.prisma`, `scripts/db-storage.mjs`, `scripts/fix-m71-handicap.cjs`（新增）, `dist/server.cjs`（云服务器）
+
+### 数据库变更
+- matchOdds: m-71补齐handicap字段（goalLine=2）
+- predictions: 3条HANDICAP重新结算（2条LOST→WON, 1条WON→LOST）
+- wallets: 3位用户余额调整（+¥7800, +¥19500, -¥5970）
+- transactions: 新增3条调整交易记录
+- syncLogs: 新增1条审计日志
+- match_odds表: 新增4个handicap列
+
 ## v2.6.3 - 2026-06-28
 
 ### maxBuffer修复 + The Odds API异常赔率纠正 + m-72结算修复

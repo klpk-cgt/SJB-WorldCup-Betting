@@ -480,10 +480,20 @@ function judgePrediction(prediction: Prediction, match: Match): boolean | null {
   }
 
   if (market === 'HANDICAP') {
-    // 获取让球数
+    // 获取让球数：竞彩网 goalLine（负数=主队让球，正数=主队受让）
     const db = dbService.getData();
     const odds = db.matchOdds[prediction.matchId];
-    const goalLine = odds?.handicap?.goalLine || 0;
+    const goalLine = odds?.handicap?.goalLine;
+    // 让球数缺失时不能默认 0 结算，否则会让球未生效导致错误结算
+    // 返回 null 走 VOID 流程，返还本金
+    if (goalLine === undefined || goalLine === null || !Number.isFinite(goalLine)) {
+      logger.warn('HANDICAP 结算缺少让球数，标记 VOID 返还本金', {
+        predictionId: prediction.id,
+        matchId: prediction.matchId,
+        hasHandicap: !!odds?.handicap,
+      });
+      return null;
+    }
     // 应用让球: 主队实际得分 = hScore + goalLine
     const adjustedHScore = hScore + goalLine;
     return (

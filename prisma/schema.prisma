@@ -131,6 +131,10 @@ model MatchOdds {
   h2hHomeWin      Float?
   h2hDraw         Float?
   h2hAwayWin      Float?
+  handicapGoalLine Float?
+  handicapHomeWin Float?
+  handicapDraw    Float?
+  handicapAwayWin Float?
   correctScore    Json?
   correctScoreSource String? @db.VarChar(64)
   totalGoalsOver25 Float?

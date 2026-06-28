@@ -162,6 +162,10 @@ function normalizeMatchOddsRows(matchOdds) {
     h2hHomeWin: item.h2h?.homeWin ?? null,
     h2hDraw: item.h2h?.draw ?? null,
     h2hAwayWin: item.h2h?.awayWin ?? null,
+    handicapGoalLine: item.handicap?.goalLine ?? null,
+    handicapHomeWin: item.handicap?.homeWin ?? null,
+    handicapDraw: item.handicap?.draw ?? null,
+    handicapAwayWin: item.handicap?.awayWin ?? null,
     correctScore: item.correctScore || [],
     correctScoreSource: item.correctScoreSource ?? null,
     totalGoalsOver25: item.totalGoalsLegacy?.over25 ?? item.totalGoals?.find((entry) => entry.goals === '3+')?.odds ?? null,
@@ -305,6 +309,15 @@ async function loadSnapshot() {
             draw: row.h2hDraw,
             awayWin: row.h2hAwayWin,
           },
+          handicap:
+            row.handicapGoalLine != null
+              ? {
+                  goalLine: row.handicapGoalLine,
+                  homeWin: row.handicapHomeWin ?? undefined,
+                  draw: row.handicapDraw ?? undefined,
+                  awayWin: row.handicapAwayWin ?? undefined,
+                }
+              : undefined,
           correctScore: row.correctScore || [],
           correctScoreSource: row.correctScoreSource ?? undefined,
           totalGoals: [],
@@ -360,6 +373,9 @@ async function loadSnapshot() {
         quizLogs,
         worldCupStandings: standingsState?.value || undefined,
       });
+    }, {
+      timeout: 60000,
+      maxWait: 10000,
     });
 
     return result;
@@ -542,6 +558,9 @@ async function saveSnapshot(snapshot) {
       for (const tableName of orderedChanged) {
         await replaceTable(tx, tableName, nextTables[tableName] || []);
       }
+    }, {
+      timeout: 60000,
+      maxWait: 10000,
     });
 
     return { ok: true, changedTables: orderedChanged };
