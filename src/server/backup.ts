@@ -10,7 +10,7 @@ const DATA_DIR = process.env.APP_DATA_DIR
 const BACKUP_DIR = path.join(DATA_DIR, 'backups');
 const ARCHIVE_FILE = path.join(DATA_DIR, 'db.activities.archive.json');
 const STORAGE_SCRIPT_PATH = path.join(process.cwd(), 'scripts', 'db-storage.mjs');
-const STORAGE_SCRIPT_MAX_BUFFER = 16 * 1024 * 1024;
+const STORAGE_SCRIPT_MAX_BUFFER = 64 * 1024 * 1024;
 
 export interface BackupResult {
   ok: boolean;

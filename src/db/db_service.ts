@@ -76,7 +76,7 @@ const DATA_DIR = process.env.APP_DATA_DIR
 const DB_FILE_PATH = path.join(DATA_DIR, 'db.json');
 const STORAGE_SCRIPT_PATH = path.join(process.cwd(), 'scripts', 'db-storage.mjs');
 const MYSQL_STORAGE_MODE = 'mysql';
-const STORAGE_SCRIPT_MAX_BUFFER = 16 * 1024 * 1024;
+const STORAGE_SCRIPT_MAX_BUFFER = 64 * 1024 * 1024;
 
 class DatabaseService {
   private cache: DatabaseSchema | null = null;
