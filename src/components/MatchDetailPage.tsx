@@ -4,6 +4,7 @@ import { Match, MatchStatus, Player, TeamHistoryResult, AIContent } from '../typ
 import type { TeamCompleteProfile, WorldCupHeadToHead } from '../types/worldcup';
 import { apiRequest, formatDate } from '../utils/api';
 import { resolvePlayerAvatar } from '../utils/playerAvatar';
+import { buildScoreDisplay } from '../utils/score';
 import FlagBadge from './home/FlagBadge';
 import SmartAvatar from './SmartAvatar';
 import TeamDetailDrawer from './TeamDetailDrawer';
@@ -240,12 +241,22 @@ export default function MatchDetailPage({
             </button>
 
             <div className="text-center">
-              <p className="text-3xl font-black tracking-tight">
-                {typeof match.homeScore === 'number' && typeof match.awayScore === 'number' && match.status !== 'NS'
-                  ? `${match.homeScore} : ${match.awayScore}`
-                  : 'VS'}
-              </p>
-              <p className="mt-1 text-[11px] font-bold text-emerald-200">{match.stage}</p>
+              {(() => {
+                const sd = buildScoreDisplay(match);
+                return (
+                  <>
+                    <div className="flex items-center justify-center gap-2">
+                      <p className="text-3xl font-black tracking-tight">{sd.main}</p>
+                      {sd.badge && (
+                        <span className="rounded-full bg-amber-400/30 px-2 py-0.5 text-[10px] font-black text-amber-100 ring-1 ring-amber-300/40">{sd.badge}</span>
+                      )}
+                    </div>
+                    {sd.sub && <p className="mt-0.5 text-[11px] font-bold text-amber-200">{sd.sub}</p>}
+                    {sd.penalty && <p className="text-[11px] font-bold text-rose-200">{sd.penalty}</p>}
+                    <p className="mt-1 text-[11px] font-bold text-emerald-200">{match.stage}</p>
+                  </>
+                );
+              })()}
             </div>
 
             <button className="min-w-0 text-right" onClick={() => { setTeamDetailId(match.awayTeam?.id || null); setTeamDetailOpen(true); }}>
@@ -1311,12 +1322,24 @@ function PostMatchReview({ match }: { match: Match }) {
 
       <div className="mt-4 rounded-3xl bg-gradient-to-br from-amber-50 via-white to-slate-50 p-4 ring-1 ring-slate-100">
         <div className="text-center">
-          <p className="text-2xl font-black text-slate-900">
-            {match.homeScore} : {match.awayScore}
-          </p>
-          <p className="mt-1 text-xs text-slate-500">
-            {match.homeTeam?.nameZh} vs {match.awayTeam?.nameZh}
-          </p>
+          {(() => {
+            const sd = buildScoreDisplay(match);
+            return (
+              <>
+                <div className="flex items-center justify-center gap-2">
+                  <p className="text-2xl font-black text-slate-900">{sd.main}</p>
+                  {sd.badge && (
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-700 ring-1 ring-amber-200">{sd.badge}</span>
+                  )}
+                </div>
+                {sd.sub && <p className="mt-1 text-xs font-bold text-amber-600">{sd.sub}</p>}
+                {sd.penalty && <p className="text-xs font-bold text-rose-600">{sd.penalty}</p>}
+                <p className="mt-1 text-xs text-slate-500">
+                  {match.homeTeam?.nameZh} vs {match.awayTeam?.nameZh}
+                </p>
+              </>
+            );
+          })()}
         </div>
       </div>
 

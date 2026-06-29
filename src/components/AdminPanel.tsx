@@ -75,6 +75,11 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
   const [awayScore, setAwayScore] = useState('0');
   const [matchStatus, setMatchStatus] = useState('NS');
   const [winnerId, setWinnerId] = useState('');
+  // AET/PEN 比赛分层比分
+  const [homeScoreAfterExtraTime, setHomeScoreAfterExtraTime] = useState('');
+  const [awayScoreAfterExtraTime, setAwayScoreAfterExtraTime] = useState('');
+  const [homePenaltyScore, setHomePenaltyScore] = useState('');
+  const [awayPenaltyScore, setAwayPenaltyScore] = useState('');
 
   // Odds edit helpers
   const [oddsHomeWin, setOddsHomeWin] = useState('1.8');
@@ -416,6 +421,11 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
     setAwayScore(match.awayScore?.toString() || '0');
     setMatchStatus(match.status);
     setWinnerId(match.winnerTeamId || '');
+    // AET/PEN 分层比分回填
+    setHomeScoreAfterExtraTime(match.homeScoreAfterExtraTime?.toString() || '');
+    setAwayScoreAfterExtraTime(match.awayScoreAfterExtraTime?.toString() || '');
+    setHomePenaltyScore(match.homePenaltyScore?.toString() || '');
+    setAwayPenaltyScore(match.awayPenaltyScore?.toString() || '');
 
     // Setup odds editable controls
     if (match.odds) {
@@ -440,7 +450,12 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
           status: matchStatus,
           homeScore: parseInt(homeScore),
           awayScore: parseInt(awayScore),
-          winnerTeamId: winnerId || null
+          winnerTeamId: winnerId || null,
+          // AET/PEN 分层比分（可选）
+          homeScoreAfterExtraTime: homeScoreAfterExtraTime ? parseInt(homeScoreAfterExtraTime) : null,
+          awayScoreAfterExtraTime: awayScoreAfterExtraTime ? parseInt(awayScoreAfterExtraTime) : null,
+          homePenaltyScore: homePenaltyScore ? parseInt(homePenaltyScore) : null,
+          awayPenaltyScore: awayPenaltyScore ? parseInt(awayPenaltyScore) : null,
         })
       });
 
@@ -949,11 +964,64 @@ export default function AdminPanel({ onBackToApp }: AdminPanelProps) {
                         >
                           <option value="NS">未开赛 NS</option>
                           <option value="LIVE">进行中 LIVE</option>
+                          <option value="HT">中场 HT</option>
                           <option value="FT">已完赛 FT</option>
+                          <option value="AET">加时赛完 AET</option>
+                          <option value="PEN">点球大战完 PEN</option>
                           <option value="CANCELLED">取消 CANCELLED</option>
                         </select>
                       </div>
                     </div>
+                    {/* AET/PEN 分层比分编辑（仅 AET/PEN 状态显示） */}
+                    {(matchStatus === 'AET' || matchStatus === 'PEN') && (
+                      <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg bg-amber-50 p-2 ring-1 ring-amber-200">
+                        <p className="col-span-2 text-[9px] font-black text-amber-700">⚡ 加时/点球比分（上方填 90 分钟比分）</p>
+                        <div>
+                          <label className="text-[9px] text-amber-600 block font-bold">加时主队</label>
+                          <input
+                            type="number"
+                            value={homeScoreAfterExtraTime}
+                            onChange={(e) => setHomeScoreAfterExtraTime(e.target.value)}
+                            placeholder="加时后总进球"
+                            className="w-full bg-white border border-amber-200 px-2 py-1 rounded text-xs text-slate-800 font-mono font-bold focus:outline-none focus:border-amber-400"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[9px] text-amber-600 block font-bold">加时客队</label>
+                          <input
+                            type="number"
+                            value={awayScoreAfterExtraTime}
+                            onChange={(e) => setAwayScoreAfterExtraTime(e.target.value)}
+                            placeholder="加时后总进球"
+                            className="w-full bg-white border border-amber-200 px-2 py-1 rounded text-xs text-slate-800 font-mono font-bold focus:outline-none focus:border-amber-400"
+                          />
+                        </div>
+                        {matchStatus === 'PEN' && (
+                          <>
+                            <div>
+                              <label className="text-[9px] text-rose-600 block font-bold">点球主队</label>
+                              <input
+                                type="number"
+                                value={homePenaltyScore}
+                                onChange={(e) => setHomePenaltyScore(e.target.value)}
+                                placeholder="点球大战进球"
+                                className="w-full bg-white border border-rose-200 px-2 py-1 rounded text-xs text-slate-800 font-mono font-bold focus:outline-none focus:border-rose-400"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[9px] text-rose-600 block font-bold">点球客队</label>
+                              <input
+                                type="number"
+                                value={awayPenaltyScore}
+                                onChange={(e) => setAwayPenaltyScore(e.target.value)}
+                                placeholder="点球大战进球"
+                                className="w-full bg-white border border-rose-200 px-2 py-1 rounded text-xs text-slate-800 font-mono font-bold focus:outline-none focus:border-rose-400"
+                              />
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Edit Odds */}

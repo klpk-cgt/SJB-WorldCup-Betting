@@ -29,6 +29,7 @@ import './profile/profileStyles.css';
 import NetProfitChart from './profile/NetProfitChart';
 import BadgeDetailModal from './profile/BadgeDetailModal';
 import { formatPoints, formatSignedPoints, formatOdds, formatReturn } from '../utils/format';
+import { buildScoreDisplay } from '../utils/score';
 
 interface MeTabProps {
   onLogout: () => void;
@@ -742,7 +743,7 @@ function SettlementRow({ prediction }: { prediction: PredictionWithMatch; key?: 
     <div className="settle-row">
       <span className="text-lg leading-none shrink-0">{homeFlag}</span>
       <span className="text-sm font-bold tabular-nums text-slate-800 min-w-[30px] text-center shrink-0">
-        {prediction.match?.homeScore ?? '-'} : {prediction.match?.awayScore ?? '-'}
+        {prediction.match ? buildScoreDisplay(prediction.match).main : '-'}
       </span>
       <span className="text-lg leading-none shrink-0">{awayFlag}</span>
       <span className={`inline-flex items-center ml-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${

@@ -157,10 +157,23 @@ export default function FocusMatchCard({
                     initial={{ opacity: 0, scale: 0.8 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.8 }}
-                    className="text-xl font-black tracking-wider text-white sm:text-2xl"
+                    className="flex flex-col items-center"
                     style={{ textShadow: isLive ? '0 0 20px rgba(239,68,68,0.3)' : '0 0 16px rgba(255,255,255,0.15)' }}
                   >
-                    {match.scoreText || '0 : 0'}
+                    {match.scoreDisplay ? (
+                      <>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xl font-black tracking-wider text-white sm:text-2xl">{match.scoreDisplay.main}</span>
+                          {match.scoreDisplay.badge && (
+                            <span className="rounded bg-amber-500/30 px-1 text-[9px] font-black text-amber-200 ring-1 ring-amber-400/40">{match.scoreDisplay.badge}</span>
+                          )}
+                        </div>
+                        {match.scoreDisplay.sub && <span className="mt-0.5 text-[10px] font-bold text-amber-200/80">{match.scoreDisplay.sub}</span>}
+                        {match.scoreDisplay.penalty && <span className="text-[10px] font-bold text-rose-300/80">{match.scoreDisplay.penalty}</span>}
+                      </>
+                    ) : (
+                      <span className="text-xl font-black tracking-wider text-white sm:text-2xl">{match.scoreText || '0 : 0'}</span>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>

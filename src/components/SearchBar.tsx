@@ -5,6 +5,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Search, X, Calendar, Clock } from 'lucide-react';
 import { apiRequest } from '../utils/api';
+import { buildScoreDisplay } from '../utils/score';
 
 interface Match {
   id: string;
@@ -87,7 +88,7 @@ export default function SearchBar({ onNavigate, compact }: SearchBarProps) {
       LIVE: '进行中',
       HT: '中场',
       FT: '完场',
-      ET: '加时',
+      AET: '加时',
       PEN: '点球',
     };
     return statusMap[status] || status;

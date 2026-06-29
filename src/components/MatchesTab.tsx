@@ -8,6 +8,7 @@ import { ArrowRight, Calendar, ChevronDown, Filter, Info, RefreshCw, Sparkles, A
 import { Match, MatchStatus, Team } from '../types';
 import { apiRequest, formatDate } from '../utils/api';
 import { getMatchesForNearestDays, groupMatchesByDay, sortMatchesByKickoff } from '../utils/matchDisplay';
+import { buildScoreDisplay } from '../utils/score';
 import { useToast } from './ToastProvider';
 import FlagBadge from './home/FlagBadge';
 import TeamDetailDrawer from './TeamDetailDrawer';
@@ -262,12 +263,22 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
               </button>
 
               <div className="text-center">
-                <p className="text-3xl font-black tracking-tight">
-                  {[MatchStatus.LIVE, MatchStatus.HT, MatchStatus.FT, MatchStatus.AET, MatchStatus.PEN].includes(featuredMatch.status)
-                    ? `${featuredMatch.homeScore ?? 0} : ${featuredMatch.awayScore ?? 0}`
-                    : 'VS'}
-                </p>
-                <p className="mt-1 text-[11px] font-semibold text-emerald-100">{featuredMatch.roundName}</p>
+                {(() => {
+                  const sd = buildScoreDisplay(featuredMatch);
+                  return (
+                    <>
+                      <div className="flex items-center justify-center gap-2">
+                        <p className="text-3xl font-black tracking-tight">{sd.main}</p>
+                        {sd.badge && (
+                          <span className="rounded-full bg-amber-400/30 px-1.5 py-0.5 text-[9px] font-black text-amber-100 ring-1 ring-amber-300/40">{sd.badge}</span>
+                        )}
+                      </div>
+                      {sd.sub && <p className="mt-0.5 text-[10px] font-bold text-amber-200">{sd.sub}</p>}
+                      {sd.penalty && <p className="text-[10px] font-bold text-rose-200">{sd.penalty}</p>}
+                      <p className="mt-1 text-[11px] font-semibold text-emerald-100">{featuredMatch.roundName}</p>
+                    </>
+                  );
+                })()}
               </div>
 
               <button
@@ -452,11 +463,16 @@ export default function MatchesTab({ onNavigate, selectedMatchId, isAdmin }: Mat
                               <span className="truncate text-sm font-black text-slate-900">{match.homeTeam?.nameZh}</span>
                             </div>
 
-                            <span className="shrink-0 text-sm font-black text-slate-400">
-                              {[MatchStatus.LIVE, MatchStatus.HT, MatchStatus.FT, MatchStatus.AET, MatchStatus.PEN].includes(match.status)
-                                ? `${match.homeScore ?? 0} : ${match.awayScore ?? 0}`
-                                : 'VS'}
-                            </span>
+                            {(() => {
+                              const sd = buildScoreDisplay(match);
+                              const fullTitle = [sd.sub, sd.penalty].filter(Boolean).join(' · ');
+                              return (
+                                <span className="shrink-0 flex items-center gap-1" title={fullTitle || undefined}>
+                                  <span className="text-sm font-black text-slate-400">{sd.main}</span>
+                                  {sd.badge && <span className="rounded bg-amber-100 px-1 text-[9px] font-black text-amber-700">{sd.badge}</span>}
+                                </span>
+                              );
+                            })()}
 
                             <div className="flex min-w-0 items-center justify-end gap-2">
                               <span className="truncate text-sm font-black text-slate-900">{match.awayTeam?.nameZh}</span>

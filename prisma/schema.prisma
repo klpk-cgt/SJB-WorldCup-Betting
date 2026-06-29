@@ -102,6 +102,8 @@ model Match {
   status               String  @db.VarChar(64)
   homeScore            Int?
   awayScore            Int?
+  homeScoreAfterExtraTime Int?
+  awayScoreAfterExtraTime Int?
   homePenaltyScore     Int?
   awayPenaltyScore     Int?
   winnerTeamId         String? @db.VarChar(191)

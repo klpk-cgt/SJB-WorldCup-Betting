@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿/**
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿/**
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -26,13 +26,24 @@ import { useToast } from './ToastProvider';
 import ActivityFeed, { ActivityItem } from './ActivityFeed';
 import BattleReportCard, { type BattleReportData } from './BattleReportCard';
 import { formatPoints, formatSignedPoints } from '../utils/format';
+import { buildScoreDisplay } from '../utils/score';
 
 interface HomeTabProps {
   user: User | null;
   wallet: Wallet | null;
   onRefreshWallet: () => void;
   onNavigate: (tab: string, matchId?: string, detailTab?: string) => void;
-  wsScoreUpdate?: { matchId: string; homeScore: number; awayScore: number; status: string } | null;
+  wsScoreUpdate?: {
+    matchId: string;
+    homeScore: number;
+    awayScore: number;
+    status: string;
+    homeScoreAfterExtraTime?: number;
+    awayScoreAfterExtraTime?: number;
+    homePenaltyScore?: number;
+    awayPenaltyScore?: number;
+    winnerTeamId?: string;
+  } | null;
   wsOddsChange?: { matchId: string; market: string; changes: Record<string, unknown> } | null;
 }
 
@@ -129,6 +140,7 @@ function buildFocusMatch(match: Match | undefined, now: number): FocusMatch {
     hotLabel: status === 'live' ? '热战' : '热门',
     status,
     scoreText: status === 'upcoming' ? undefined : (match.scoreUnknown ? '比分待确认' : `${match.homeScore ?? 0} : ${match.awayScore ?? 0}`),
+    scoreDisplay: status === 'upcoming' || match.scoreUnknown ? undefined : buildScoreDisplay(match),
     homeTeam: {
       name: match.homeTeam.nameZh,
       flagCode: match.homeTeam.code,
@@ -302,6 +314,12 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate, wsS
         homeScore: wsScoreUpdate.homeScore,
         awayScore: wsScoreUpdate.awayScore,
         status: wsScoreUpdate.status as any,
+        // AET/PEN 比赛携带分层比分
+        homeScoreAfterExtraTime: wsScoreUpdate.homeScoreAfterExtraTime,
+        awayScoreAfterExtraTime: wsScoreUpdate.awayScoreAfterExtraTime,
+        homePenaltyScore: wsScoreUpdate.homePenaltyScore,
+        awayPenaltyScore: wsScoreUpdate.awayPenaltyScore,
+        winnerTeamId: wsScoreUpdate.winnerTeamId,
       };
     }));
   }, [wsScoreUpdate]);
@@ -717,9 +735,18 @@ export default function HomeTab({ user, wallet, onRefreshWallet, onNavigate, wsS
 
                   <div className="mt-2.5 flex items-center justify-between">
                     {isLive || isFinished ? (
-                      <span className="text-sm font-black text-slate-900">
-                        {(match as any).scoreUnknown ? '待确认' : `${match.homeScore ?? 0} : ${match.awayScore ?? 0}`}
-                      </span>
+                      (match as any).scoreUnknown ? (
+                        <span className="text-sm font-black text-amber-600">待确认</span>
+                      ) : (() => {
+                        const sd = buildScoreDisplay(match);
+                        const fullTitle = [sd.sub, sd.penalty].filter(Boolean).join(' · ');
+                        return (
+                          <span className="flex items-center gap-1" title={fullTitle || undefined}>
+                            <span className="text-sm font-black text-slate-900">{sd.main}</span>
+                            {sd.badge && <span className="rounded bg-amber-100 px-1 text-[9px] font-black text-amber-700">{sd.badge}</span>}
+                          </span>
+                        );
+                      })()
                     ) : (
                       <span className="text-[10px] font-bold text-emerald-600">{formatBeijingTime(match.startTimeUtc)}</span>
                     )}

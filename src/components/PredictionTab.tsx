@@ -24,6 +24,7 @@ import { apiRequest, clearApiCache, formatDate } from '../utils/api';
 import { formatPoints, formatSignedPoints, formatOdds, formatReturn } from '../utils/format';
 import { SCORE_GROUP_META, getScoreGroup, getScoreDisplayLabel, isOtherScoreKey } from '../utils/odds';
 import type { ScoreGroup } from '../utils/odds';
+import { buildScoreDisplay } from '../utils/score';
 import FlagBadge from './home/FlagBadge';
 import { useToast } from './ToastProvider';
 
@@ -666,7 +667,10 @@ export default function PredictionTab({ user, wallet, onRefreshWallet, focusedMa
 
                   <div className="text-center">
                     <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-300">
-                      {activeCategory === 'BETTABLE' ? 'VS' : `${match.homeScore ?? 0} : ${match.awayScore ?? 0}`}
+                      {activeCategory === 'BETTABLE' ? 'VS' : (() => {
+                        const sd = buildScoreDisplay(match);
+                        return sd.badge ? `${sd.main} ${sd.badge}` : sd.main;
+                      })()}
                     </div>
                     <div className="mt-1 text-[11px] font-semibold text-slate-500">{match.venueCity}</div>
                   </div>

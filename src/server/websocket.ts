@@ -136,21 +136,32 @@ export function sendToUser(userId: string, event: WSEvent, data: Record<string, 
 
 /**
  * 推送比分更新
+ * AET/PEN 比赛时携带加时后总比分、点球比分、获胜方 ID
  */
-export function broadcastScoreUpdate(matchId: string, homeScore: number, awayScore: number, status: string) {
-  broadcast('match:score_update', {
+export function broadcastScoreUpdate(
+  matchId: string,
+  homeScore: number,
+  awayScore: number,
+  status: string,
+  homeScoreAfterExtraTime?: number,
+  awayScoreAfterExtraTime?: number,
+  homePenaltyScore?: number,
+  awayPenaltyScore?: number,
+  winnerTeamId?: string,
+) {
+  const payload = {
     matchId,
     homeScore,
     awayScore,
     status,
-  }, `match:${matchId}`);
-
-  broadcast('match:score_update', {
-    matchId,
-    homeScore,
-    awayScore,
-    status,
-  }, 'match:*');
+    homeScoreAfterExtraTime,
+    awayScoreAfterExtraTime,
+    homePenaltyScore,
+    awayPenaltyScore,
+    winnerTeamId,
+  };
+  broadcast('match:score_update', payload, `match:${matchId}`);
+  broadcast('match:score_update', payload, 'match:*');
 }
 
 /**

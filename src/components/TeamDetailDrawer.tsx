@@ -5,6 +5,7 @@ import { Match, MatchStatus, Player, Team, TeamHistoryResult } from '../types';
 import type { TeamCompleteProfile } from '../types/worldcup';
 import { apiRequest, formatDate } from '../utils/api';
 import { resolvePlayerAvatar } from '../utils/playerAvatar';
+import { buildScoreDisplay } from '../utils/score';
 import FlagBadge from './home/FlagBadge';
 import SmartAvatar from './SmartAvatar';
 import { TEAM_TACTICS } from '../data/worldcup/tactics';
@@ -714,11 +715,19 @@ export default function TeamDetailDrawer({ teamId, open, onClose }: TeamDetailDr
                                     {isHome ? 'vs ' : '@ '}{opponent?.nameZh}
                                   </span>
                                 </div>
-                                {(isLive || isFinished) && (
-                                  <p className="mt-1 text-lg font-black text-slate-900">
-                                    {match.homeScore ?? 0} : {match.awayScore ?? 0}
-                                  </p>
-                                )}
+                                {(isLive || isFinished) && (() => {
+                                  const sd = buildScoreDisplay(match);
+                                  return (
+                                    <div className="mt-1 flex flex-col items-start gap-0.5">
+                                      <div className="flex items-center gap-1.5">
+                                        <p className="text-lg font-black text-slate-900">{sd.main}</p>
+                                        {sd.badge && <span className="rounded bg-amber-100 px-1 text-[9px] font-black text-amber-700">{sd.badge}</span>}
+                                      </div>
+                                      {sd.sub && <p className="text-[10px] font-bold text-amber-600">{sd.sub}</p>}
+                                      {sd.penalty && <p className="text-[10px] font-bold text-rose-600">{sd.penalty}</p>}
+                                    </div>
+                                  );
+                                })()}
                               </div>
                             );
                           })

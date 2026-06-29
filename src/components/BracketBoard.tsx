@@ -124,8 +124,20 @@ function BracketCard({ match, onOpen }: { match: BracketMatchNode; onOpen: (id?:
           isWinner={match.winnerTeamId === match.homeTeamId}
           isFinished={isFinished}
         />
-        <div className="flex items-center justify-center">
-          <span className="text-[9px] font-bold text-slate-300">VS</span>
+        <div className="flex items-center justify-center gap-1">
+          {match.status === 'AET' || match.status === 'PEN' ? (
+            <>
+              <span className="rounded bg-amber-100 px-1 text-[9px] font-black text-amber-700">{match.status}</span>
+              {typeof match.homeScoreAfterExtraTime === 'number' && typeof match.awayScoreAfterExtraTime === 'number' && (
+                <span className="text-[9px] font-bold text-slate-500">加时 {match.homeScoreAfterExtraTime}:{match.awayScoreAfterExtraTime}</span>
+              )}
+              {typeof match.homePenaltyScore === 'number' && typeof match.awayPenaltyScore === 'number' && (
+                <span className="text-[9px] font-bold text-rose-600">点球 {match.homePenaltyScore}:{match.awayPenaltyScore}</span>
+              )}
+            </>
+          ) : (
+            <span className="text-[9px] font-bold text-slate-300">VS</span>
+          )}
         </div>
         <BracketTeamRow
           code={match.awayTeamCode}

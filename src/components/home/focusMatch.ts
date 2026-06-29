@@ -32,6 +32,13 @@ export type FocusMatch = {
   hotLabel?: string;
   status?: FocusMatchStatus;
   scoreText?: string;
+  /** AET/PEN 比赛分层比分显示 */
+  scoreDisplay?: {
+    main: string;
+    sub?: string;
+    penalty?: string;
+    badge?: string;
+  };
   homeTeam: FocusMatchTeam;
   awayTeam: FocusMatchTeam;
   odds?: FocusMatchOdds;

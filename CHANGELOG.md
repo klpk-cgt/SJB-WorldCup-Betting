@@ -1,5 +1,32 @@
 # 更新日志 (Changelog)
 
+## v2.6.5 - 2026-06-29
+
+### AET/PEN 比赛比分分离与结算合规修复
+
+#### 问题
+ESPN API 在 AET（加时赛）/PEN（点球大战）比赛返回的 `score` 字段是加时赛结束后的总比分，直接写入 `homeScore/awayScore` 会导致：
+- 竞彩结算错误（5 种玩法均以 90 分钟 + 伤停补时为结算标准）
+- 小组积分榜计算错误（加时进球被错误计入）
+
+#### 修复方案
+- **数据层语义固化**：`homeScore/awayScore` 严格表示 90 分钟比分（结算 + 积分榜使用）；新增 `homeScoreAfterExtraTime/awayScoreAfterExtraTime`（加时后总比分）、`homePenaltyScore/awayPenaltyScore`（点球比分）、`winnerTeamId`（点球大战胜方）
+- **同步层**：`espn_sync.ts` 新增 `calculateRegulationScore`，从 ESPN `details` 数组按 `clock.displayValue` 解析分钟数（< 100 为常规时间，≥ 100 为加时赛），并显式排除 `shootout=true` 的点球大战进球；新增 `pickWinnerTeamId` 读取 ESPN `competitor.winner` 字段
+- **WebSocket**：`broadcastScoreUpdate` 携带分层比分（90 分钟 / 加时后 / 点球 / 胜方）
+- **前端工具**：新建 `src/utils/score.ts` 的 `buildScoreDisplay(match)` 统一返回 `{ main, sub?, penalty?, badge?, isLive }` 结构，覆盖 12 个组件
+- **管理后台**：`AdminPanel` 支持 AET/PEN 状态选项 + 分层比分手动编辑（90 分钟 / 加时 / 点球三组输入框）
+- **结算层**：零侵入（`settlement_service.ts` 不修改），仍只读取 `homeScore/awayScore` 即可获得正确的 90 分钟比分
+
+#### 影响文件（20 个）
+- 后端：`src/server/espn_sync.ts`, `src/server/websocket.ts`, `src/server/helpers.ts`, `src/server/routes/admin.ts`, `src/db/db_service.ts`
+- 类型：`src/types.ts`
+- 前端工具：`src/utils/score.ts`（新建）
+- 前端组件：`MatchDetailPage.tsx`, `MatchesTab.tsx`, `HomeTab.tsx`, `home/FocusMatchCard.tsx`, `home/focusMatch.ts`, `BracketBoard.tsx`, `PredictionTab.tsx`, `TeamDetailDrawer.tsx`, `MeTab.tsx`, `SearchBar.tsx`, `AdminPanel.tsx`, `App.tsx`
+- 数据库：`prisma/schema.prisma`（新增 4 个 nullable 字段，已通过 `npx prisma db push` 同步）
+
+### 测试守门
+build 通过（2814 modules，无 TS 错误）· ESPN 同步 104 场赛事正常 · API 验证 FT 比赛新字段为 null（正确）· 稳定性审查 10 项清单全部通过
+
 ## v2.6.4 - 2026-06-28
 
 ### 让球结算Bug修复 + handicap字段持久化 + 5种玩法结算逻辑审查

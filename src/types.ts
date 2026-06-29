@@ -144,6 +144,10 @@ export interface Match extends MatchLifecycle {
   odds?: MatchOdds | null;
   homeScore?: number;
   awayScore?: number;
+  // 加时赛结束后总比分（含加时赛进球，不含点球大战）
+  // 仅 AET/PEN 比赛填充，FT 比赛保持 undefined
+  homeScoreAfterExtraTime?: number;
+  awayScoreAfterExtraTime?: number;
   homePenaltyScore?: number;
   awayPenaltyScore?: number;
   winnerTeamId?: string;
@@ -454,6 +458,11 @@ export interface BracketMatchNode {
   awayTeamCode?: string;
   homeScore?: number;
   awayScore?: number;
+  // AET/PEN 比赛的加时后总比分与点球比分
+  homeScoreAfterExtraTime?: number;
+  awayScoreAfterExtraTime?: number;
+  homePenaltyScore?: number;
+  awayPenaltyScore?: number;
   winnerTeamId?: string;
   startTimeUtc?: string;
   status?: MatchStatus;

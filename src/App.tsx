@@ -61,7 +61,17 @@ export default function App() {
   const [loginPin, setLoginPin] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [navDrawerOpen, setNavDrawerOpen] = useState(false);
-  const [wsScoreUpdate, setWsScoreUpdate] = useState<{ matchId: string; homeScore: number; awayScore: number; status: string } | null>(null);
+  const [wsScoreUpdate, setWsScoreUpdate] = useState<{
+    matchId: string;
+    homeScore: number;
+    awayScore: number;
+    status: string;
+    homeScoreAfterExtraTime?: number;
+    awayScoreAfterExtraTime?: number;
+    homePenaltyScore?: number;
+    awayPenaltyScore?: number;
+    winnerTeamId?: string;
+  } | null>(null);
   const [wsOddsChange, setWsOddsChange] = useState<{ matchId: string; market: string; changes: Record<string, unknown> } | null>(null);
 
   const isAdmin = !!localStorage.getItem(ADMIN_KEY_STORAGE);
@@ -81,7 +91,17 @@ export default function App() {
       const awayScore = data.awayScore as number | undefined;
       const status = data.status as string | undefined;
       if (data.matchId && homeScore !== undefined && awayScore !== undefined && status) {
-        setWsScoreUpdate({ matchId: data.matchId as string, homeScore, awayScore, status });
+        setWsScoreUpdate({
+          matchId: data.matchId as string,
+          homeScore,
+          awayScore,
+          status,
+          homeScoreAfterExtraTime: data.homeScoreAfterExtraTime as number | undefined,
+          awayScoreAfterExtraTime: data.awayScoreAfterExtraTime as number | undefined,
+          homePenaltyScore: data.homePenaltyScore as number | undefined,
+          awayPenaltyScore: data.awayPenaltyScore as number | undefined,
+          winnerTeamId: data.winnerTeamId as string | undefined,
+        });
       }
       // 开赛/进球提醒（同场比赛30秒内不重复弹）
       const home = (data.homeTeam as string) || '';

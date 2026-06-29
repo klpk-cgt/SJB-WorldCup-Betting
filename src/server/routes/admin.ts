@@ -888,7 +888,7 @@ router.put('/api/admin/matches/:id', (req: Request, res: Response) => {
   const match = db.matches.find((item) => item.id === req.params.id);
   if (!match) return res.status(404).json({ error: '比赛不存在。' });
 
-  const { homeScore, awayScore, status, isOddsFrozen, isPredictionLocked, winnerTeamId, resetToNS, startTimeUtc } = req.body;
+  const { homeScore, awayScore, status, isOddsFrozen, isPredictionLocked, winnerTeamId, resetToNS, startTimeUtc, homeScoreAfterExtraTime, awayScoreAfterExtraTime, homePenaltyScore, awayPenaltyScore } = req.body;
   if (startTimeUtc !== undefined) match.startTimeUtc = startTimeUtc;
   if (status) match.status = status as MatchStatus;
   if (homeScore !== undefined) {
@@ -900,6 +900,23 @@ router.put('/api/admin/matches/:id', (req: Request, res: Response) => {
     match.awayScore = Number.isNaN(n) ? undefined : n;
   }
   if (winnerTeamId !== undefined) match.winnerTeamId = winnerTeamId || undefined;
+  // AET/PEN 分层比分（null 表示清除，数字表示设置）
+  if (homeScoreAfterExtraTime !== undefined) {
+    const n = Number(homeScoreAfterExtraTime);
+    match.homeScoreAfterExtraTime = (homeScoreAfterExtraTime === null || Number.isNaN(n)) ? undefined : n;
+  }
+  if (awayScoreAfterExtraTime !== undefined) {
+    const n = Number(awayScoreAfterExtraTime);
+    match.awayScoreAfterExtraTime = (awayScoreAfterExtraTime === null || Number.isNaN(n)) ? undefined : n;
+  }
+  if (homePenaltyScore !== undefined) {
+    const n = Number(homePenaltyScore);
+    match.homePenaltyScore = (homePenaltyScore === null || Number.isNaN(n)) ? undefined : n;
+  }
+  if (awayPenaltyScore !== undefined) {
+    const n = Number(awayPenaltyScore);
+    match.awayPenaltyScore = (awayPenaltyScore === null || Number.isNaN(n)) ? undefined : n;
+  }
   if (isOddsFrozen !== undefined) {
     match.isOddsFrozen = Boolean(isOddsFrozen);
     match.oddsFrozenAt = match.isOddsFrozen ? new Date().toISOString() : undefined;
@@ -921,6 +938,11 @@ router.put('/api/admin/matches/:id', (req: Request, res: Response) => {
     match.homeScore = undefined;
     match.awayScore = undefined;
     match.winnerTeamId = undefined;
+    // 清除 AET/PEN 分层比分
+    match.homeScoreAfterExtraTime = undefined;
+    match.awayScoreAfterExtraTime = undefined;
+    match.homePenaltyScore = undefined;
+    match.awayPenaltyScore = undefined;
     // 回滚该比赛关联的已结算预测（交易记录驱动，与 forceResettle 同源逻辑）
     const matchPredictions = db.predictions.filter((p) => p.matchId === match.id);
     const settlementCreditTypes = ['PREDICTION_WIN', 'CARD_EFFECT', 'REFUND'];

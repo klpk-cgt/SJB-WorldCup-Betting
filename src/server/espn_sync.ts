@@ -22,6 +22,18 @@ interface EspnCompetitor {
   homeAway: 'home' | 'away';
   team?: { displayName?: string; abbreviation?: string; id?: string };
   score?: string | number;
+  // 点球大战比分（仅 PEN 比赛填充）
+  shootoutScore?: string | number;
+  // ESPN 标识的获胜方（AET/PEN 时填充）
+  winner?: boolean;
+}
+
+interface EspnEventDetail {
+  scoringPlay?: boolean;
+  // true 表示点球大战进球，必须排除
+  shootout?: boolean;
+  clock?: { displayValue?: string };
+  team?: { id?: string };
 }
 
 interface EspnEvent {
@@ -32,6 +44,8 @@ interface EspnEvent {
   competitions?: Array<{
     id: string;
     competitors?: EspnCompetitor[];
+    // 进球事件列表（用于分离 90 分钟/加时赛比分）
+    details?: EspnEventDetail[];
   }>;
 }
 
@@ -188,6 +202,53 @@ function parseScore(score: string | number | undefined): number | undefined {
   if (typeof score === 'number') return score;
   const num = parseInt(score, 10);
   return isNaN(num) ? undefined : num;
+}
+
+/**
+ * 从 ESPN details 数组计算 90 分钟（含伤停补时）比分
+ *
+ * 规则：
+ * - scoringPlay === true 才计入
+ * - shootout === true 是点球大战进球，显式排除
+ * - clock.displayValue 解析分钟数：< 100 为常规时间（含 90+补时），>= 100 为加时赛
+ * - team.id 归属得分方（ESPN 在乌龙球时 team 已是得分方）
+ *
+ * @returns 90 分钟比分；details 缺失或为空时返回 null（调用方需降级处理）
+ */
+function calculateRegulationScore(
+  details: EspnEventDetail[] | undefined,
+  homeTeamId: string,
+  awayTeamId: string,
+): { home: number; away: number } | null {
+  if (!details || details.length === 0) return null;
+  let home = 0;
+  let away = 0;
+  for (const d of details) {
+    if (!d.scoringPlay) continue;
+    if (d.shootout) continue;
+    const dv = d.clock?.displayValue || '';
+    const m = dv.match(/^(\d+)/);
+    const minute = m ? parseInt(m[1], 10) : 0;
+    if (minute >= 100) continue; // 加时赛进球
+    if (d.team?.id === homeTeamId) home += 1;
+    else if (d.team?.id === awayTeamId) away += 1;
+  }
+  return { home, away };
+}
+
+/**
+ * 从 ESPN competitor.winner 字段确定最终获胜方 ID
+ * AET/PEN 比赛 ESPN 会标记 winner=true
+ */
+function pickWinnerTeamId(
+  competitors: EspnCompetitor[] | undefined,
+  homeTeamId: string,
+  awayTeamId: string,
+): string | undefined {
+  if (!competitors) return undefined;
+  const winner = competitors.find((c) => c.winner === true);
+  if (!winner) return undefined;
+  return winner.homeAway === 'home' ? homeTeamId : awayTeamId;
 }
 
 /**
@@ -389,12 +450,59 @@ export async function syncEspnScoreboard(db: DatabaseSchema): Promise<{
       if (!localMatch) continue;
 
       const newStatus = mapEspnStatus(event.status?.type?.state, event.status?.type?.shortDetail);
-      const newHomeScore = parseScore(homeComp.score);
-      const newAwayScore = parseScore(awayComp.score);
+      const espnHomeScore = parseScore(homeComp.score);
+      const espnAwayScore = parseScore(awayComp.score);
 
       const previousHomeScore = localMatch.homeScore;
       const previousAwayScore = localMatch.awayScore;
       const previousStatus = localMatch.status;
+
+      // 分离 90 分钟/加时后/点球比分
+      // 核心策略：homeScore/awayScore 固化为 90 分钟（含伤停补时）比分，用于结算与积分榜
+      let finalHomeScore: number | undefined;
+      let finalAwayScore: number | undefined;
+      let homeScoreAfterExtraTime: number | undefined;
+      let awayScoreAfterExtraTime: number | undefined;
+      let homePenaltyScore: number | undefined;
+      let awayPenaltyScore: number | undefined;
+      let winnerTeamId: string | undefined;
+
+      if (newStatus === MatchStatus.AET || newStatus === MatchStatus.PEN) {
+        // AET/PEN：ESPN score 字段是加时赛结束后的总比分（不含点球）
+        homeScoreAfterExtraTime = espnHomeScore;
+        awayScoreAfterExtraTime = espnAwayScore;
+
+        // 从 details 数组计算 90 分钟比分
+        const details = competition.details;
+        const regulation = calculateRegulationScore(details, homeTeam.id, awayTeam.id);
+        if (regulation) {
+          finalHomeScore = regulation.home;
+          finalAwayScore = regulation.away;
+        } else {
+          // details 缺失降级：无法分离 90 分钟比分，用 ESPN score 并标记待人工复核
+          finalHomeScore = espnHomeScore;
+          finalAwayScore = espnAwayScore;
+          localMatch.scoreUnknown = true;
+          logger.warn('[ESPN] AET/PEN details missing, falling back to ESPN score as 90min', {
+            matchId: localMatch.id,
+            eventId: event.id,
+            status: newStatus,
+          });
+        }
+
+        // PEN：读取点球大战比分
+        if (newStatus === MatchStatus.PEN) {
+          homePenaltyScore = parseScore(homeComp.shootoutScore);
+          awayPenaltyScore = parseScore(awayComp.shootoutScore);
+        }
+
+        // 设置最终获胜方（基于 ESPN competitor.winner）
+        winnerTeamId = pickWinnerTeamId(competition.competitors, homeTeam.id, awayTeam.id);
+      } else {
+        // FT/LIVE/HT/NS：ESPN score 即为 90 分钟比分
+        finalHomeScore = espnHomeScore;
+        finalAwayScore = espnAwayScore;
+      }
 
       // 更新 providerMeta
       localMatch.providerMeta = {
@@ -414,15 +522,27 @@ export async function syncEspnScoreboard(db: DatabaseSchema): Promise<{
       }
 
       localMatch.status = newStatus;
-      if (newHomeScore !== undefined) localMatch.homeScore = newHomeScore;
-      if (newAwayScore !== undefined) localMatch.awayScore = newAwayScore;
+      if (finalHomeScore !== undefined) localMatch.homeScore = finalHomeScore;
+      if (finalAwayScore !== undefined) localMatch.awayScore = finalAwayScore;
+      // AET/PEN 比赛才填充加时/点球字段，FT 比赛保持 undefined
+      if (homeScoreAfterExtraTime !== undefined) localMatch.homeScoreAfterExtraTime = homeScoreAfterExtraTime;
+      if (awayScoreAfterExtraTime !== undefined) localMatch.awayScoreAfterExtraTime = awayScoreAfterExtraTime;
+      if (homePenaltyScore !== undefined) localMatch.homePenaltyScore = homePenaltyScore;
+      if (awayPenaltyScore !== undefined) localMatch.awayPenaltyScore = awayPenaltyScore;
+      if (winnerTeamId !== undefined) localMatch.winnerTeamId = winnerTeamId;
 
-      // 清除 scoreUnknown 标记（ESPN 提供真实比分）
-      if ((localMatch as any).scoreUnknown && typeof localMatch.homeScore === 'number' && typeof localMatch.awayScore === 'number') {
+      // 清除 scoreUnknown 标记（仅当 details 计算成功时；降级路径已主动设置 scoreUnknown=true）
+      if (
+        (localMatch as any).scoreUnknown &&
+        typeof localMatch.homeScore === 'number' &&
+        typeof localMatch.awayScore === 'number' &&
+        newStatus !== MatchStatus.AET &&
+        newStatus !== MatchStatus.PEN
+      ) {
         delete (localMatch as any).scoreUnknown;
       }
 
-      // 比分或状态变化时推送
+      // 比分或状态变化时推送（携带 AET/PEN 分层比分）
       if (
         (previousHomeScore !== localMatch.homeScore ||
           previousAwayScore !== localMatch.awayScore ||
@@ -431,7 +551,17 @@ export async function syncEspnScoreboard(db: DatabaseSchema): Promise<{
         typeof localMatch.homeScore === 'number' &&
         typeof localMatch.awayScore === 'number'
       ) {
-        broadcastScoreUpdate(localMatch.id, localMatch.homeScore, localMatch.awayScore, localMatch.status);
+        broadcastScoreUpdate(
+          localMatch.id,
+          localMatch.homeScore,
+          localMatch.awayScore,
+          localMatch.status,
+          localMatch.homeScoreAfterExtraTime,
+          localMatch.awayScoreAfterExtraTime,
+          localMatch.homePenaltyScore,
+          localMatch.awayPenaltyScore,
+          localMatch.winnerTeamId,
+        );
       }
 
       updatedMatches.push(localMatch);

@@ -493,6 +493,11 @@ export function serializeMatch(match: Match) {
     venueCity: match.venueCity || '',
     homeScore: typeof match.homeScore === 'number' ? match.homeScore : null,
     awayScore: typeof match.awayScore === 'number' ? match.awayScore : null,
+    // AET/PEN 分层比分（显式序列化确保前端获取）
+    homeScoreAfterExtraTime: typeof match.homeScoreAfterExtraTime === 'number' ? match.homeScoreAfterExtraTime : null,
+    awayScoreAfterExtraTime: typeof match.awayScoreAfterExtraTime === 'number' ? match.awayScoreAfterExtraTime : null,
+    homePenaltyScore: typeof match.homePenaltyScore === 'number' ? match.homePenaltyScore : null,
+    awayPenaltyScore: typeof match.awayPenaltyScore === 'number' ? match.awayPenaltyScore : null,
     scoreUnknown: Boolean((match as any).scoreUnknown),
     oddsSyncStatus: rawOdds?.syncStatus || null,
     oddsSource: rawOdds?.source || null,
