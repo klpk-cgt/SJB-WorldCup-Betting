@@ -1,5 +1,34 @@
 # 更新日志 (Changelog)
 
+## v2.6.6 - 2026-07-02
+
+### 排行榜修复与优化
+
+#### 问题
+- "叫我c罗"今日榜显示 -4055，疑似数据异常
+- 收益榜只累计命中收益，不扣除未命中本金，与用户直觉不符
+- 命中率榜把"暂无数据"用户排在有数据用户前面
+- 连胜榜、今日榜缺少平局打破规则
+- 排行榜快照使用同步 `save()` 落库，会阻塞事件循环
+
+#### 修复方案
+- **今日榜数据核查**：生产环境验证确认 -4055 为正确结果（北京时间 7/2  settled 的 5 条预测盈亏相抵：+11230 - 700 - 14585 = -4055），m-82 的盈利已正确计入
+- **收益榜改为净收益**：`/api/leaderboards` 中 `wonProfitList` 排序依据由 `totalWonProfit` 改为 `netProfit = wallet.balance - wallet.initialPoints`
+- **命中率排序修复**：无已结算数据用户统一排在最后；相同命中率按命中场次、余额排序
+- **连胜榜排序增强**：当前连胜相同按最高连胜、余额排序
+- **今日榜排序增强**：今日盈亏相同按余额、命中场次排序
+- **快照异步落库**：`leaderboard_snapshot_service.ts` 中 `dbService.save()` 改为 `saveAsync()`，避免阻塞
+- **前端展示优化**：`LeaderboardTab.tsx` 收益榜文案和数值改为净收益；命中率榜列表列改为"命中/已结算"；rankDelta 为 0 时显示"持平"
+
+#### 影响文件
+- 后端：`src/server/routes/matches.ts`, `src/server/services/leaderboard_snapshot_service.ts`
+- 前端：`src/components/LeaderboardTab.tsx`
+
+#### 部署验证
+- 本地 build 通过（2814 modules）
+- dist 上传服务器并重启 PM2 worldcup
+- 生产 `/api/leaderboards` 验证：收益榜按净收益排序、命中率榜无数据用户排最后、连胜榜正常
+
 ## v2.6.5 - 2026-06-29
 
 ### AET/PEN 比赛比分分离与结算合规修复

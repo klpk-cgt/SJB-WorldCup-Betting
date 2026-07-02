@@ -46,7 +46,12 @@ export function captureLeaderboardSnapshot(groupId?: string): LeaderboardSnapsho
     db.systemState.leaderboardSnapshots = {};
   }
   db.systemState.leaderboardSnapshots[effectiveGroupId] = snapshot;
-  dbService.save();
+  dbService.saveAsync().catch((error) => {
+    logger.error('[LeaderboardSnapshot] 快照异步落库失败', {
+      groupId: effectiveGroupId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
 
   logger.info('[LeaderboardSnapshot] 快照已捕获', {
     groupId: effectiveGroupId,

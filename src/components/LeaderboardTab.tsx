@@ -28,6 +28,7 @@ type LeaderboardEntry = {
   totalWonProfit?: number;
   rate?: number | null;
   wonCount?: number;
+  settledCount?: number;
   totalCount?: number;
   currentStreak?: number;
   maxStreak?: number;
@@ -64,7 +65,14 @@ const TONE_CLASS: Record<NonNullable<LeaderboardEntry['badgeTone']>, string> = {
 };
 
 function getRankDeltaMeta(delta?: number) {
-  if (!delta) return null;
+  if (delta === undefined || delta === null) return null;
+  if (delta === 0) {
+    return {
+      icon: <span className="h-3 w-3 text-[10px]">−</span>,
+      className: 'bg-slate-100 text-slate-600 ring-1 ring-slate-200',
+      label: '持平',
+    };
+  }
   if (delta > 0) {
     return {
       icon: <TrendingUp className="h-3 w-3" />,
@@ -94,7 +102,7 @@ function PodiumCard({ item, rank, tabKey }: { item: LeaderboardEntry; rank: 1 | 
       case 'today':
         return formatSignedPoints(item.todayProfit);
       case 'wonProfit':
-        return formatSignedPoints(item.totalWonProfit);
+        return formatSignedPoints(item.netProfit);
       case 'rate':
         return item.rate == null ? '暂无' : `${item.rate}%`;
       case 'streak':
@@ -402,10 +410,10 @@ export default function LeaderboardTab({ user }: LeaderboardTabProps) {
                         </>
                       ) : activeLeaderboardTab === 'rate' ? (
                         <>
-                          <p className="text-sm font-black text-violet-700">{item.rate == null ? '暂无' : `${item.rate}%`}</p>
-                          <p className="mt-1 text-[11px] font-semibold text-slate-500">
-                            {item.wonCount || 0}/{item.totalCount || 0}
+                          <p className="text-sm font-black text-violet-700">
+                            {item.wonCount || 0}/{item.settledCount || 0}
                           </p>
+                          <p className="mt-1 text-[11px] font-semibold text-slate-500">命中/已结算</p>
                         </>
                       ) : (
                         <>
@@ -434,13 +442,13 @@ export default function LeaderboardTab({ user }: LeaderboardTabProps) {
                       )}
                       {activeLeaderboardTab === 'wonProfit' && (
                         <>
-                          <p className="text-sm font-black text-violet-700">{formatSignedPoints(item.totalWonProfit)}</p>
-                          <p className="mt-1 text-[11px] font-semibold text-slate-500">累计收益</p>
+                          <p className="text-sm font-black text-violet-700">{formatSignedPoints(item.netProfit)}</p>
+                          <p className="mt-1 text-[11px] font-semibold text-slate-500">净收益</p>
                         </>
                       )}
                       {activeLeaderboardTab === 'rate' && (
                         <>
-                          <p className="text-sm font-black text-slate-900">{item.wonCount || 0} 场</p>
+                          <p className="text-sm font-black text-violet-700">{item.rate == null ? '暂无' : `${item.rate}%`}</p>
                           <p className="mt-1 text-[11px] font-semibold text-slate-500">净收益 {formatSignedPoints(item.netProfit)}</p>
                         </>
                       )}

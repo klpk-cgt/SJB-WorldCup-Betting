@@ -308,7 +308,9 @@ router.post('/api/predictions', async (req: Request, res: Response) => {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : '下注失败';
-    const status = message.includes('不存在') || message.includes('不足') || message.includes('不能') || message.includes('不合法') || message.includes('卡牌') || message.includes('反悔卡') ? 400 : 500;
+    // placePrediction 抛出的所有 Error 都是业务逻辑错误（余额/赔率/卡牌/状态校验），应返回 400
+    // 只有非 Error 实例（如数据库连接异常）才返回 500
+    const status = error instanceof Error ? 400 : 500;
     res.status(status).json({ error: message });
   }
 });
@@ -596,10 +598,31 @@ router.get('/api/leaderboards', (_req: Request, res: Response) => {
 
   res.json({
     totalList: sortedByTotal,
-    todayList: [...leaderboard].sort((a, b) => b.todayProfit - a.todayProfit),
-    rateList: [...leaderboard].sort((a, b) => (b.rate ?? -1) - (a.rate ?? -1)),
-    streakList: [...leaderboard].sort((a, b) => b.currentStreak - a.currentStreak),
-    wonProfitList: [...leaderboard].sort((a, b) => b.totalWonProfit - a.totalWonProfit),
+    todayList: [...leaderboard].sort((a, b) => {
+      if (b.todayProfit !== a.todayProfit) return b.todayProfit - a.todayProfit;
+      if (b.balance !== a.balance) return b.balance - a.balance;
+      return (b.wonCount || 0) - (a.wonCount || 0);
+    }),
+    rateList: [...leaderboard].sort((a, b) => {
+      // 无已结算数据的用户统一排在最后
+      const aHasData = (a.settledCount || 0) > 0;
+      const bHasData = (b.settledCount || 0) > 0;
+      if (aHasData !== bHasData) return bHasData ? 1 : -1;
+      if ((b.rate ?? -1) !== (a.rate ?? -1)) return (b.rate ?? -1) - (a.rate ?? -1);
+      if ((b.wonCount || 0) !== (a.wonCount || 0)) return (b.wonCount || 0) - (a.wonCount || 0);
+      return b.balance - a.balance;
+    }),
+    streakList: [...leaderboard].sort((a, b) => {
+      if ((b.currentStreak || 0) !== (a.currentStreak || 0)) {
+        return (b.currentStreak || 0) - (a.currentStreak || 0);
+      }
+      if ((b.maxStreak || 0) !== (a.maxStreak || 0)) {
+        return (b.maxStreak || 0) - (a.maxStreak || 0);
+      }
+      return b.balance - a.balance;
+    }),
+    // 收益榜改为净收益（盈亏相抵）
+    wonProfitList: [...leaderboard].sort((a, b) => b.netProfit - a.netProfit),
   });
 });
 
