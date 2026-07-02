@@ -1,5 +1,33 @@
 # 更新日志 (Changelog)
 
+## v2.6.7 - 2026-07-02
+
+### 32强赛程"西班牙vs澳大利亚"修复（应为奥地利）
+
+#### 问题
+- 32强赛程列表中出现"西班牙vs澳大利亚"，实际应为"西班牙vs奥地利"
+- 根因：竞彩网 API 返回"奥地利"的 teamCode 为 `AUS`（与澳大利亚的 FIFA code 一致），导致 Sporttery 同步时按 code 匹配错误地将"奥地利"匹配为"澳大利亚"
+- 次生问题：错误的匹配占用了 m-85 TBD 种子比赛，导致真实的"瑞士vs阿尔及利亚"无法替换种子，只能新建 fx-st--61d558b3；删除 m-85 后应用重启时 reconcile 逻辑又重新注入 TBD 种子
+
+#### 修复方案
+- **竞彩网队伍匹配降级（`sporttery_sync.ts`）**：`resolveTeamsFromItem` 和 `matchByTeamCodes` 函数中，code 匹配成功后增加中文队名验证，不一致时降级为中文队名匹配；新增 `isNameMatch` 辅助函数支持完全相等和包含关系
+- **TBD 种子 reconcile 修复（`db_service.ts`）**：`hasComparableMatch` 对 TBD 种子比赛（homeTeamId='TBD'）改为仅按同时段判断是否已满足，避免真实比赛替换 TBD 后又重新注入 TBD 种子
+- **数据库清理**：删除 MySQL 中遗留的 m-85（TBD vs TBD）记录，R32 从 17 场恢复为正确的 16 场
+
+#### 竞彩网 code 录入错误清单（已知）
+奥地利=AUS(应为AUT)、葡萄牙=POG(POR)、瑞士=SWI(SUI)、阿尔及利亚=ALG(ALG)、澳大利亚=AUA(AUS)、佛得角=CVI(CPV)、哥伦比亚=COM(COL)、加拿大=CAA(CAN)、摩洛哥=MCO(MAR)、巴拉圭=PGY(PAR)
+
+#### 影响文件
+- `src/server/sporttery_sync.ts`：队伍匹配逻辑修复
+- `src/db/db_service.ts`：TBD 种子 reconcile 逻辑修复
+- `CHANGELOG.md`
+
+#### 部署验证
+- 本地 build 通过（2814 modules）
+- 生产 R32 = 16 场，m-83 正确显示"西班牙 vs 奥地利"
+- fx-st--61d558b3 正常显示"瑞士 vs 阿尔及利亚"（7/3 11:00）
+- PM2 日志：Sporttery 同步 matched:8, createdKnockout:0，无 "Replaced TBD seed match m-85"
+
 ## v2.6.6 - 2026-07-02
 
 ### 排行榜修复与优化

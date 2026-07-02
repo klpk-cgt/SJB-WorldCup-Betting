@@ -6,7 +6,10 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { execFileSync } from 'child_process';
+import { execFileSync, execFile } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
 import {
   GroupRoom,
   User,
@@ -84,6 +87,14 @@ class DatabaseService {
   private _saveTimer: ReturnType<typeof setTimeout> | null = null;
   private _writeLock = false;
   private _lockWaiters: Array<() => void> = [];
+  // 异步落库串行化链：保证多次 saveAsync 请求按顺序落库，避免并发写冲突
+  private _persistChain: Promise<void> = Promise.resolve();
+  /**
+   * 数据保护标志位：true 表示当前内存是因 MySQL 故障而重置的默认初始数据，
+   * 此时禁止 writeMySqlSnapshot 写入，防止初始数据覆盖 MySQL 中的真实数据。
+   * 当 readMySqlSnapshot 成功加载真实数据后会清除该标志。
+   */
+  private _isDefaultSeed = false;
 
   constructor() {
     this.init();
@@ -92,40 +103,80 @@ class DatabaseService {
   private init() {
     try {
       this.ensureDataDir();
-      try {
-        const snapshot = this.readMySqlSnapshot();
-        if (snapshot && snapshot.teams.length > 0) {
-          this.cache = snapshot;
-          this.ensureDerivedState();
+      if (this.useMySqlStorage()) {
+        // MySQL 模式：带指数退避的重试，覆盖 MySQL 重启窗口（通常 15-30s）
+        // 15 次 × 指数退避（2s, 4s, 8s, 16s, 30s...），总窗口约 5 分钟
+        const maxRetries = 15;
+        let lastError: unknown;
+        let lastWasEmpty = false;
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+          try {
+            const snapshot = this.readMySqlSnapshot();
+            if (snapshot && snapshot.teams.length > 0) {
+              this.cache = snapshot;
+              this._isDefaultSeed = false; // 成功加载真实数据，清除保护标志
+              this.ensureDerivedState();
+              if (attempt > 0) {
+                console.log(`[Init] MySQL snapshot loaded successfully after ${attempt + 1} attempt(s).`);
+              }
+              return;
+            }
+            // MySQL 可连接但数据为空 — 首次初始化场景，不需要重试
+            console.log('MySQL snapshot is empty, seeding default data (first-time init)...');
+            lastWasEmpty = true;
+            break;
+          } catch (error) {
+            lastError = error;
+            if (attempt < maxRetries - 1) {
+              // 指数退避：2s, 4s, 8s, 16s, 30s, 30s, ...（上限 30s）
+              const delay = Math.min(2000 * Math.pow(2, attempt), 30000);
+              console.warn(`[Init] MySQL connection attempt ${attempt + 1}/${maxRetries} failed, retrying in ${delay}ms...`, (error as Error).message);
+              const start = Date.now();
+              while (Date.now() - start < delay) { /* busy wait */ }
+            }
+          }
+        }
+        if (lastWasEmpty) {
+          // MySQL 可连接但数据为空：可能是首次部署，也可能是数据异常丢失。
+          // 默认进入保护模式（禁止写入），防止默认数据覆盖真实数据。
+          // 仅当显式设置 WORLD_CUP_ALLOW_SEED=true 时才允许写入默认数据（用于首次部署）。
+          if (process.env.WORLD_CUP_ALLOW_SEED === 'true') {
+            console.log('[Init] 首次初始化：WORLD_CUP_ALLOW_SEED=true，允许写入默认数据。');
+            this._isDefaultSeed = false;
+            this.resetToDefaults();
+          } else {
+            console.error('[DataProtection] MySQL 可连接但数据为空，可能是数据异常丢失！');
+            console.error('[DataProtection] 进入保护模式：内存使用默认初始数据，但禁止写入 MySQL，防止覆盖真实数据。');
+            console.error('[DataProtection] 请先从 JSON 备份(runtime/backups/)或宝塔 SQL 备份恢复数据，再重启应用。');
+            console.error('[DataProtection] 如确系首次部署，请设置环境变量 WORLD_CUP_ALLOW_SEED=true 后重启。');
+            this._isDefaultSeed = true;
+            this.resetToDefaults();
+          }
           return;
         }
-        console.log('MySQL snapshot is empty, seeding default data...');
-      } catch (error) {
-        console.warn('Failed to read MySQL snapshot, seeding default data instead.', error);
-      }
-      this.resetToDefaults();
-      return;
-      if (this.useMySqlStorage()) {
+        // 重试全部失败：MySQL 严重故障，进入只读保护模式
+        console.error('[DataProtection] MySQL 连接失败，已重试 ' + maxRetries + ' 次仍无法读取。');
+        console.error('[DataProtection] 进入只读保护模式：内存使用默认初始数据，但禁止写入 MySQL，防止覆盖真实数据。');
+        console.error('[DataProtection] 请恢复 MySQL 后重启应用。');
+        // 先设置保护标志，防止下方 resetToDefaults() 内部的 save() 写入 MySQL
+        this._isDefaultSeed = true;
+        this.resetToDefaults();
+        return;
+      } else {
+        // 文件存储模式
         try {
           const snapshot = this.readMySqlSnapshot();
-          if (snapshot?.teams.length) {
+          if (snapshot && snapshot.teams.length > 0) {
             this.cache = snapshot;
             this.ensureDerivedState();
             return;
           }
-          // MySQL tables exist but are empty — seed default data
           console.log('MySQL snapshot is empty, seeding default data...');
         } catch (error) {
-          console.warn('Failed to read MySQL snapshot, falling back to local db.json.', error);
+          console.warn('Failed to read MySQL snapshot, seeding default data instead.', error);
         }
       }
-      if (fs.existsSync(DB_FILE_PATH)) {
-        const fileContent = fs.readFileSync(DB_FILE_PATH, 'utf-8');
-        this.cache = JSON.parse(fileContent);
-        this.ensureDerivedState();
-      } else {
-        this.resetToDefaults();
-      }
+      this.resetToDefaults();
     } catch (e) {
       console.error('Failed to parse db.json, resetting to default seed data...', e);
       this.resetToDefaults();
@@ -437,30 +488,22 @@ class DatabaseService {
     this.ensureDerivedState();
   }
 
-  /** 延迟异步写入，合并短时间内的多次写入请求，不阻塞事件循环 */
+  /**
+   * 延迟异步写入，合并短时间内的多次写入请求，不阻塞事件循环。
+   * 关键点：用 execFile（异步）落库，整个落库过程在后台执行，
+   * 下注响应不需要等待落库完成即可返回。
+   * 串行化：通过 _persistChain 保证多次 saveAsync 按顺序落库，避免并发写冲突。
+   */
   public saveAsync() {
     if (this._saveTimer) return; // 已有待写入的定时器，跳过
     this._saveTimer = setTimeout(() => {
       this._saveTimer = null;
       this.ensureDataDir();
       const normalized = this.normalizeForPersistence();
-      try {
-        this.writeMySqlSnapshot(normalized);
-      } catch (e) {
-        console.error('Failed to persist database to MySQL!', e);
-      }
-      return;
-      const data = JSON.stringify(normalized, null, 2);
-      fs.promises.writeFile(DB_FILE_PATH, data, 'utf-8').catch((e) => {
-        console.error('Failed to write database to disk!', e);
-      });
-      if (this.useMySqlStorage()) {
-        try {
-          this.writeMySqlSnapshot(normalized);
-        } catch (e) {
-          console.error('Failed to persist database to MySQL!', e);
-        }
-      }
+      // 串行化落库：前一次落库完成后才开始本次，避免并发写冲突
+      this._persistChain = this._persistChain
+        .then(() => this.writeMySqlSnapshotAsync(normalized))
+        .catch((e) => console.error('Failed to persist database to MySQL!', e));
     }, 100);
   }
 
@@ -750,6 +793,12 @@ class DatabaseService {
   }
 
   private writeMySqlSnapshot(snapshot: DatabaseSchema) {
+    // 数据保护：如果当前内存是因 MySQL 故障而重置的默认初始数据，
+    // 拒绝写入 MySQL，防止覆盖真实数据
+    if (this._isDefaultSeed) {
+      console.warn('[DataProtection] 拒绝将默认初始数据写入 MySQL（防止覆盖真实数据）。请恢复 MySQL 后重启应用。');
+      return;
+    }
     if (!fs.existsSync(STORAGE_SCRIPT_PATH)) {
       throw new Error(`MySQL storage script not found: ${STORAGE_SCRIPT_PATH}`);
     }
@@ -765,6 +814,37 @@ class DatabaseService {
     } finally {
       if (fs.existsSync(tempFile)) {
         fs.unlinkSync(tempFile);
+      }
+    }
+  }
+
+  /**
+   * 异步版本 writeMySqlSnapshot：用 execFile（异步）替代 execFileSync（同步），
+   * 不阻塞 Node.js 事件循环。用于 saveAsync 场景（如下注响应后落库）。
+   * 数据一致性由调用方保证：内存数据是权威源，落库失败不会回滚内存，
+   * 下次 saveAsync 会重新写入最新内存状态。
+   */
+  private async writeMySqlSnapshotAsync(snapshot: DatabaseSchema): Promise<void> {
+    if (this._isDefaultSeed) {
+      console.warn('[DataProtection] 拒绝将默认初始数据写入 MySQL（防止覆盖真实数据）。请恢复 MySQL 后重启应用。');
+      return;
+    }
+    if (!fs.existsSync(STORAGE_SCRIPT_PATH)) {
+      throw new Error(`MySQL storage script not found: ${STORAGE_SCRIPT_PATH}`);
+    }
+    const tempFile = path.join(os.tmpdir(), `worldcup-db-${Date.now()}.json`);
+    await fs.promises.writeFile(tempFile, JSON.stringify(snapshot, null, 2), 'utf-8');
+    try {
+      await execFileAsync(process.execPath, [STORAGE_SCRIPT_PATH, 'save', tempFile], {
+        cwd: process.cwd(),
+        encoding: 'utf-8',
+        maxBuffer: STORAGE_SCRIPT_MAX_BUFFER,
+      });
+    } finally {
+      try {
+        await fs.promises.unlink(tempFile);
+      } catch {
+        // 临时文件清理失败不致命，忽略
       }
     }
   }
@@ -887,6 +967,12 @@ class DatabaseService {
         this.cache!.matches.some((match) => {
           if (existingMatchIds.has(candidate.id) && match.id === candidate.id) {
             return true;
+          }
+
+          // 对于 TBD 种子比赛（淘汰赛占位）：只要同时段已有任何比赛（含已替换为真实队伍的），
+          // 就视为该时段已满足，避免真实比赛替换 TBD 后又重新注入 TBD 种子（如 m-85 场景）
+          if (candidate.homeTeamId === 'TBD' && candidate.awayTeamId === 'TBD') {
+            return match.startTimeUtc.slice(0, 16) === candidate.startTimeUtc.slice(0, 16);
           }
 
           return (

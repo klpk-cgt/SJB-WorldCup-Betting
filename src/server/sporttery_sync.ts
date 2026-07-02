@@ -105,9 +105,19 @@ function matchByTeamCodes(
   let homeTeam = db.teams.find((t) => t.code?.toUpperCase() === homeCode.toUpperCase());
   let awayTeam = db.teams.find((t) => t.code?.toUpperCase() === awayCode.toUpperCase());
 
+  // code 匹配成功但中文队名不一致时，降级为中文队名匹配（修复竞彩网 code 录入错误）
+  if (homeTeam && homeAbbName && !isNameMatch(homeTeam.nameZh, homeAbbName)) {
+    const nameMatch = db.teams.find((t) => isNameMatch(t.nameZh, homeAbbName));
+    if (nameMatch) homeTeam = nameMatch;
+  }
+  if (awayTeam && awayAbbName && !isNameMatch(awayTeam.nameZh, awayAbbName)) {
+    const nameMatch = db.teams.find((t) => isNameMatch(t.nameZh, awayAbbName));
+    if (nameMatch) awayTeam = nameMatch;
+  }
+
   // 降级：按中文队名缩写匹配（竞彩网返回的 abbName 是中文简称）
-  if (!homeTeam) homeTeam = db.teams.find((t) => t.nameZh === homeAbbName || t.nameZh?.includes(homeAbbName) || homeAbbName?.includes(t.nameZh || ''));
-  if (!awayTeam) awayTeam = db.teams.find((t) => t.nameZh === awayAbbName || t.nameZh?.includes(awayAbbName) || awayAbbName?.includes(t.nameZh || ''));
+  if (!homeTeam) homeTeam = db.teams.find((t) => isNameMatch(t.nameZh, homeAbbName));
+  if (!awayTeam) awayTeam = db.teams.find((t) => isNameMatch(t.nameZh, awayAbbName));
 
   if (!homeTeam || !awayTeam) return null;
 
@@ -126,16 +136,37 @@ function matchByTeamCodes(
 
 /**
  * 从竞彩网数据项解析本地队伍（代码优先，中文队名降级）
+ * 注意：竞彩网的 teamCode 体系与 FIFA code 不一致（如奥地利=AUS 而非 AUT），
+ * 需要在 code 匹配后验证中文队名，不一致时降级为中文队名匹配。
  */
 function resolveTeamsFromItem(db: DatabaseSchema, item: SportteryMatchItem): { homeTeam: Team; awayTeam: Team } | null {
   let homeTeam = db.teams.find((t) => t.code?.toUpperCase() === item.homeTeamCode.toUpperCase());
   let awayTeam = db.teams.find((t) => t.code?.toUpperCase() === item.awayTeamCode.toUpperCase());
 
-  if (!homeTeam) homeTeam = db.teams.find((t) => t.nameZh === item.homeTeamAbbName || t.nameZh?.includes(item.homeTeamAbbName) || item.homeTeamAbbName?.includes(t.nameZh || ''));
-  if (!awayTeam) awayTeam = db.teams.find((t) => t.nameZh === item.awayTeamAbbName || t.nameZh?.includes(item.awayTeamAbbName) || item.awayTeamAbbName?.includes(t.nameZh || ''));
+  // code 匹配成功但中文队名不一致时，降级为中文队名匹配
+  // 修复竞彩网 code 录入错误（如奥地利 code=AUS 匹配到澳大利亚）
+  if (homeTeam && item.homeTeamAbbName && !isNameMatch(homeTeam.nameZh, item.homeTeamAbbName)) {
+    const nameMatch = db.teams.find((t) => isNameMatch(t.nameZh, item.homeTeamAbbName));
+    if (nameMatch) homeTeam = nameMatch;
+  }
+  if (awayTeam && item.awayTeamAbbName && !isNameMatch(awayTeam.nameZh, item.awayTeamAbbName)) {
+    const nameMatch = db.teams.find((t) => isNameMatch(t.nameZh, item.awayTeamAbbName));
+    if (nameMatch) awayTeam = nameMatch;
+  }
+
+  if (!homeTeam) homeTeam = db.teams.find((t) => isNameMatch(t.nameZh, item.homeTeamAbbName));
+  if (!awayTeam) awayTeam = db.teams.find((t) => isNameMatch(t.nameZh, item.awayTeamAbbName));
 
   if (!homeTeam || !awayTeam) return null;
   return { homeTeam, awayTeam };
+}
+
+/**
+ * 中文队名匹配辅助：支持完全相等或包含关系（竞彩网返回的 abbName 可能是简称）
+ */
+function isNameMatch(teamNameZh: string | undefined, abbName: string | undefined): boolean {
+  if (!teamNameZh || !abbName) return false;
+  return teamNameZh === abbName || teamNameZh.includes(abbName) || abbName.includes(teamNameZh);
 }
 
 /**
